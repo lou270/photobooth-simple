@@ -1,8 +1,14 @@
+"""Manual hardware check: drives every ring-light effect in sequence.
+
+Run on the booth itself: `python tools/manual/check_ring_led.py`
+"""
+
 import sys
 import time
+from pathlib import Path
 
-sys.path.append('..')
-from libs.ringled import RingLed
+sys.path.append(str(Path(__file__).resolve().parents[2]))
+from libs.hardware.led import RingLed
 
 leds = RingLed(num_pixels=12)
 

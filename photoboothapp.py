@@ -33,7 +33,7 @@ from libs.config import Config
 from libs.device_utils import DeviceUtils
 from libs.file_utils import FileUtils
 from libs.screens import ScreenMgr
-from libs.ringled import RingLed
+from libs.hardware.led import create_led
 from libs.stats_store import StatsStore
 from libs.template_collage import load_templates
 from libs.usb_transfer import UsbTransfer
@@ -82,12 +82,9 @@ class PhotoboothApp(App):
 
         self._rotate_logs()
         
-        # Initialize RingLed if enabled in config
-        if config.get_ringled():
-            RINGLED = RingLed(num_pixels=12)
-            Logger.info('PhotoboothApp: RingLed enabled')
-        else:
-            Logger.info('PhotoboothApp: RingLed disabled')
+        # Always a usable object: a ring light that cannot be driven degrades to
+        # a no-op instead of stopping the booth from starting.
+        RINGLED = create_led(enabled=config.get_ringled(), num_pixels=12)
 
         # Assign local variables
         self.sm = None
@@ -118,13 +115,9 @@ class PhotoboothApp(App):
             camera_backend=self.CAMERA_BACKEND,
         )
         
-        # Load templates from JSON files
+        # Always at least one format: load_templates() falls back to a built-in
+        # template rather than returning an empty list.
         self.print_formats = load_templates('templates')
-        
-        # Check if templates were loaded
-        if len(self.print_formats) == 0:
-            Logger.error('No templates found in templates/ directory!')
-            raise Exception('No templates found. Please ensure template JSON files exist in the templates/ directory.')
 
         # Create required directories
         self.tmp_directory = os.path.join(self.DCIM_DIRECTORY, 'tmp')

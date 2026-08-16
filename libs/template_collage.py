@@ -2,11 +2,27 @@ import os
 import cv2
 import json
 import base64
+import logging
 import tempfile
 import numpy as np
-from kivy.logger import Logger
 
 from libs.file_utils import FileUtils
+
+# Child of Kivy's logger so records land in the application log when Kivy is
+# running, without importing Kivy: collage building must stay testable headless.
+Logger = logging.getLogger('kivy.photobooth')
+
+
+# Shipped in code so the booth always has at least one usable format: an empty or
+# corrupted templates/ directory must not leave the operator with an application
+# that refuses to start on site.
+DEFAULT_TEMPLATE = {
+    'name': 'Full Page',
+    'description': 'Built-in fallback format: one photo, 10x15 cm',
+    'page': {'width': 1800, 'height': 1200},
+    'photos': [{'x': 90, 'y': 60, 'width': 1620, 'height': 1080}],
+    'print_params': {'PageSize': 'w288h432', 'print-scaling': 'fit'},
+}
 
 
 class TemplateCollage:
@@ -14,22 +30,30 @@ class TemplateCollage:
     Collage class that loads configuration from JSON template files.
     """
     
-    def __init__(self, template_path):
+    def __init__(self, template_path=None, template=None):
         """
         Initialize the collage from a JSON template file.
         
         Args:
             template_path: Path to the JSON template file
         """
-        Logger.info(f'TemplateCollage: __init__({template_path})')
+        Logger.info('TemplateCollage: __init__(%s)', template_path or 'built-in')
+
+        if template is None and template_path is None:
+            raise ValueError('TemplateCollage requires either template_path or template')
         
         self._template_path = template_path
         self._module_dir = os.path.dirname(os.path.abspath(__file__))
-        self._template_dir = os.path.dirname(os.path.abspath(template_path))
+        self._template_dir = (
+            os.path.dirname(os.path.abspath(template_path)) if template_path
+            else os.path.join(self._module_dir, '..', 'templates')
+        )
         
         # Load template
-        with open(template_path, 'r') as f:
-            self._template = json.load(f)
+        if template is None:
+            with open(template_path, 'r') as f:
+                template = json.load(f)
+        self._template = template
         
         # Cache template properties
         self._name = self._template.get('name', 'Unnamed Template')
@@ -303,12 +327,14 @@ def load_templates(templates_dir='templates'):
     module_dir = os.path.dirname(os.path.abspath(__file__))
     templates_path = os.path.join(module_dir, '..', templates_dir)
     
-    if not os.path.exists(templates_path):
+    if os.path.isdir(templates_path):
+        filenames = sorted(os.listdir(templates_path))
+    else:
         Logger.warning(f'Templates directory not found: {templates_path}')
-        return templates
+        filenames = []
     
     # Load all JSON files
-    for filename in sorted(os.listdir(templates_path)):
+    for filename in filenames:
         if filename.endswith('.json'):
             template_path = os.path.join(templates_path, filename)
             try:
@@ -317,5 +343,11 @@ def load_templates(templates_dir='templates'):
                 Logger.info(f'Loaded template: {template.get_name()} from {filename}')
             except Exception as e:
                 Logger.error(f'Error loading template {filename}: {e}')
-    
+
+    # Guarantee at least one usable format, so callers never have to handle an
+    # empty list and the booth always starts.
+    if not templates:
+        Logger.warning('TemplateCollage: no usable template found, using the built-in fallback')
+        templates.append(TemplateCollage(template=DEFAULT_TEMPLATE))
+
     return templates
