@@ -62,7 +62,7 @@ class PhotoboothApp(App):
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()
         self.WEB_HOST = config.get_web_host()
-        self.FILTERS = config.get_filters()
+        self.FILTERS_ENABLED = config.get_filters()
         self.PREVIEW_BLUR_REFRESH_FRAMES = config.get_preview_blur_refresh_frames()
         self.BLUR_CAMERA = config.get_blur_camera()
         self.BLUR_IMAGES = config.get_blur_images()
@@ -234,9 +234,6 @@ class PhotoboothApp(App):
 
     def get_shots_to_take(self, format=0):
         return self.print_formats[format].get_photos_required()
-
-    def get_layout_previews(self, format=0):
-        return [f.get_preview() for f in self.print_formats]
 
     def get_format_aspect_ratio(self, format_idx):
         """Get the aspect ratio (width/height) for the given format."""

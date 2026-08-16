@@ -137,22 +137,6 @@ class UsbTransfer:
             for root in cls.REMOVABLE_MOUNT_ROOTS
         )
 
-    def copy_folders_to_usb(self, usb_path):
-        Logger.info("UsbTransfer: copy_folders_to_usb()")
-        destination_path = Path(usb_path, 'photobooth')
-
-        try:
-            os.makedirs(destination_path, exist_ok=True)
-        except Exception as exc:
-            Logger.warning("UsbTransfer: Cannot create destination folder on USB drive")
-
-        Logger.info("UsbTransfer: Copying {} to {}".format(self._folder, destination_path))
-        try:
-            shutil.copytree(self._folder, destination_path, dirs_exist_ok=True)
-        except Exception as exc:
-            Logger.warning("UsbTransfer: Cannot copy files to USB drive")
-            return
-
     def copy_without_overwrite(self, src, dest):
         src_path = Path(src)
         dest_path = Path(dest)

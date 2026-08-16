@@ -20,6 +20,7 @@ from kivy.core.image import Image as CoreImage
 
 from libs.kivywidgets import *
 from libs.file_utils import FileUtils
+from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
 
 # Font sizes as fractions of min(Window.width, Window.height) — DPI-independent and
 # orientation-independent: the shortest side is always the binding constraint so fonts
@@ -54,18 +55,9 @@ def _on_window_resize(instance, size):
 Window.bind(size=_on_window_resize)
 
 SHOT_TIMEOUT_SECONDS = 10
-HOME_TIMEOUT_SECONDS = 60
+REVIEW_HOME_TIMEOUT_SECONDS = 60
 COUNTDOWN_HOME_TIMEOUT_SECONDS = 30
 CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS = 30
-
-def hex_to_rgba(hex_color):
-    hex_color = hex_color.lstrip('#')
-    return (
-        int(hex_color[0:2], 16) / 255.0,
-        int(hex_color[2:4], 16) / 255.0,
-        int(hex_color[4:6], 16) / 255.0,
-        1.0,
-    )
 
 def lighten_rgba(color, amount=0.35):
     return (
@@ -117,17 +109,72 @@ ICON_QRCODE = '\u45f4'
 ICON_SHARE = '\u46d4'
 
 
+class HomeTimeoutMixin:
+    """Send an abandoned session back to the start screen.
+
+    Three screens wait on a guest who may simply have walked away, and the ring
+    drawn around the home button doubles as the visual countdown. Starting the
+    timeout, animating the ring and going home are one behaviour; they used to
+    be copy-pasted three times, differing only by the delay.
+
+    Screens set HOME_TIMEOUT_SECONDS, and HOME_TIMEOUT_HIDES_RING when the ring
+    has to disappear while something else owns the screen.
+    """
+
+    HOME_TIMEOUT_SECONDS = 60
+    HOME_TIMEOUT_HIDES_RING = False
+
+    def _init_home_timeout(self):
+        self._home_timeout_clock = None
+        self._home_progress_clock = None
+        self._home_timeout_started_at = 0.0
+
+    def _start_home_timeout(self):
+        self._stop_home_timeout()
+        self._home_timeout_started_at = Clock.get_boottime()
+        self.btn_home.progress = 1.0
+        if self.HOME_TIMEOUT_HIDES_RING:
+            self.btn_home.show_progress = True
+        self._home_timeout_clock = Clock.schedule_once(self._home_timeout_event, self.HOME_TIMEOUT_SECONDS)
+        self._home_progress_clock = Clock.schedule_interval(self._update_home_progress, 1 / 30.0)
+
+    def _stop_home_timeout(self):
+        if self._home_timeout_clock:
+            Clock.unschedule(self._home_timeout_clock)
+            self._home_timeout_clock = None
+        if self._home_progress_clock:
+            Clock.unschedule(self._home_progress_clock)
+            self._home_progress_clock = None
+        self.btn_home.progress = 1.0
+        if self.HOME_TIMEOUT_HIDES_RING:
+            self.btn_home.show_progress = False
+
+    def _update_home_progress(self, dt):
+        elapsed = Clock.get_boottime() - self._home_timeout_started_at
+        self.btn_home.progress = max(0, 1.0 - (elapsed / self.HOME_TIMEOUT_SECONDS))
+
+    def _home_timeout_event(self, dt):
+        Logger.info('%s: home timeout, returning to start.', type(self).__name__)
+        self._stop_home_timeout()
+        self.app.transition_to(ScreenMgr.START)
+
+    def home_event(self, obj):
+        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent):
+            return
+        Logger.info('%s: home_event().', type(self).__name__)
+        self._stop_home_timeout()
+        self.app.transition_to(ScreenMgr.START)
+
+
 class ScreenMgr(ScreenManager):
     """Screen Manager for the photobooth screens."""
     START = 'start'
-    READY = 'ready'
     SELECT_FORMAT = 'select_format'
     ERROR = 'error'
     COUNTDOWN = 'countdown'
     CONFIRM_CAPTURE = 'confirm_capture'
     PROCESSING = 'processing'
     REVIEW = 'review'
-    PRINTING = 'printing'
     SUCCESS = 'success'
     COPYING = 'copying'
 
@@ -259,8 +306,7 @@ class StartScreen(BackgroundScreen):
 
     def on_entry(self, kwargs={}):
         Logger.info('StartScreen: on_entry().')
-        if self.app.ringled:
-            self.app.ringled.start_rainbow()
+        self.app.ringled.start_rainbow()
         self._purge_when_idle()
 
     def _purge_when_idle(self, *args):
@@ -276,8 +322,7 @@ class StartScreen(BackgroundScreen):
 
     def on_exit(self, kwargs={}):
         Logger.info('StartScreen: on_exit().')
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def on_click(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
@@ -517,13 +562,11 @@ class SelectFormatScreen(ColorScreen):
         # OPTIMIZED: Previews are now cached in templates, no need to reload
         # Previously: reloaded all previews on every entry (slow)
         # Now: previews are generated once and cached in TemplateCollage
-        if self.app.ringled:
-            self.app.ringled.start_rainbow()
+        self.app.ringled.start_rainbow()
 
     def on_exit(self, kwargs={}):
         Logger.info('SelectFormatScreen: on_exit().')
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def on_format_selected(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
@@ -658,7 +701,12 @@ class ErrorScreen(ColorScreen):
             return True
         return False
 
-class CountdownScreen(ColorScreen):
+class CountdownScreen(HomeTimeoutMixin, ColorScreen):
+    HOME_TIMEOUT_SECONDS = COUNTDOWN_HOME_TIMEOUT_SECONDS
+    # The ring is the countdown timer while a shot is being taken, so it must
+    # not also be showing the walk-away timeout.
+    HOME_TIMEOUT_HIDES_RING = True
+
     """
     +-----------------+
     |                 |
@@ -674,8 +722,7 @@ class CountdownScreen(ColorScreen):
         self._current_shot = 0
         self._current_format = 0
         self._timer_active = False
-        self._home_timeout_clock = None
-        self._home_progress_clock = None
+        self._init_home_timeout()
 
         self.time_remaining = self.app.COUNTDOWN
         self.total_countdown = self.app.COUNTDOWN
@@ -794,8 +841,7 @@ class CountdownScreen(ColorScreen):
         if self._clock_trigger:
             Clock.unschedule(self._clock_trigger)
         self._stop_home_timeout()
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
         if self.loading_layout.parent:
             self.overlay_layout.remove_widget(self.loading_layout)
         if self.btn_home.parent:
@@ -809,33 +855,6 @@ class CountdownScreen(ColorScreen):
         elapsed_time = Clock.get_boottime() - self.start_time
         remaining_progress = max(0, 1.0 - (elapsed_time / self.total_countdown))
         self.circular_counter.set_progress(remaining_progress)
-
-    def _start_home_timeout(self):
-        self._stop_home_timeout()
-        self._home_timeout_started_at = Clock.get_boottime()
-        self.btn_home.progress = 1.0
-        self.btn_home.show_progress = True
-        self._home_timeout_clock = Clock.schedule_once(self.home_timeout_event, COUNTDOWN_HOME_TIMEOUT_SECONDS)
-        self._home_progress_clock = Clock.schedule_interval(self._update_home_progress, 1/30.0)
-
-    def _stop_home_timeout(self):
-        if self._home_timeout_clock:
-            Clock.unschedule(self._home_timeout_clock)
-            self._home_timeout_clock = None
-        if self._home_progress_clock:
-            Clock.unschedule(self._home_progress_clock)
-            self._home_progress_clock = None
-        self.btn_home.progress = 1.0
-        self.btn_home.show_progress = False
-
-    def _update_home_progress(self, dt):
-        elapsed = Clock.get_boottime() - self._home_timeout_started_at
-        self.btn_home.progress = max(0, 1.0 - (elapsed / COUNTDOWN_HOME_TIMEOUT_SECONDS))
-
-    def home_timeout_event(self, obj):
-        Logger.info('CountdownScreen: home_timeout_event().')
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenMgr.START)
 
     def timer_event(self, obj):
         Logger.info('CountdownScreen: timer_event(%s)', obj)
@@ -947,8 +966,7 @@ class CountdownScreen(ColorScreen):
         # Start countdown
         self._clock = Clock.schedule_once(self.timer_event, 1)
         self._clock_progress = Clock.schedule_interval(self.timer_progress, 1/30.0)
-        if self.app.ringled:
-            self.app.ringled.start_countdown(self.time_remaining)
+        self.app.ringled.start_countdown(self.time_remaining)
 
     def cancel_countdown(self):
         Logger.info('CountdownScreen: cancel_countdown().')
@@ -977,16 +995,11 @@ class CountdownScreen(ColorScreen):
                 break
         
         # Clear LED
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
-    def home_event(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
-        Logger.info('CountdownScreen: home_event().')
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenMgr.START)
+class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
+    HOME_TIMEOUT_SECONDS = CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS
 
-class ConfirmCaptureScreen(ColorScreen):
     """
     +-----------------+
     |       1/3       |
@@ -994,22 +1007,6 @@ class ConfirmCaptureScreen(ColorScreen):
     | NO          YES |
     +-----------------+
     """
-    # Filter definitions
-    FILTERS = [
-        {'name': 'Color', 'key': 'color'},
-        {'name': 'B&W', 'key': 'bw'},
-        {'name': 'B&W Glam', 'key': 'bwglam'},
-        {'name': 'Sepia', 'key': 'sepia'},
-        {'name': 'Glam', 'key': 'glam'},
-        {'name': 'Vintage', 'key': 'vintage'},
-        {'name': 'Warm Glow', 'key': 'warmglow'},
-        {'name': 'Cool Tone', 'key': 'cooltone'},
-        {'name': 'Soft Focus', 'key': 'softfocus'},
-        {'name': 'Retro 70s', 'key': 'retro70s'},
-        {'name': 'Pastel', 'key': 'pastel'},
-        {'name': 'Polaroid', 'key': 'polaroid'},
-    ]
-    
     def __init__(self, app, **kwargs):
         Logger.info('ConfirmCaptureScreen: __init__().')
         super(ConfirmCaptureScreen, self).__init__(**kwargs)
@@ -1017,10 +1014,9 @@ class ConfirmCaptureScreen(ColorScreen):
         self.app = app
         self._current_shot = 0
         self._current_format = 1
-        self._selected_filter = 'color'  # Default filter
+        self._selected_filter = DEFAULT_FILTER  # Default filter
         self._original_image = None  # Store original image
-        self._home_timeout_clock = None
-        self._home_progress_clock = None
+        self._init_home_timeout()
 
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
@@ -1062,7 +1058,7 @@ class ConfirmCaptureScreen(ColorScreen):
             pos_hint={'x': 0, 'y': 0},
             anchor_x='center',
             anchor_y='center',
-            opacity=1 if self.app.FILTERS else 0,
+            opacity=1 if self.app.FILTERS_ENABLED else 0,
         )
         
         self.filter_scroll = ScrollView(
@@ -1097,8 +1093,8 @@ class ConfirmCaptureScreen(ColorScreen):
         
         # Create filter cards (even if filters are disabled, to maintain consistent layout)
         self.filter_cards = []
-        if self.app.FILTERS:
-            for filter_def in self.FILTERS:
+        if self.app.FILTERS_ENABLED:
+            for filter_def in FILTERS:
                 card = self._create_filter_card(filter_def)
                 self.filter_container.add_widget(card)
                 self.filter_cards.append(card)
@@ -1203,153 +1199,6 @@ class ConfirmCaptureScreen(ColorScreen):
         
         return card
     
-    def _apply_filter(self, img, filter_key):
-        """Apply a filter to an image using OpenCV."""
-        if filter_key == 'color':
-            return img
-        
-        elif filter_key == 'bw':
-            # Black and white
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            return cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
-            
-        elif filter_key == 'bwglam':
-            # Black and white with soft glam effect - enhanced contrast and subtle smoothing
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            clahe = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8))
-            enhanced = clahe.apply(gray)
-            smoothed = cv2.bilateralFilter(enhanced, d=5, sigmaColor=50, sigmaSpace=50)
-            return cv2.cvtColor(smoothed, cv2.COLOR_GRAY2BGR)
-        
-        elif filter_key == 'sepia':
-            # Sepia tone
-            sepia_filter = np.array([[0.272, 0.534, 0.131],
-                                    [0.349, 0.686, 0.168],
-                                    [0.393, 0.769, 0.189]])
-            sepia_img = cv2.transform(img, sepia_filter)
-            return np.clip(sepia_img, 0, 255).astype(np.uint8)
-        
-        elif filter_key == 'glam':
-            # Glam: increase contrast and saturation
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 1] = hsv[:, :, 1] * 1.3  # Increase saturation
-            hsv[:, :, 2] = hsv[:, :, 2] * 1.1  # Increase brightness
-            hsv = np.clip(hsv, 0, 255).astype(np.uint8)
-            result = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-            # Increase contrast
-            alpha = 1.2  # Contrast control
-            beta = 10    # Brightness control
-            return cv2.convertScaleAbs(result, alpha=alpha, beta=beta)
-        
-        elif filter_key == 'vintage':
-            # Vintage: reduced saturation, warm tones, slight vignette
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 1] = hsv[:, :, 1] * 0.7  # Reduce saturation
-            hsv = np.clip(hsv, 0, 255).astype(np.uint8)
-            result = cv2.cvtColor(hsv, cv2.COLOR_HSV2BGR)
-            # Add warm tone
-            result[:, :, 0] = np.clip(result[:, :, 0] * 0.9, 0, 255)  # Reduce blue
-            result[:, :, 2] = np.clip(result[:, :, 2] * 1.1, 0, 255)  # Increase red
-            return result.astype(np.uint8)
-        
-        elif filter_key == 'warmglow':
-            # Warm Glow: golden hour effect with orange/golden tones
-            # Increase red and reduce blue for warmth
-            result = img.copy().astype(np.float32)
-            result[:, :, 0] = np.clip(result[:, :, 0] * 0.85, 0, 255)  # Reduce blue
-            result[:, :, 1] = np.clip(result[:, :, 1] * 1.05, 0, 255)  # Slight green boost
-            result[:, :, 2] = np.clip(result[:, :, 2] * 1.15, 0, 255)  # Increase red
-            # Add slight brightness and saturation
-            hsv = cv2.cvtColor(result.astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 1.2, 0, 255)  # Increase saturation
-            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.05, 0, 255)  # Slight brightness boost
-            return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-        
-        elif filter_key == 'cooltone':
-            # Cool Tone: modern cinematic look with blue/cyan emphasis
-            # Increase blue and cyan, reduce red
-            result = img.copy().astype(np.float32)
-            result[:, :, 0] = np.clip(result[:, :, 0] * 1.15, 0, 255)  # Increase blue
-            result[:, :, 1] = np.clip(result[:, :, 1] * 1.05, 0, 255)  # Slight green boost for cyan
-            result[:, :, 2] = np.clip(result[:, :, 2] * 0.9, 0, 255)   # Reduce red
-            # Enhance contrast slightly
-            alpha = 1.1  # Contrast
-            beta = -5    # Brightness (slightly darker)
-            result = cv2.convertScaleAbs(result, alpha=alpha, beta=beta)
-            return result
-        
-        elif filter_key == 'softfocus':
-            # Soft Focus: dreamy romantic effect with subtle blur
-            # Apply bilateral filter for skin smoothing while preserving edges
-            smoothed = cv2.bilateralFilter(img, d=9, sigmaColor=75, sigmaSpace=75)
-            # Blend original with smoothed version for soft focus effect
-            alpha = 0.6  # Weight of smoothed image
-            result = cv2.addWeighted(smoothed, alpha, img, 1 - alpha, 0)
-            # Add slight glow by blending with a blurred version
-            blurred = cv2.GaussianBlur(result, (21, 21), 0)
-            glow = cv2.addWeighted(result, 0.85, blurred, 0.15, 0)
-            # Slightly increase brightness for dreamy effect
-            hsv = cv2.cvtColor(glow, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.08, 0, 255)
-            return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-        
-        elif filter_key == 'retro70s':
-            # Retro 70s: nostalgic look with yellow/orange tones and reduced contrast
-            # Reduce contrast first
-            alpha = 0.85  # Reduced contrast
-            beta = 15     # Increased brightness
-            faded = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
-            # Add yellow/orange cast
-            result = faded.copy().astype(np.float32)
-            result[:, :, 0] = np.clip(result[:, :, 0] * 0.88, 0, 255)  # Reduce blue
-            result[:, :, 1] = np.clip(result[:, :, 1] * 1.08, 0, 255)  # Increase green
-            result[:, :, 2] = np.clip(result[:, :, 2] * 1.12, 0, 255)  # Increase red
-            # Reduce saturation slightly for vintage feel
-            hsv = cv2.cvtColor(result.astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 0.85, 0, 255)
-            return cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-        
-        elif filter_key == 'pastel':
-            # Pastel Dream: soft pastel colors with increased brightness
-            # Increase brightness significantly
-            hsv = cv2.cvtColor(img, cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 2] = np.clip(hsv[:, :, 2] * 1.25, 0, 255)  # Increase brightness
-            # Reduce saturation for pastel effect
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 0.5, 0, 255)   # Significantly reduce saturation
-            result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-            # Add slight white overlay for pastel wash
-            white_overlay = np.ones_like(result) * 255
-            result = cv2.addWeighted(result, 0.75, white_overlay.astype(np.uint8), 0.25, 0)
-            return result
-        
-        elif filter_key == 'polaroid':
-            # Polaroid: vintage instant camera look with characteristic color shift
-            # Slight color shift and reduced contrast like old Polaroid photos
-            alpha = 0.9   # Slightly reduced contrast
-            beta = 10     # Slight brightness boost
-            faded = cv2.convertScaleAbs(img, alpha=alpha, beta=beta)
-            # Add characteristic Polaroid color cast (slightly cool with faded colors)
-            result = faded.copy().astype(np.float32)
-            result[:, :, 0] = np.clip(result[:, :, 0] * 1.05, 0, 255)  # Slight blue boost
-            result[:, :, 1] = np.clip(result[:, :, 1] * 0.98, 0, 255)  # Slight green reduction
-            result[:, :, 2] = np.clip(result[:, :, 2] * 1.02, 0, 255)  # Slight red boost
-            # Reduce saturation for faded look
-            hsv = cv2.cvtColor(result.astype(np.uint8), cv2.COLOR_BGR2HSV).astype(np.float32)
-            hsv[:, :, 1] = np.clip(hsv[:, :, 1] * 0.75, 0, 255)
-            result = cv2.cvtColor(hsv.astype(np.uint8), cv2.COLOR_HSV2BGR)
-            # Add slight vignette for authentic Polaroid look
-            rows, cols = result.shape[:2]
-            kernel_x = cv2.getGaussianKernel(cols, cols/2.5)
-            kernel_y = cv2.getGaussianKernel(rows, rows/2.5)
-            kernel = kernel_y * kernel_x.T
-            mask = kernel / kernel.max()
-            mask = np.dstack([mask] * 3)
-            vignette = result * mask
-            result = cv2.addWeighted(result, 0.3, vignette.astype(np.uint8), 0.7, 0)
-            return result
-        
-        return img
-    
     def _generate_thumbnail(self, img, filter_key, size=None):
         """Generate a thumbnail with the filter applied."""
         if size is None:
@@ -1368,7 +1217,7 @@ class ConfirmCaptureScreen(ColorScreen):
         thumbnail = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
         
         # Apply filter
-        filtered = self._apply_filter(thumbnail, filter_key)
+        filtered = apply_filter(thumbnail, filter_key)
         
         return filtered
     
@@ -1411,7 +1260,7 @@ class ConfirmCaptureScreen(ColorScreen):
         
         # Apply filter to preview
         if self._original_image is not None:
-            filtered_image = self._apply_filter(self._original_image.copy(), self._selected_filter)
+            filtered_image = apply_filter(self._original_image.copy(), self._selected_filter)
 
             # Update preview directly in memory to avoid temp files.
             self.preview.set_image(filtered_image)
@@ -1420,7 +1269,7 @@ class ConfirmCaptureScreen(ColorScreen):
         Logger.info('ConfirmCaptureScreen: on_entry().')
         self._current_shot = kwargs.get('shot') if 'shot' in kwargs else 0
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
-        self._selected_filter = 'color'  # Reset to default filter
+        self._selected_filter = DEFAULT_FILTER  # Reset to default filter
         self._original_image = None
 
         # Hide counter layout when only one photo is needed
@@ -1441,9 +1290,9 @@ class ConfirmCaptureScreen(ColorScreen):
             small_path = FileUtils.get_small_path(self.app.get_shot(shot))
             full_path = self.app.get_shot(shot)
             small_im = cv2.imread(small_path)
-            full_im = cv2.imread(full_path) if self.app.FILTERS else None
+            full_im = cv2.imread(full_path) if self.app.FILTERS_ENABLED else None
             thumbnails = []
-            if self.app.FILTERS and full_im is not None:
+            if self.app.FILTERS_ENABLED and full_im is not None:
                 thumbnails = [self._generate_thumbnail(full_im, card.filter_key) for card in self.filter_cards]
 
             def apply_on_main(dt):
@@ -1465,7 +1314,7 @@ class ConfirmCaptureScreen(ColorScreen):
         self._start_home_timeout()
 
     def _save_selected_filter(self, shot, filter_key, original_image):
-        filtered_image = self._apply_filter(original_image.copy(), filter_key)
+        filtered_image = apply_filter(original_image.copy(), filter_key)
         shot_path = self.app.get_shot(shot)
         FileUtils.write_image(shot_path, filtered_image)
         small_path = FileUtils.get_small_path(shot_path)
@@ -1476,31 +1325,12 @@ class ConfirmCaptureScreen(ColorScreen):
         Logger.info('ConfirmCaptureScreen: on_exit().')
         self._stop_home_timeout()
 
-    def _start_home_timeout(self):
-        self._stop_home_timeout()
-        self._home_timeout_started_at = Clock.get_boottime()
-        self.btn_home.progress = 1.0
-        self._home_timeout_clock = Clock.schedule_once(self.timer_event, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS)
-        self._home_progress_clock = Clock.schedule_interval(self._update_home_progress, 1/30.0)
-
-    def _stop_home_timeout(self):
-        if self._home_timeout_clock:
-            Clock.unschedule(self._home_timeout_clock)
-            self._home_timeout_clock = None
-        if self._home_progress_clock:
-            Clock.unschedule(self._home_progress_clock)
-            self._home_progress_clock = None
-
-    def _update_home_progress(self, dt):
-        elapsed = Clock.get_boottime() - self._home_timeout_started_at
-        self.btn_home.progress = max(0, 1.0 - (elapsed / CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS))
-
     def keep_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         self._stop_home_timeout()
         
         # Apply selected filter off the UI thread; Processing waits before building the collage.
-        if self.app.FILTERS and self._selected_filter != 'color' and self._original_image is not None:
+        if self.app.FILTERS_ENABLED and self._selected_filter != DEFAULT_FILTER and self._original_image is not None:
             self.app.start_photo_task(self._save_selected_filter, self._current_shot, self._selected_filter, self._original_image)
         
         if self._current_shot == self.app.get_shots_to_take(self._current_format) - 1:
@@ -1512,16 +1342,6 @@ class ConfirmCaptureScreen(ColorScreen):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
         self._stop_home_timeout()
         self.app.transition_to(ScreenMgr.COUNTDOWN, shot=self._current_shot, format=self._current_format)
-
-    def home_event(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenMgr.START)
-
-    def timer_event(self, obj):
-        Logger.info('ConfirmCaptureScreen: timer_event().')
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenMgr.START)
 
     def on_keyboard_action(self):
         self.keep_event(None)
@@ -1570,16 +1390,14 @@ class ProcessingScreen(ColorScreen):
         Logger.info('ProcessingScreen: on_entry().')
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
         self._clock = Clock.schedule_once(self.timer_event, 0.2)
-        if self.app.ringled:
-            self.app.ringled.start_rainbow()
+        self.app.ringled.start_rainbow()
 
         self._collage_started = False
 
     def on_exit(self, kwargs={}):
         Logger.info('ProcessingScreen: on_exit().')
         Clock.unschedule(self._clock)
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def timer_event(self, obj):
         Logger.info('ProcessingScreen: timer_event().')
@@ -1801,8 +1619,10 @@ class PrintStatusPopup(FloatLayout):
         if self.on_dismiss:
             self.on_dismiss()
 
-class ReviewScreen(ColorScreen):
+class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     """Final action screen: saved collage preview with independent print/share/done actions."""
+
+    HOME_TIMEOUT_SECONDS = REVIEW_HOME_TIMEOUT_SECONDS
 
     def __init__(self, app, **kwargs):
         Logger.info('ReviewScreen: __init__().')
@@ -1810,8 +1630,7 @@ class ReviewScreen(ColorScreen):
 
         self.app = app
         self._current_format = 0
-        self._home_timeout_clock = None
-        self._home_progress_clock = None
+        self._init_home_timeout()
         self._print_state = None
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
@@ -1930,8 +1749,7 @@ class ReviewScreen(ColorScreen):
         Logger.info('ReviewScreen: on_entry().')
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
         self._start_home_timeout()
-        if self.app.ringled:
-            self.app.ringled.start_rainbow()
+        self.app.ringled.start_rainbow()
         self._sync_print_button()
         self._load_preview_async(FileUtils.get_small_path(self.app.get_collage()))
         self.app.start_photo_task(self.app.save_collage)
@@ -1959,30 +1777,10 @@ class ReviewScreen(ColorScreen):
             self.layout.remove_widget(self.qr_popup)
         if hasattr(self, 'print_popup') and self.print_popup.parent:
             self.layout.remove_widget(self.print_popup)
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def _reset_timeout(self):
         self._start_home_timeout()
-
-    def _start_home_timeout(self):
-        self._stop_home_timeout()
-        self._home_timeout_started_at = Clock.get_boottime()
-        self.btn_home.progress = 1.0
-        self._home_timeout_clock = Clock.schedule_once(self.timer_event, HOME_TIMEOUT_SECONDS)
-        self._home_progress_clock = Clock.schedule_interval(self._update_home_progress, 1/30.0)
-
-    def _stop_home_timeout(self):
-        if self._home_timeout_clock:
-            Clock.unschedule(self._home_timeout_clock)
-            self._home_timeout_clock = None
-        if self._home_progress_clock:
-            Clock.unschedule(self._home_progress_clock)
-            self._home_progress_clock = None
-
-    def _update_home_progress(self, dt):
-        elapsed = Clock.get_boottime() - self._home_timeout_started_at
-        self.btn_home.progress = max(0, 1.0 - (elapsed / HOME_TIMEOUT_SECONDS))
 
     def home_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
@@ -2018,11 +1816,6 @@ class ReviewScreen(ColorScreen):
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:
             self.layout.remove_widget(self.qr_popup)
         self._reset_timeout()
-
-    def timer_event(self, obj):
-        Logger.info('ReviewScreen: timer_event().')
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenMgr.START)
 
     def on_keyboard_action(self):
         self.home_event(None)
@@ -2081,14 +1874,12 @@ class SuccessScreen(ColorScreen):
     def on_entry(self, kwargs={}):
         Logger.info('SuccessScreen: on_entry().')
         self._clock = Clock.schedule_once(self.timer_event, 1)
-        if self.app.ringled:
-            self.app.ringled.blink([255, 255, 255])
+        self.app.ringled.blink([255, 255, 255])
 
     def on_exit(self, kwargs={}):
         Logger.info('SuccessScreen: on_exit().')
         Clock.unschedule(self._clock)
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def on_click_start(self, obj):
         Logger.info('SuccessScreen: on_click_start(%s).', obj)
@@ -2155,13 +1946,11 @@ class CopyingScreen(ColorScreen):
 
     def on_entry(self, kwargs={}):
         Logger.info('CopyingScreen: on_entry().')
-        if self.app.ringled:
-            self.app.ringled.wave([255, 255, 255])
+        self.app.ringled.wave([255, 255, 255])
 
     def on_exit(self, kwargs={}):
         Logger.info('CopyingScreen: on_exit().')
-        if self.app.ringled:
-            self.app.ringled.clear()
+        self.app.ringled.clear()
 
     def on_update(self, kwargs={}):
         if not 'label' in kwargs: return

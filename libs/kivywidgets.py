@@ -1,12 +1,11 @@
 from kivy.clock import Clock
 from kivy.animation import Animation
-from kivy.uix.image import Image, AsyncImage
+from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.lang import Builder
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.behaviors import ButtonBehavior
-from kivy.uix.progressbar import ProgressBar
 from kivy.graphics.texture import Texture
 from kivy.properties import ColorProperty, StringProperty, ListProperty, NumericProperty, BooleanProperty
 from kivy.metrics import dp, sp
@@ -40,14 +39,13 @@ class KivyCamera(Image):
         super(KivyCamera, self).__init__(**kwargs)
         self._app = app
         self._fps = fps
-        self._reuse_texture = None
+        self._reuse_texture = None  # reused so a texture is not allocated per frame
         self._reset_stats()
         self._blur = blur
         self._blur_refresh_frames = max(1, int(blur_refresh_frames))
         self._blur_cache = None
         self._frame_count = 0
         self._stop = False
-        self._reuse_texture = None  # Réutilisation pour éviter allocations à chaque frame
         self._last_frame_id = None
         self._last_frame_size = None
         self._bound_parent = None
@@ -307,26 +305,8 @@ class FeedbackButtonBehavior(ButtonBehavior):
         Animation.cancel_all(self, 'opacity')
         Animation(opacity=self.feedback_opacity if value == 'down' else 1, d=0.06).start(self)
 
-class ImageButton(FeedbackButtonBehavior, AsyncImage):
-    pass
-
 class LayoutButton(FeedbackButtonBehavior, FloatLayout):
     pass
-
-Builder.load_string("""
-<ImageRoundButton>:
-    background_color: 0, 0, 0, 0
-    padding: (0, 0, 0, 0)
-    canvas.before:
-        Color:
-            rgba: self.background_color
-        Ellipse:
-            size: min(self.size) * 1.4, min(self.size) * 1.4
-            pos: (self.center_x - (min(self.size) * 1.4) / 2, self.center_y - (min(self.size) * 1.4) / 2)
-""")
-class ImageRoundButton(FeedbackButtonBehavior, AsyncImage):
-    source = StringProperty('')
-    background_color = ListProperty([0, 0, 0, 0])
 
 class ResizeLabel(Label):
     max_font_size = NumericProperty(sp(16))
@@ -446,29 +426,6 @@ class LabelRoundButton(FeedbackButtonBehavior, ResizeLabel):
             self.max_font_size = max_font_size
 
 Builder.load_string("""
-<BorderedLabel@Label>:
-    color : 1,1,1,1
-    border_color: (0,0,0,1)
-    border_width: .1
-    canvas.before:
-        Color:
-            rgba: self.border_color
-        Line:
-            width: self.border_width
-            rectangle: (self.pos[0], self.pos[1], self.size[0], self.size[1])
-""")
-class BorderedLabel(Label):
-    def __init__(self, **kwargs):
-        if 'border_color' in kwargs:
-            self.border_color = kwargs.pop('border_color')
-        if 'border_width' in kwargs:
-            self.border_width = kwargs.pop('border_width')
-        super(BorderedLabel, self).__init__(**kwargs)
-
-    def on_size(self, *args):
-        self.font_size = self.width / len(self.text) * 1.5
-
-Builder.load_string("""
 <BreezyBorderedLabel@Label>:
     color : 1,1,1,1
     border_color: (0,0,0,1)
@@ -550,31 +507,6 @@ class ShadowLabel(Label):
     tint = ListProperty([.5, .5, 1, .5])
 
 Builder.load_string('''
-<RotatingImage>:
-    canvas.before:
-        PushMatrix
-        Rotate:
-            angle: root.angle
-            axis: 0, 0, 1
-            origin: root.center
-    canvas.after:
-        PopMatrix
-''')
-class RotatingImage(AsyncImage):
-    angle = NumericProperty()
-
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
-        self.angle = 0
-        Clock.schedule_interval(self.update, 1/30)
-
-    def update(self, dt):
-        if is_offscreen(self):
-            return
-        self.angle -= 4  # Was 2 at 60fps, now 4 at 30fps for same visual speed
-        self.angle %= 360
-
-Builder.load_string('''
 <RotatingLabel>:
     canvas.before:
         PushMatrix
@@ -598,24 +530,6 @@ class RotatingLabel(ResizeLabel):
             return
         self.angle -= 4  # Was 2 at 60fps, now 4 at 30fps for same visual speed
         self.angle %= 360
-
-Builder.load_string('''
-<ThickProgressBar@ProgressBar>:
-    canvas:
-        Color:
-            rgba: 1, 1, 1, 0
-        Rectangle:
-            pos: self.x, self.center_y - dp(3)
-            size: self.width, dp(6)
-
-        Color:
-            rgba: self.color
-        Rectangle:
-            pos: self.x, self.center_y - dp(3)
-            size: self.width * (self.value / float(self.max)) if self.max else 0, dp(6)
-''')
-class ThickProgressBar(ProgressBar):
-    color = ColorProperty()
 
 def hex_to_rgba(hex_color):
     # Enlève le caractère '#' si présent
