@@ -39,6 +39,10 @@ from libs.web_server import WebServer
 
 RINGLED = None
 
+# How long a capture abandoned after a timeout is given to leave the camera
+# driver before we stop trying to release the device ourselves.
+DEVICE_RELEASE_TIMEOUT_SECONDS = 5
+
 def signal_handler(sig, frame):
     print("\nCtrl+C detected. Exiting gracefully...")
     if RINGLED:
@@ -427,7 +431,22 @@ class PhotoboothApp(App):
             return False
 
     def reset_devices(self, reason='unknown'):
+        """Rebuild the capture devices. Returns False when that was not safe."""
         Logger.warning('PhotoboothApp: resetting devices reason=%s', reason)
+
+        # The abandoned capture thread may still be inside libgphoto2, which
+        # cannot be interrupted. Freeing the camera underneath it segfaults the
+        # process rather than raising, so when it does not come back we hand the
+        # problem to systemd, which restarts us, instead of guessing.
+        if not self.process_runner.wait_for_abandoned(DEVICE_RELEASE_TIMEOUT_SECONDS):
+            Logger.error(
+                'PhotoboothApp: capture still inside the camera driver after %ss, restarting '
+                'the application rather than freeing the device under a running thread',
+                DEVICE_RELEASE_TIMEOUT_SECONDS,
+            )
+            self.request_restart()
+            return False
+
         try:
             if getattr(self, 'devices', None):
                 self.devices.close()
@@ -442,12 +461,14 @@ class PhotoboothApp(App):
             camera_backend=self.CAMERA_BACKEND,
         )
         self._log_runtime_snapshot('devices_reset')
+        return True
 
     def recover_devices_and_return_home(self, reason='unknown'):
         def recover():
             try:
                 self.abandon_background_processes(kind='shot', reason=reason)
-                self.reset_devices(reason=reason)
+                if not self.reset_devices(reason=reason):
+                    return  # a restart is already on its way
                 self.request_transition_to(ScreenMgr.START)
             except Exception as exc:
                 Logger.error('PhotoboothApp: device recovery failed: %s', exc)

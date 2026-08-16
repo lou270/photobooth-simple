@@ -18,6 +18,7 @@ class ProcessRunner:
     def __init__(self):
         self._lock = threading.Lock()
         self._thread = None
+        self._abandoned_thread = None
         self._token = 0
         self._state = self._idle_state()
 
@@ -128,5 +129,28 @@ class ProcessRunner:
             self._token += 1
             self._state['error'] = reason
             self._state['finished_at'] = time.monotonic()
+            self._abandoned_thread = self._thread
             self._thread = None
+        return True
+
+    def wait_for_abandoned(self, timeout):
+        """Give an abandoned job a bounded chance to leave its native driver.
+
+        Returns False when it is still running. Callers must treat that as "this
+        device can never be safely released": freeing a handle a thread is
+        blocked inside segfaults the process instead of raising.
+        """
+        with self._lock:
+            thread = self._abandoned_thread
+
+        if thread is None or not thread.is_alive():
+            return True
+
+        thread.join(timeout)
+        if thread.is_alive():
+            return False
+
+        with self._lock:
+            if self._abandoned_thread is thread:
+                self._abandoned_thread = None
         return True

@@ -109,6 +109,34 @@ def test_abandoning_another_kind_is_a_no_op():
     release.set()
 
 
+def test_waiting_on_nothing_succeeds_immediately():
+    assert ProcessRunner().wait_for_abandoned(timeout=0.01)
+
+
+def test_an_abandoned_job_that_returns_releases_its_device():
+    runner = ProcessRunner()
+    release = threading.Event()
+    runner.start('shot', release.wait)
+    runner.abandon('shot', reason='capture_timeout')
+
+    release.set()
+
+    assert runner.wait_for_abandoned(timeout=2.0)
+
+
+def test_an_abandoned_job_stuck_in_its_driver_refuses_the_release():
+    """False here means the device can never be safely closed."""
+    runner = ProcessRunner()
+    release = threading.Event()
+    runner.start('shot', release.wait)
+    runner.abandon('shot', reason='capture_timeout')
+
+    assert not runner.wait_for_abandoned(timeout=0.05)
+
+    release.set()
+    assert wait_until(lambda: runner.wait_for_abandoned(timeout=0.5))
+
+
 def test_an_abandoned_job_cannot_overwrite_the_next_one():
     """The thread keeps running after abandon(): its outcome must be ignored."""
     runner = ProcessRunner()
