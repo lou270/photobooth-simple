@@ -104,7 +104,7 @@ class Cv2Camera(Camera):
             im = self._preview_frame
         if im is None: return None
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
-        if zoom and zoom[0] > 1.0: im = FileUtils.zoom(im, zoom)
+        im = self._apply_preview_zoom(im, zoom)
         return im
 
     def get_preview_frame_id(self):
@@ -120,7 +120,7 @@ class Cv2Camera(Camera):
             raise IOError('OpenCV camera capture failed')
         #im = cv2.flip(im, 0)
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
-        if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
+        im = self._apply_capture_zoom(im, zoom)
 
         self._write_capture(output_name, im)
     
@@ -280,8 +280,7 @@ class Gphoto2Camera(Camera):
         if im is None:
             return None
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
-        if zoom and zoom[0] > 1.0:
-            im = FileUtils.zoom(im, zoom)
+        im = self._apply_preview_zoom(im, zoom)
         return im
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
@@ -310,7 +309,7 @@ class Gphoto2Camera(Camera):
             raise IOError('gPhoto2 returned an unreadable image buffer')
         #im = cv2.rotate(im, cv2.ROTATE_180)
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
-        if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
+        im = self._apply_capture_zoom(im, zoom)
 
         self._write_capture(output_name, im)
 
@@ -388,7 +387,7 @@ class Picamera2Camera(Camera):
             im = self._preview_frame
         if im is None: return None
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
-        if zoom and zoom[0] > 1.0: im = FileUtils.zoom(im, zoom)
+        im = self._apply_preview_zoom(im, zoom)
         return im
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
@@ -404,7 +403,7 @@ class Picamera2Camera(Camera):
                 self._instance.switch_mode(self._preview_config)
         finally:
             self._capturing = False
-        if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
+        im = self._apply_capture_zoom(im, zoom)
 
         self._write_capture(output_name, im)
     

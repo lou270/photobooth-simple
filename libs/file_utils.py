@@ -154,8 +154,15 @@ class FileUtils:
 
     @staticmethod
     def zoom(im, zoom=(1.0, 0, 0)):
+        """Zoom in on (zoom_factor, offset_x, offset_y), keeping the input size.
+
+        The image is upscaled by the factor then centre-cropped back to its
+        original dimensions, so only a zoom-in is meaningful. Callers holding a
+        calibration triple should go through Camera._apply_preview_zoom or
+        Camera._apply_capture_zoom, which know which side to invert.
+        """
         h, w, _ = [ int(zoom[0] * i) for i in im.shape ]
-        if zoom[0] < 1.0: raise Exception('Zoom must be greater than 1.0')
+        if zoom[0] < 1.0: raise ValueError('Zoom factor must be greater than 1.0')
         cx, cy = w/2, h/2
         im = cv2.resize(im, (0, 0), fx=zoom[0], fy=zoom[0])
         cx = cx - zoom[1]

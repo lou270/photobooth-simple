@@ -70,6 +70,27 @@ class Camera:
         top = (height - new_height) // 2
         return image[top:top + new_height, :]
 
+    # CALIBRATION is the (zoom, offset_x, offset_y) triple produced by
+    # tools/calibrate_zoom.py on a hybrid rig, where preview and capture come
+    # from two cameras with different fields of view. The tool stores a single
+    # factor and decides from its value which side has to be zoomed in:
+    #     zoom > 1  ->  the preview is too wide, zoom the preview by `zoom`
+    #     zoom < 1  ->  the capture is too wide, zoom the capture by `1 / zoom`
+    # Offsets are passed through unchanged on both sides, exactly as the tool
+    # applies them while the operator validates the overlay on screen.
+
+    @staticmethod
+    def _apply_preview_zoom(image, zoom):
+        if not zoom or zoom[0] <= 1.0:
+            return image
+        return FileUtils.zoom(image, zoom)
+
+    @staticmethod
+    def _apply_capture_zoom(image, zoom):
+        if not zoom or zoom[0] >= 1.0:
+            return image
+        return FileUtils.zoom(image, (1.0 / zoom[0], zoom[1], zoom[2]))
+
     def _write_capture(self, output_name, image):
         """Write the capture, then build its small preview off the capture path."""
         FileUtils.write_image(output_name, image)

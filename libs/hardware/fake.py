@@ -81,12 +81,10 @@ class FakeCamera(Camera):
         )
         return frame
 
-    def _frame_for_output(self, aspect_ratio, zoom):
+    def _frame_for_output(self, aspect_ratio, zoom, apply_zoom):
         frame = self._render_frame()
         frame = self._crop_to_aspect_ratio(frame, aspect_ratio)
-        if zoom and zoom[0] > 1.0:
-            frame = FileUtils.zoom(frame, zoom)
-        return frame
+        return apply_zoom(frame, zoom)
 
     # --- Camera contract -------------------------------------------------
 
@@ -97,7 +95,7 @@ class FakeCamera(Camera):
         return self._frame_index()
 
     def get_preview(self, aspect_ratio=None, zoom=None):
-        return self._frame_for_output(aspect_ratio, zoom)
+        return self._frame_for_output(aspect_ratio, zoom, self._apply_preview_zoom)
 
     def has_physical_flash(self):
         return self._has_flash
@@ -108,7 +106,7 @@ class FakeCamera(Camera):
 
         if flash_fn and not self.has_physical_flash():
             flash_fn()
-        frame = self._frame_for_output(aspect_ratio, zoom)
+        frame = self._frame_for_output(aspect_ratio, zoom, self._apply_capture_zoom)
         if flash_fn and not self.has_physical_flash():
             flash_fn(stop=True)
 
