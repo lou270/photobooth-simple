@@ -203,8 +203,11 @@ class TemplateCollage:
         collage = self.assemble(image_paths)
         collage = FileUtils.resize(collage)
         
-        # Dump to temp file
-        _, tmp_output = tempfile.mkstemp(suffix='.jpg')
+        # Dump to temp file. mkstemp hands back an open descriptor as well as a
+        # path; leaving it open leaked one per template and, on Windows, stopped
+        # write_image from replacing the file it had just created.
+        handle, tmp_output = tempfile.mkstemp(suffix='.jpg')
+        os.close(handle)
         FileUtils.write_image(tmp_output, collage)
         
         # Cache the result
