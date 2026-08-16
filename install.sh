@@ -106,6 +106,17 @@ pip3 install -r requirements.txt --break-system-packages
 print_success "Python dependencies installed"
 echo ""
 
+# config.ini holds the admin password and is deliberately not in the repository.
+# Without this the application would refuse to start on a fresh install.
+if [ ! -f config.ini ]; then
+    cp config.ini.example config.ini
+    print_success "Created config.ini from config.ini.example"
+    print_warning "Set ADMIN_PASSWORD in config.ini (at least 10 characters), otherwise the web admin stays disabled"
+else
+    print_info "Keeping the existing config.ini"
+fi
+echo ""
+
 # ============================================================================
 # STEP 3: Kiosk Mode (Raspberry Pi only)
 # ============================================================================
