@@ -69,6 +69,23 @@ class Config:
         """
         return self._get_string(('Web',), 'WEB_HOST', fallback='0.0.0.0').strip() or '0.0.0.0'
 
+    def get_wifi_ssid(self):
+        """Network name put in the QR code that joins the booth's access point.
+
+        Defaults to what install.sh writes into hostapd.conf. A booth whose
+        operator renamed the network there must say so here too: nothing in this
+        process can read the access point's own configuration.
+        """
+        return self._get_string(('WiFi',), 'WIFI_SSID', fallback='PhotoBooth').strip()
+
+    def get_wifi_password(self):
+        """Empty for an open network, which is how the access point ships."""
+        password = self._get_string(('WiFi',), 'WIFI_PASSWORD', fallback='').strip()
+        return password if password and password.upper() != 'NONE' else ''
+
+    def get_wifi_hidden(self):
+        return self._get_boolean(('WiFi',), 'WIFI_HIDDEN', fallback=False)
+
     def get_remote_capture(self):
         """Whether guests may send photos taken with their own phone."""
         return self._get_boolean(('Remote',), 'REMOTE_CAPTURE', fallback=False)

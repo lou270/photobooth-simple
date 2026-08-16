@@ -228,6 +228,7 @@
 
         <p class="hint">
             Up to {{ max_per_sender }} photos per phone, {{ max_upload_mb }} MB each.
+            {% if show_gallery_link %}<br><a href="/gallery">See the photos taken at the booth</a>{% endif %}
         </p>
     </main>
 

@@ -214,13 +214,12 @@ class PrintStatusPopup(FloatLayout):
 class QRCodePopup(FloatLayout):
     """Popup overlay to show QR code.
 
-    Two payloads exist so far: the WiFi credentials that get a phone onto the
-    booth's network, and the address of the remote capture page. They are cached
-    per payload rather than one at a time, because the welcome screen may offer
-    both and building a code costs a visible fraction of a second on a Pi.
+    What goes in the code is decided by the caller, not here: joining the WiFi
+    and opening a page are different payloads, and which one a booth should hand
+    out depends on whether it runs its own access point. Codes are cached per
+    payload rather than one at a time, because a booth may offer several and
+    building one costs a visible fraction of a second on a Pi.
     """
-
-    WIFI_PAYLOAD = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
 
     # Class-level caches, shared across instances and keyed by payload.
     _qr_texture_cache = {}
@@ -228,7 +227,7 @@ class QRCodePopup(FloatLayout):
     _qr_generating = set()
 
     @classmethod
-    def preload(cls, payload=WIFI_PAYLOAD):
+    def preload(cls, payload):
         """Build the QR texture on the UI thread if async preload did not finish yet."""
         if payload in cls._qr_texture_cache:
             return
@@ -243,9 +242,9 @@ class QRCodePopup(FloatLayout):
         cls.preload_async(payload)
 
     @classmethod
-    def preload_async(cls, payload=WIFI_PAYLOAD):
+    def preload_async(cls, payload):
         """Generate QR PNG in a worker, then create the Kivy texture on the UI thread."""
-        if payload in cls._qr_texture_cache or payload in cls._qr_generating:
+        if not payload or payload in cls._qr_texture_cache or payload in cls._qr_generating:
             return
 
         cls._qr_generating.add(payload)
@@ -294,8 +293,7 @@ class QRCodePopup(FloatLayout):
         core_image = CoreImage(buf, ext='png')
         cls._qr_texture_cache[payload] = core_image.texture
 
-    def __init__(self, on_dismiss=None, payload=WIFI_PAYLOAD, title='SCAN ME',
-                 hint='Go to http://192.168.4.1', **kwargs):
+    def __init__(self, payload, on_dismiss=None, title='SCAN ME', hint='', **kwargs):
         super(QRCodePopup, self).__init__(**kwargs)
         self.on_dismiss = on_dismiss
         self.payload = payload

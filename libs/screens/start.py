@@ -106,7 +106,7 @@ class StartScreen(BackgroundScreen):
         self._purge_when_idle()
 
         if self.app.has_remote_capture():
-            QRCodePopup.preload_async(self.app.remote_url)
+            QRCodePopup.preload_async(self.app.get_qr_invitation(self.app.remote_url)[0])
             self._refresh_pending_count()
             self._queue_clock = Clock.schedule_interval(self._refresh_pending_count, 5)
 
@@ -119,7 +119,7 @@ class StartScreen(BackgroundScreen):
             self.app.clear_pending_photo_error()
             self.app.purge_tmp()
             if self.app.SHARE:
-                QRCodePopup.preload_async()
+                QRCodePopup.preload_async(self.app.get_qr_invitation(self.app.gallery_url)[0])
 
     def on_exit(self, kwargs={}):
         Logger.info('StartScreen: on_exit().')
@@ -172,11 +172,12 @@ class StartScreen(BackgroundScreen):
         Logger.info('StartScreen: remote_qr_event().')
         if getattr(self, 'qr_popup', None) is not None and self.qr_popup.parent:
             return
+        payload, title, hint = self.app.get_qr_invitation(self.app.remote_url)
         self.qr_popup = QRCodePopup(
+            payload,
             on_dismiss=self._dismiss_qr_popup,
-            payload=self.app.remote_url,
-            title='PHOTO FROM YOUR PHONE',
-            hint=self.app.remote_url,
+            title=title,
+            hint=hint,
         )
         self.add_widget(self.qr_popup)
 

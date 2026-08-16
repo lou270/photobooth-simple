@@ -31,7 +31,7 @@ from kivy.uix.screenmanager import FadeTransition
 from libs.config import Config
 from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
-from libs.net_utils import build_url
+from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import ScreenMgr
 from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
@@ -128,9 +128,24 @@ class PhotoboothApp(App):
             max_prints=self.MAX_PRINTS,
         )
 
+        # What every QR code the booth shows tells a phone to join. Built once:
+        # the access point does not change while the booth is running, and both
+        # the sharing popup and the remote camera popup hand out this same code.
+        self.wifi_payload = build_wifi_payload(
+            config.get_wifi_ssid(),
+            config.get_wifi_password(),
+            hidden=config.get_wifi_hidden(),
+        )
+
         # Photos guests take with their own phone, kept beside the sessions
         # rather than inside them: nothing here is a session until someone at the
         # booth picks it and prints it.
+        self.gallery_url = build_url(
+            self.WEB_PORT, '',
+            host=self.WEB_HOST,
+            override=config.get_remote_url(),
+        )
+
         self.remote_store = None
         self.remote_url = None
         if self.REMOTE_CAPTURE:
@@ -167,6 +182,7 @@ class PhotoboothApp(App):
             restart_callback=self.request_restart,
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
+            share_enabled=self.SHARE,
         )
         if self.web_server.start():
             Logger.info(
@@ -277,6 +293,22 @@ class PhotoboothApp(App):
             if print_format.get_photos_required() == 1:
                 return format_idx
         return 0
+
+    def get_qr_invitation(self, url):
+        """What a QR code must carry so a phone ends up at `url`.
+
+        Joining the network comes first, and no phone reads a code that both
+        joins a network and opens a page. So where the booth runs its own access
+        point the code joins it, and the address goes underneath in text: the
+        captive portal opens it by itself on most phones, and the ones it fails
+        on can be typed in. With no access point configured, the guest is
+        already on some network of their own and the code carries the address.
+
+        Returns (payload, title, hint) for QRCodePopup.
+        """
+        if self.wifi_payload:
+            return self.wifi_payload, 'SCAN TO JOIN THE WIFI', f'Then open {url}'
+        return url, 'SCAN ME', url
 
     # --- photos sent from phones -----------------------------------------
 

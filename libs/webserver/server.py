@@ -33,7 +33,7 @@ class WebServer:
     })
 
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
-                 restart_callback=None, remote_store=None, remote_enabled=False):
+                 restart_callback=None, remote_store=None, remote_enabled=False, share_enabled=False):
         self.save_directory = save_directory
         self.host = host
         self.port = port
@@ -46,6 +46,9 @@ class WebServer:
         # the photos already received going anywhere.
         self.remote_store = remote_store
         self.remote_enabled = bool(remote_enabled)
+        # SHARE decides whether guests are meant to reach the gallery at all, so
+        # it decides whether the capture page offers them a way back to it.
+        self.share_enabled = bool(share_enabled)
         # libs/webserver/server.py -> the project root is three levels up.
         self.project_root = str(Path(__file__).resolve().parents[2])
         self.web_directory = os.path.join(self.project_root, 'web')

@@ -68,6 +68,9 @@ def create_blueprint(server):
             max_upload_mb=round(store.max_upload_bytes / (1024 * 1024)),
             max_per_sender=store.max_per_sender,
             max_image_pixels=store.max_image_pixels,
+            # This page took over the captive portal landing, so it owes guests
+            # the way back to the gallery, where they were meant to reach it.
+            show_gallery_link=server.share_enabled,
         ))
         return attach_sender(response, sender_id() or new_sender_id())
 

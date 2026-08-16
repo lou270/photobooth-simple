@@ -26,6 +26,20 @@ WEB_PORT = 5000
 # 192.168.x.y pinned to a single interface
 WEB_HOST = 0.0.0.0
 
+[WiFi]
+# The access point install.sh sets up on the Pi, as it must appear in the QR
+# code guests scan to join it. Nothing here configures hostapd: these values
+# only describe it, so renaming the network in /etc/hostapd/hostapd.conf means
+# renaming it here as well, otherwise the QR code joins a network that is gone.
+WIFI_SSID = PhotoBooth
+
+# Empty for an open network, which is what install.sh configures. Fill it in
+# after uncommenting wpa_passphrase in hostapd.conf.
+WIFI_PASSWORD =
+
+# True only if hostapd is set to ignore_broadcast_ssid
+WIFI_HIDDEN = False
+
 [Remote]
 # Turn every guest phone into a camera for the booth: the welcome screen shows a
 # QR code, the phone opens a page, takes a photo and sends it here. The photos

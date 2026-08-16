@@ -11,7 +11,14 @@ def create_blueprint(server):
 
     @blueprint.route('/')
     def index():
-        """Main page - show gallery."""
+        """Main page - show gallery, or the capture page when phones may send."""
+        # The access point advertises this address as its captive portal (RFC
+        # 8910), so this is where a phone that just joined the WiFi arrives.
+        # Where the booth takes photos from phones, that is what the guest
+        # scanned the code for; the gallery stays one link away at /gallery.
+        if server.remote_enabled and server.remote_store is not None:
+            return redirect('/remote')
+
         collages = server._get_all_collages()
 
         if not collages:

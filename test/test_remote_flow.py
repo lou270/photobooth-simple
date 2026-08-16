@@ -134,3 +134,26 @@ def test_only_waiting_photos_are_offered_at_the_booth(tmp_path):
 def test_a_card_is_labelled_with_the_time_the_photo_arrived(received_at, expected):
     """The clock time is how a guest recognises their own photo on the wall."""
     assert RemoteGalleryScreen._format_time(received_at) == expected
+
+
+def test_the_qr_code_joins_the_wifi_and_the_address_goes_underneath(tmp_path):
+    """Scanning has to connect the phone first; no code can do both at once."""
+    app = make_app(tmp_path)
+    app.wifi_payload = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
+
+    payload, title, hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
+
+    assert payload == app.wifi_payload
+    assert 'WIFI' in title
+    assert hint == 'Then open http://192.168.4.1:5000/remote'
+
+
+def test_without_an_access_point_the_qr_code_carries_the_address(tmp_path):
+    """Nothing to join means the guest is already on a network of their own."""
+    app = make_app(tmp_path)
+    app.wifi_payload = None
+
+    payload, _title, hint = app.get_qr_invitation('http://192.168.1.20:5000/remote')
+
+    assert payload == 'http://192.168.1.20:5000/remote'
+    assert hint == 'http://192.168.1.20:5000/remote'

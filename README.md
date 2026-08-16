@@ -199,14 +199,19 @@ photo to the booth, walks over and prints it.
 
 ### What a guest does
 
-1. Joins the booth's WiFi network. Phones open the booth's page by themselves at that point, since
-   the captive portal detection now lands on the capture page.
-2. Or scans the QR code shown at the bottom right of the welcome screen, which carries the address
-   of that same page. Note that the phone must already be on the booth's network for it to open.
+1. Scans the QR code at the bottom right of the welcome screen. It carries the booth's WiFi
+   credentials, so scanning it joins the access point the Pi runs.
+2. The capture page then opens by itself: the booth's dnsmasq answers every domain with its own
+   address and advertises itself as a captive portal, so the phone's connectivity check lands there.
+   The address is written under the QR code as well, for the phone whose portal fails to pop.
 3. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
    became of it, and lets the guest take a photo back before anyone prints it.
 4. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
    it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
+
+A QR code cannot both join a network and open a page — no phone reads a payload that does both — so
+it does the half that has to come first. The rest is the captive portal's job, which is why `/`
+serves the capture page while the feature is on; the gallery stays one link away at `/gallery`.
 
 The capture itself is done by the phone's own camera application, through a file input, rather than
 by the browser. That is deliberate: `getUserMedia` is refused outside a secure context, and a booth
@@ -245,6 +250,20 @@ All in the `[Remote]` section of `config.ini`, and in the admin configuration fo
 
 The last four exist so that one guest, or one script within WiFi range, cannot fill the booth's disk
 on their own.
+
+The QR code itself is built from the `[WiFi]` section, which every QR code the booth shows now uses,
+the sharing one included:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `WIFI_SSID` | `PhotoBooth` | Network name put in the code. Must match `ssid=` in `/etc/hostapd/hostapd.conf`. |
+| `WIFI_PASSWORD` | *(empty)* | Empty for an open network, which is how `install.sh` configures it. |
+| `WIFI_HIDDEN` | `False` | Only if hostapd is set to `ignore_broadcast_ssid`. |
+
+Nothing here configures hostapd; these values only describe it. Renaming the network on the Pi means
+renaming it here too, otherwise the QR code invites guests onto a network that no longer exists.
+Clearing `WIFI_SSID` says the booth has no access point of its own, and the QR codes then carry the
+booth's address directly instead.
 
 ## USB Photo Export
 

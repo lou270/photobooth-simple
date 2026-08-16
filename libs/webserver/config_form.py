@@ -56,6 +56,15 @@ CONFIG_FORM_SECTIONS = (
         ),
     },
     {
+        'title': 'WiFi access point',
+        'description': 'What the QR code tells a phone to join. Describes hostapd, does not configure it.',
+        'fields': (
+            {'section': 'WiFi', 'option': 'WIFI_SSID', 'label': 'Network name', 'control': 'text', 'placeholder': 'PhotoBooth', 'help': 'Must match ssid= in /etc/hostapd/hostapd.conf.'},
+            {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'label': 'Network password', 'control': 'text', 'placeholder': 'Open network', 'help': 'Leave empty for an open network, as install.sh configures it.'},
+            {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'label': 'Hidden network', 'control': 'checkbox'},
+        ),
+    },
+    {
         'title': 'Remote camera',
         'description': 'Photos guests take with their own phone and send to the booth.',
         'fields': (

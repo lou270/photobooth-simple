@@ -28,13 +28,14 @@ def jpeg_bytes(width=800, height=600):
     return buffer.tobytes()
 
 
-def make_server(tmp_path, enabled=True, **store_kwargs):
+def make_server(tmp_path, enabled=True, share=False, **store_kwargs):
     store = RemoteStore(str(tmp_path / 'remote'), min_upload_interval=0, **store_kwargs)
     server = WebServer(
         str(tmp_path / 'save'),
         admin_password=ADMIN_PASSWORD,
         remote_store=store,
         remote_enabled=enabled,
+        share_enabled=share,
     )
     server.templates_directory = str(tmp_path / 'templates')
     server.logs_directory = str(tmp_path / 'logs')
@@ -179,20 +180,35 @@ def test_a_phone_can_withdraw_its_photo_but_not_another_one(server, phone):
     assert server.remote_store.count_pending() == 0
 
 
-def test_joining_the_wifi_lands_a_phone_on_the_capture_page(server, tmp_path):
-    """The captive portal is what a phone opens on its own after joining."""
-    response = server.app.test_client().get('/generate_204')
+@pytest.mark.parametrize('path', [
+    '/generate_204',        # what a phone probes to detect a captive portal
+    '/hotspot-detect.html',
+    '/',                    # what the access point advertises as its portal
+])
+def test_joining_the_wifi_lands_a_phone_on_the_capture_page(server, path):
+    """Every way a phone arrives after joining the WiFi has to end up here."""
+    response = server.app.test_client().get(path)
 
     assert response.status_code == 302
     assert response.headers['Location'] == '/remote'
 
 
-def test_without_the_feature_the_captive_portal_still_opens_the_gallery(tmp_path):
+@pytest.mark.parametrize('path', ['/generate_204', '/'])
+def test_without_the_feature_a_phone_still_lands_on_the_gallery(tmp_path, path):
     client = make_server(tmp_path, enabled=False).app.test_client()
 
-    response = client.get('/generate_204')
+    response = client.get(path)
 
-    assert response.headers['Location'] == '/'
+    assert response.headers.get('Location') != '/remote'
+
+
+def test_the_capture_page_offers_the_gallery_only_when_sharing_is_on(tmp_path):
+    """It took over the captive portal landing, so it owes guests the way back."""
+    shared = make_server(tmp_path / 'shared', share=True).app.test_client()
+    private = make_server(tmp_path / 'private', share=False).app.test_client()
+
+    assert b'/gallery' in shared.get('/remote').data
+    assert b'/gallery' not in private.get('/remote').data
 
 
 @pytest.mark.parametrize('method,path', [
