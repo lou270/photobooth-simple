@@ -230,6 +230,17 @@
             Up to {{ max_per_sender }} photos per phone, {{ max_upload_mb }} MB each.
             {% if show_gallery_link %}<br><a href="/gallery">See the photos taken at the booth</a>{% endif %}
         </p>
+
+        <!-- This network has no internet, and phones say so loudly: Android
+             offers to leave it for mobile data, iOS keeps reopening the sign-in
+             sheet. Telling the booth the guest is done makes the connectivity
+             probes answer success, which quiets both. -->
+        <button id="keep-wifi" type="button" class="btn btn-quiet btn-block" style="margin-top: 14px;">
+            Keep this WiFi connected
+        </button>
+        <p id="keep-wifi-done" class="hint hidden">
+            Done. Your phone will stop asking about this network.
+        </p>
     </main>
 
     <canvas id="scratch" class="hidden"></canvas>
@@ -260,7 +271,9 @@
                 liveCancel: document.getElementById('live-cancel'),
                 list: document.getElementById('sent-list'),
                 empty: document.getElementById('sent-empty'),
-                canvas: document.getElementById('scratch')
+                canvas: document.getElementById('scratch'),
+                keepWifi: document.getElementById('keep-wifi'),
+                keepWifiDone: document.getElementById('keep-wifi-done')
             };
 
             var pendingBlob = null;
@@ -485,6 +498,20 @@
                     .then(function (body) { renderSent(body.photos || []); })
                     .catch(function () { /* the next tick tries again */ });
             }
+
+            function keepWifiConnected() {
+                elements.keepWifi.disabled = true;
+                fetch('/captive-portal/release', { method: 'POST' })
+                    .then(function () {
+                        elements.keepWifi.classList.add('hidden');
+                        elements.keepWifiDone.classList.remove('hidden');
+                    })
+                    .catch(function () {
+                        elements.keepWifi.disabled = false;
+                    });
+            }
+
+            elements.keepWifi.addEventListener('click', keepWifiConnected);
 
             window.addEventListener('pagehide', stopLive);
             refreshSent();

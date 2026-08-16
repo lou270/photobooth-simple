@@ -1,4 +1,4 @@
-"""What a guest can reach: the collages, and the captive portal that leads here."""
+"""What a guest can reach: the collages, and the page they land on first."""
 
 from flask import Blueprint, redirect, render_template, send_file, session
 
@@ -78,24 +78,5 @@ def create_blueprint(server):
             as_attachment=True,
             download_name=f'photobooth_{session}.jpg'
         )
-
-    @blueprint.route('/generate_204')
-    @blueprint.route('/gen_204')
-    @blueprint.route('/hotspot-detect.html')
-    @blueprint.route('/library/test/success.html')
-    @blueprint.route('/canonical.html')
-    @blueprint.route('/connecttest.txt')
-    @blueprint.route('/ncsi.txt')
-    @blueprint.route('/redirect')
-    @blueprint.route('/fwlink')
-    @blueprint.route('/check_network_status.txt')
-    @blueprint.route('/mobile/status.php')
-    def captive():
-        # A phone joining the booth's access point opens one of these by itself.
-        # Where a booth takes photos from phones, that is the page worth landing
-        # on: it is the reason the guest was asked to join the network at all.
-        if server.remote_enabled and server.remote_store is not None:
-            return redirect('/remote')
-        return redirect('/')
 
     return blueprint

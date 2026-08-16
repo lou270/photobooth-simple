@@ -366,8 +366,11 @@ domain=photobooth.local
 dhcp-option=3,192.168.4.1
 dhcp-option=6,192.168.4.1
 
-# RFC 8910 captive portal hint, supported by recent Android/iOS versions.
-dhcp-option=114,http://192.168.4.1/
+# RFC 8910 captive portal hint, read by iOS 14+ and Android 11+. The URI must
+# be the RFC 8908 API endpoint, which answers application/captive+json, and not
+# a web page: a phone that finds HTML here ignores the hint and falls back to
+# guessing from connectivity probes.
+dhcp-option=114,http://192.168.4.1/captive-portal/api
 
 # Captive Portal DNS - resolve every domain to the PhotoBooth.
 # Phones probe public domains to detect captive portals; this makes those probes hit Flask locally.
