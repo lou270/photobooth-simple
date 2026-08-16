@@ -1,7 +1,21 @@
-numpy
-kivy
-lxml
-opencv-contrib-python
-psutil
-flask
-qrcode[pil]
+# Runtime dependencies.
+#
+# Upper bounds are deliberate: this file used to pin nothing, and psutil 7
+# removing a private name was enough to make the application unbootable on a
+# fresh install. A booth must never pick up a new major release by accident.
+# Lower bounds are known-good versions; the test suite currently runs against
+# Flask 3.1, Kivy 2.3, numpy 2.5, OpenCV 5.0 and psutil 7.2.
+flask>=3.0,<4
+kivy>=2.3,<3
+numpy>=1.26,<3
+opencv-contrib-python>=4.8,<6
+psutil>=5.9,<8
+qrcode[pil]>=7.4,<9
+
+# Optional, platform specific: install only where the hardware exists.
+#   pycups      CUPS printing               (Linux, macOS)
+#   spidev      WS2812 ring light over SPI  (Raspberry Pi)
+#   picamera2   Raspberry Pi Camera Module  (Raspberry Pi)
+# DSLR support needs the libgphoto2 shared library, not a Python package.
+# Without any of these the application still runs: set CAMERA = fake in
+# config.ini, and printing and the ring light degrade to no-ops.

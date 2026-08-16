@@ -2,7 +2,8 @@ import sys
 import time
 import cv2
 
-sys.path.append('..')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from libs.device_utils import Gphoto2Camera
 
 # Connect to camera

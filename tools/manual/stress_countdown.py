@@ -18,7 +18,7 @@ import numpy as np
 os.environ.setdefault('KIVY_NO_ARGS', '1')
 os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 

@@ -1,0 +1,6 @@
+# Development and test dependencies.
+#
+# The test suite needs no camera, no printer and no ring light: it runs against
+# FakeCamera and NullLed. `pytest test/` is expected to pass on a workstation.
+-r requirements.txt
+pytest>=8.0,<10
