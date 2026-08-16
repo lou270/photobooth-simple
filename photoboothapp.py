@@ -145,13 +145,17 @@ class PhotoboothApp(App):
                 self.SHARE,
             )
         else:
-            Logger.error('PhotoboothApp: Web server failed to start; gallery and admin are unavailable')
-            self._requested_screen = ScreenMgr.ERROR
-            self._requested_kwargs = {
-                'message': f"Web server cannot be bound to port {self.WEB_PORT}.",
-                'show_continue': True,
-                'show_restart': True,
-            }
+            # The web server is a maintenance tool, not part of taking photos.
+            # It can fail to bind for reasons that have nothing to do with the
+            # booth being usable: the maintenance AP not up yet at boot, or the
+            # port still held by a process left over from a crash. Refusing to
+            # run in front of guests over that is the worst possible trade.
+            Logger.error(
+                'PhotoboothApp: web server could not bind %s:%s, gallery and admin are '
+                'unavailable for this run',
+                self.WEB_HOST,
+                self.WEB_PORT,
+            )
 
         self.storage.log_disk_usage('startup')
         if self.is_disk_space_critical():
