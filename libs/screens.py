@@ -1812,6 +1812,7 @@ class ReviewScreen(ColorScreen):
         self._current_format = 0
         self._home_timeout_clock = None
         self._home_progress_clock = None
+        self._print_state = None
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
         self.layout.add_widget(self.overlay_layout)
@@ -1879,8 +1880,25 @@ class ReviewScreen(ColorScreen):
         return buttons
 
     def _sync_print_button(self):
-        printer_available = self.app.has_printer()
-        print_available = self.app.can_start_print()
+        """Refresh the print button without blocking the UI thread.
+
+        has_printer() is a CUPS round trip and can_start_print() reads the stats
+        file. Both used to run straight from the clock, so entering this screen
+        stalled on a printer that was slow to answer, right after a capture.
+        The last known state is shown immediately and corrected when the probe
+        comes back.
+        """
+        if self._print_state is not None:
+            self._apply_print_state(*self._print_state)
+
+        def probe():
+            state = (self.app.has_printer(), self.app.can_start_print())
+            Clock.schedule_once(lambda dt: self._apply_print_state(*state), 0)
+
+        threading.Thread(target=probe, name='photobooth-printer-probe', daemon=True).start()
+
+    def _apply_print_state(self, printer_available, print_available):
+        self._print_state = (printer_available, print_available)
 
         if printer_available and self.btn_print.parent is None:
             self.overlay_layout.add_widget(self.btn_print)

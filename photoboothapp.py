@@ -294,7 +294,7 @@ class PhotoboothApp(App):
 
     def _log_runtime_snapshot(self, context):
         Logger.info(
-            'PhotoboothApp: runtime snapshot [%s] threads=%d current_screen=%s share=%s printer=%s',
+            'PhotoboothApp: runtime snapshot [%s] threads=%d current_screen=%s share=%s printer_configured=%s',
             context,
             len(threading.enumerate()),
             self.get_current_screen_name(),
@@ -483,10 +483,9 @@ class PhotoboothApp(App):
         Logger.info('PhotoboothApp: save_collage().')
         if not self.ensure_disk_space_or_maintenance():
             raise RuntimeError('Photo storage is almost full')
-        session_id, moved_files = self.storage.save_session()
+        session_id, photos = self.storage.save_session()
         self.storage.log_disk_usage('after_save')
-        for _ in range(moved_files):
-            self.stats_store.track_photo_taken(session_id=session_id)
+        self.stats_store.track_session(session_id, photos)
 
     def purge_tmp(self):
         self.storage.purge_tmp()

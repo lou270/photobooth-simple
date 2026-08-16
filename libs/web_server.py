@@ -1,6 +1,5 @@
 import configparser
 import hmac
-import io
 import json
 import os
 import re
@@ -8,12 +7,39 @@ import shutil
 import threading
 import zipfile
 from datetime import datetime
-from flask import Flask, jsonify, request, send_file, render_template, redirect, session
+from flask import Flask, Response, jsonify, request, send_file, render_template, redirect, session
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
 from libs.login_throttle import LoginThrottle
 from libs.template_schema import TemplateValidationError, validate_template
+
+
+class _ArchiveStream:
+    """Write target for ZipFile that hands each chunk straight to the response.
+
+    Only tell() is provided, no seek: zipfile then writes a streamable archive
+    with data descriptors instead of rewinding to patch headers.
+    """
+
+    def __init__(self):
+        self._chunks = []
+        self._offset = 0
+
+    def write(self, data):
+        self._chunks.append(data)
+        self._offset += len(data)
+        return len(data)
+
+    def tell(self):
+        return self._offset
+
+    def flush(self):
+        pass
+
+    def drain(self):
+        chunks, self._chunks = self._chunks, []
+        return b''.join(chunks)
 
 class WebServer:
     """Flask web server for photo gallery with captive portal."""
@@ -21,6 +47,9 @@ class WebServer:
     # The admin password is the only application-level gate on a booth that is
     # reachable from whatever network it sits on, so refuse the obvious ones
     # outright rather than trusting the operator to have changed the default.
+    # Poll interval, then the delay before each successive restart attempt.
+    WATCHDOG_BACKOFF_SECONDS = (5, 5, 15, 60, 300)
+
     MIN_ADMIN_PASSWORD_LENGTH = 10
     FORBIDDEN_ADMIN_PASSWORDS = frozenset({
         'admin', 'password', 'photobooth', 'motdepasse', 'changeme', '0000',
@@ -187,18 +216,43 @@ class WebServer:
         self._setup_routes()
 
     def _watchdog_loop(self):
-        while not self._watchdog_stop.wait(timeout=5):
-            if self.server_thread is None:
-                continue
-            if self.server_thread.is_alive():
+        """Restart the server when its thread dies, backing off between tries.
+
+        A bind that fails once usually fails again: a port held by a leftover
+        process does not free itself. Retrying every five seconds forever only
+        fills the log with the same error until the disk notices.
+        """
+        consecutive_failures = 0
+
+        while not self._watchdog_stop.wait(timeout=self.WATCHDOG_BACKOFF_SECONDS[consecutive_failures]):
+            if self.server_thread is None or self.server_thread.is_alive():
+                consecutive_failures = 0
                 continue
 
             Logger.error('WebServer: watchdog detected stopped server thread, attempting restart')
+            restarted = False
             try:
-                if not self.start(force_restart=True):
-                    Logger.error('WebServer: watchdog restart failed')
+                restarted = self.start(force_restart=True)
             except Exception as e:
                 Logger.error(f'WebServer: watchdog restart exception: {e}')
+
+            if restarted:
+                consecutive_failures = 0
+                continue
+
+            consecutive_failures += 1
+            if consecutive_failures >= len(self.WATCHDOG_BACKOFF_SECONDS):
+                Logger.error(
+                    'WebServer: giving up after %s restart attempts, gallery and admin stay '
+                    'unavailable until the application is restarted',
+                    consecutive_failures,
+                )
+                return
+
+            Logger.error(
+                'WebServer: watchdog restart failed, next attempt in %ss',
+                self.WATCHDOG_BACKOFF_SECONDS[consecutive_failures],
+            )
 
     def _ensure_watchdog(self):
         if self._watchdog_thread and self._watchdog_thread.is_alive():
@@ -1001,31 +1055,46 @@ class WebServer:
 
         @self.app.route('/download/all-photos')
         def download_all_photos():
-            """Download all photos as a ZIP archive."""
-            photos = self._get_all_downloadable_photos()
+            """Stream every photo as a ZIP archive.
 
+            Admin only: this hands over every session of the evening at once,
+            which is an operator action, not something a guest should be able
+            to do from the gallery.
+            """
+            auth_redirect = self._require_admin_auth()
+            if auth_redirect is not None:
+                return auth_redirect
+
+            photos = self._get_all_downloadable_photos()
             if not photos:
                 return 'No photos found', 404
 
-            archive_buffer = io.BytesIO()
-
-            try:
-                with zipfile.ZipFile(archive_buffer, 'w', zipfile.ZIP_DEFLATED) as archive:
-                    for photo in photos:
-                        archive.write(photo['path'], arcname=photo['archive_name'])
-            except Exception as e:
-                Logger.error(f'WebServer: Error creating photo archive: {e}')
-                return 'Unable to create archive', 500
-
-            archive_buffer.seek(0)
             if self.stats_store is not None:
                 self.stats_store.track_event('download')
 
-            return send_file(
-                archive_buffer,
+            def generate():
+                # Built incrementally rather than in a BytesIO: after an evening
+                # the whole archive does not fit in a Pi's memory. ZIP_STORED
+                # because JPEGs do not compress, so deflating only burns CPU.
+                buffer = _ArchiveStream()
+                try:
+                    with zipfile.ZipFile(buffer, 'w', zipfile.ZIP_STORED) as archive:
+                        for photo in photos:
+                            archive.write(photo['path'], arcname=photo['archive_name'])
+                            chunk = buffer.drain()
+                            if chunk:
+                                yield chunk
+                except Exception as e:
+                    # The response has already started, so the client sees a
+                    # truncated archive; the log is the only place left to say why.
+                    Logger.error(f'WebServer: Error while streaming photo archive: {e}')
+                    return
+                yield buffer.drain()
+
+            return Response(
+                generate(),
                 mimetype='application/zip',
-                as_attachment=True,
-                download_name='photobooth_photos.zip'
+                headers={'Content-Disposition': 'attachment; filename=photobooth_photos.zip'},
             )
 
         @self.app.route('/admin')
@@ -1185,9 +1254,6 @@ class WebServer:
             }
             collages = self._get_all_collages()
             downloadable_photos = self._get_all_downloadable_photos()
-            
-            # Calculate photos taken from number of sessions
-            stats['photos_taken'] = len(collages)
 
             return render_template(
                 'stats.html',

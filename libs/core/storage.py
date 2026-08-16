@@ -18,6 +18,7 @@ class SessionStorage:
     """
 
     SESSION_ID_FORMAT = '%Y%m%d_%H%M%S'
+    SHOT_PREFIX = 'capture-'
 
     def __init__(self, dcim_directory, min_free_gb=2.0, max_used_percent=90.0):
         self.dcim_directory = dcim_directory
@@ -33,7 +34,7 @@ class SessionStorage:
     # --- paths -----------------------------------------------------------
 
     def get_shot(self, shot_idx):
-        return os.path.join(self.tmp_directory, f'capture-{shot_idx}.jpg')
+        return os.path.join(self.tmp_directory, f'{self.SHOT_PREFIX}{shot_idx}.jpg')
 
     def get_collage(self):
         return os.path.join(self.tmp_directory, 'collage.jpg')
@@ -88,8 +89,9 @@ class SessionStorage:
         Small previews and print-only duplicates stay behind: they are derived
         files that would only bloat the gallery and the USB export.
 
-        Returns (session_id, moved_files); session_id is None when nothing was
-        worth saving.
+        Returns (session_id, photos), where photos counts the captures only, not
+        the collage that was assembled from them. session_id is None when
+        nothing was worth saving.
         """
         working_files = os.listdir(self.tmp_directory)
         if not working_files:
@@ -99,6 +101,7 @@ class SessionStorage:
         os.makedirs(destination, exist_ok=True)
 
         moved_files = 0
+        saved_photos = 0
         for filename in working_files:
             if '_small' in filename or '_print' in filename:
                 continue
@@ -106,12 +109,16 @@ class SessionStorage:
             target_path = os.path.join(destination, filename)
             try:
                 FileUtils.move_file(source_path, target_path)
-                moved_files += 1
             except FileNotFoundError:
                 Logger.warning('SessionStorage: file disappeared before save: %s', source_path)
+                continue
             except Exception as exc:
                 Logger.error('SessionStorage: failed to save %s to %s: %s', source_path, target_path, exc)
                 raise
+
+            moved_files += 1
+            if filename.startswith(self.SHOT_PREFIX):
+                saved_photos += 1
 
         if not moved_files:
             # Nothing but derived files: do not leave an empty session behind.
@@ -122,7 +129,9 @@ class SessionStorage:
             return None, 0
 
         self.last_saved_session_directory = destination
-        return os.path.basename(destination), moved_files
+        session_id = os.path.basename(destination)
+        Logger.info('SessionStorage: saved session %s files=%s photos=%s', session_id, moved_files, saved_photos)
+        return session_id, saved_photos
 
     def purge_tmp(self):
         """Delete every working file, including the derived ones save_session left."""

@@ -39,10 +39,11 @@ def test_saving_moves_originals_and_leaves_derived_files_behind(tmp_path):
         'collage.jpg', 'collage_small.jpg', 'collage_print.jpg',
     ])
 
-    session_id, moved_files = storage.save_session()
+    session_id, photos = storage.save_session()
 
     session_directory = Path(storage.save_directory, session_id)
-    assert moved_files == 2
+    # One photo saved: the collage is assembled from it, not a photo of its own.
+    assert photos == 1
     assert sorted(p.name for p in session_directory.iterdir()) == ['capture-0.jpg', 'collage.jpg']
     assert sorted(p.name for p in Path(storage.tmp_directory).iterdir()) == [
         'capture-0_small.jpg', 'collage_print.jpg', 'collage_small.jpg',
@@ -60,10 +61,29 @@ def test_saving_only_derived_files_leaves_no_empty_session_behind(tmp_path):
     storage = make_storage(tmp_path)
     write_working_files(storage, ['collage_small.jpg', 'collage_print.jpg'])
 
-    session_id, moved_files = storage.save_session()
+    session_id, photos = storage.save_session()
 
-    assert (session_id, moved_files) == (None, 0)
+    assert (session_id, photos) == (None, 0)
     assert list(Path(storage.save_directory).iterdir()) == []
+
+
+def test_every_capture_counts_as_a_photo(tmp_path):
+    storage = make_storage(tmp_path)
+    write_working_files(storage, ['capture-0.jpg', 'capture-1.jpg', 'capture-2.jpg', 'collage.jpg'])
+
+    _session_id, photos = storage.save_session()
+
+    assert photos == 3
+
+
+def test_a_session_without_photos_still_reports_none(tmp_path):
+    """A collage with no captures left is a session, but not three photos."""
+    storage = make_storage(tmp_path)
+    write_working_files(storage, ['collage.jpg'])
+
+    _session_id, photos = storage.save_session()
+
+    assert photos == 0
 
 
 def test_saved_collage_is_exposed_after_the_session_is_saved(tmp_path):

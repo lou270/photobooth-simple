@@ -4,9 +4,12 @@ The template API used to be fully open: anyone on the network could write or
 delete layout files on the booth.
 """
 
+import io
 import json
 import sys
+import zipfile
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -56,7 +59,8 @@ def test_api_routes_reject_anonymous_callers_with_401(client, method, path):
     assert response.get_json()['error'] == 'Authentication required'
 
 
-@pytest.mark.parametrize('path', ['/admin', '/admin/editor', '/admin/logs', '/stats'])
+@pytest.mark.parametrize('path', ['/admin', '/admin/editor', '/admin/logs', '/stats',
+                                  '/download/all-photos'])
 def test_admin_pages_redirect_anonymous_visitors_to_the_login(client, path):
     response = client.get(path)
     assert response.status_code == 302
@@ -106,6 +110,56 @@ def test_a_wrong_password_does_not_open_the_api(client):
 
 def test_the_gallery_stays_open_to_guests(client):
     assert client.get('/gallery').status_code == 200
+
+
+# --- bulk download ---------------------------------------------------------
+
+def test_the_streamed_archive_holds_every_session(client, server):
+    session = Path(server.save_directory, '20260816_120000')
+    session.mkdir(parents=True)
+    (session / 'collage.jpg').write_bytes(b'collage bytes')
+    (session / 'capture-0.jpg').write_bytes(b'capture bytes')
+    login(client)
+
+    response = client.get('/download/all-photos')
+
+    assert response.status_code == 200
+    archive = zipfile.ZipFile(io.BytesIO(response.get_data()))
+    assert sorted(archive.namelist()) == [
+        '20260816_120000/capture-0.jpg', '20260816_120000/collage.jpg',
+    ]
+    assert archive.read('20260816_120000/collage.jpg') == b'collage bytes'
+
+
+def test_an_empty_gallery_reports_nothing_to_download(client, server):
+    login(client)
+    assert client.get('/download/all-photos').status_code == 404
+
+
+# --- watchdog --------------------------------------------------------------
+
+def test_the_watchdog_gives_up_instead_of_retrying_forever(tmp_path):
+    """A port held by a leftover process does not free itself."""
+    server = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD)
+    server.server_thread = SimpleNamespace(is_alive=lambda: False)
+    server._watchdog_stop = SimpleNamespace(wait=lambda timeout: False)
+    attempts = []
+
+    def failing_start(force_restart=False):
+        attempts.append(force_restart)
+        return False
+
+    server.start = failing_start
+
+    server._watchdog_loop()  # returns instead of looping forever
+
+    assert len(attempts) == len(WebServer.WATCHDOG_BACKOFF_SECONDS)
+
+
+def test_the_watchdog_backoff_grows():
+    delays = WebServer.WATCHDOG_BACKOFF_SECONDS
+    assert list(delays) == sorted(delays)
+    assert delays[-1] >= 60
 
 
 @pytest.mark.parametrize('weak_password', ['admin', 'Admin', 'password', '1234', 'court'])
