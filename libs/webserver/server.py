@@ -13,7 +13,7 @@ from werkzeug.serving import make_server
 from kivy.logger import Logger
 
 from libs.login_throttle import LoginThrottle
-from libs.webserver import config_form
+from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
 
 
@@ -58,9 +58,6 @@ class WebServer:
         '1234', '12345678', '123456789', '1234567890', 'azertyuiop', 'qwertyuiop',
     })
 
-    SESSION_PATTERN = re.compile(r'^\d{8}_\d{6}$')
-    IMAGE_FILENAME_PATTERN = re.compile(r'^(?:collage|capture-\d+)\.jpg$', re.IGNORECASE)
-    LOG_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None, restart_callback=None):
         self.save_directory = save_directory
         self.host = host
@@ -144,32 +141,6 @@ class WebServer:
         self._watchdog_thread = threading.Thread(target=self._watchdog_loop, name='webserver-watchdog', daemon=True)
         self._watchdog_thread.start()
 
-    def _sanitize_template_filename(self, filename=None, template_name='template'):
-        """Return a safe JSON filename for template storage."""
-        source = filename or template_name or 'template'
-        safe_name = os.path.basename(source).strip()
-
-        if safe_name.lower().endswith('.json'):
-            safe_name = safe_name[:-5]
-
-        safe_name = safe_name.replace(' ', '_')
-        safe_name = re.sub(r'[^A-Za-z0-9._-]', '', safe_name)
-        safe_name = safe_name.strip('._-') or 'template'
-
-        return f'{safe_name}.json'
-
-    def _get_unique_template_filename(self, filename):
-        """Return a non-conflicting filename in the templates directory."""
-        base_name, extension = os.path.splitext(filename)
-        candidate = filename
-        counter = 1
-
-        while os.path.exists(os.path.join(self.templates_directory, candidate)):
-            candidate = f'{base_name}_{counter}{extension}'
-            counter += 1
-
-        return candidate
-
     def _load_template_definitions(self):
         """Load all template JSON files from the templates directory."""
         templates = []
@@ -199,36 +170,6 @@ class WebServer:
 
         return templates
 
-    def _is_valid_session(self, session):
-        """Return True when session matches expected timestamp format."""
-        if not isinstance(session, str):
-            return False
-
-        return bool(self.SESSION_PATTERN.fullmatch(session))
-
-    def _is_valid_image_filename(self, filename):
-        """Return True when filename matches expected JPEG photo names."""
-        if not isinstance(filename, str):
-            return False
-
-        return bool(self.IMAGE_FILENAME_PATTERN.fullmatch(filename))
-
-    def _get_safe_photo_path(self, session, filename):
-        """Return canonical photo path when request targets allowed JPEG file."""
-        if not self._is_valid_session(session) or not self._is_valid_image_filename(filename):
-            return None
-
-        base_path = os.path.realpath(self.save_directory)
-        requested_path = os.path.realpath(os.path.join(base_path, session, filename))
-
-        if not requested_path.startswith(base_path + os.sep):
-            return None
-
-        if not os.path.isfile(requested_path):
-            return None
-
-        return requested_path
-
     def _get_log_files(self):
         """Return log files sorted by modification time, newest first."""
         log_files = []
@@ -253,22 +194,6 @@ class WebServer:
 
         return sorted(log_files, key=lambda item: item['modified'], reverse=True)
 
-    def _get_safe_log_path(self, filename):
-        """Return canonical log path for a direct child of the logs directory."""
-        if not isinstance(filename, str) or not self.LOG_FILENAME_PATTERN.fullmatch(filename):
-            return None
-
-        base_path = os.path.realpath(self.logs_directory)
-        requested_path = os.path.realpath(os.path.join(base_path, filename))
-
-        if os.path.dirname(requested_path) != base_path:
-            return None
-
-        if not os.path.isfile(requested_path):
-            return None
-
-        return requested_path
-
     def _delete_all_log_files(self):
         """Delete all direct files from the logs directory."""
         deleted_files = 0
@@ -277,7 +202,7 @@ class WebServer:
             return deleted_files
 
         for log_file in self._get_log_files():
-            log_path = self._get_safe_log_path(log_file['filename'])
+            log_path = paths.safe_log_path(self.logs_directory, log_file['filename'])
             if log_path is None:
                 continue
 
@@ -348,11 +273,11 @@ class WebServer:
 
             for session_dir in sorted(os.listdir(self.save_directory), reverse=True):
                 session_path = os.path.join(self.save_directory, session_dir)
-                if not os.path.isdir(session_path) or not self._is_valid_session(session_dir):
+                if not os.path.isdir(session_path) or not paths.is_valid_session(session_dir):
                     continue
 
                 for filename in sorted(os.listdir(session_path)):
-                    if not self._is_valid_image_filename(filename):
+                    if not paths.is_valid_image_filename(filename):
                         continue
 
                     photo_path = os.path.join(session_path, filename)
@@ -378,7 +303,7 @@ class WebServer:
             if os.path.isdir(self.save_directory):
                 for session_dir in os.listdir(self.save_directory):
                     session_path = os.path.join(self.save_directory, session_dir)
-                    if not os.path.isdir(session_path) or not self._is_valid_session(session_dir):
+                    if not os.path.isdir(session_path) or not paths.is_valid_session(session_dir):
                         continue
 
                     shutil.rmtree(session_path)
@@ -565,7 +490,7 @@ class WebServer:
             if auth_error is not None:
                 return auth_error
 
-            log_path = self._get_safe_log_path(filename)
+            log_path = paths.safe_log_path(self.logs_directory, filename)
             if log_path is None:
                 return jsonify({'error': 'Log file not found'}), 404
 
@@ -619,7 +544,7 @@ class WebServer:
                 return jsonify({'error': str(exc)}), 400
 
             requested_filename = payload.get('filename')
-            filename = self._sanitize_template_filename(
+            filename = paths.sanitize_template_filename(
                 requested_filename,
                 template_data.get('name', 'template')
             )
@@ -628,7 +553,7 @@ class WebServer:
                 os.makedirs(self.templates_directory, exist_ok=True)
 
                 if not requested_filename:
-                    filename = self._get_unique_template_filename(filename)
+                    filename = paths.unique_template_filename(self.templates_directory, filename)
 
                 template_path = os.path.join(self.templates_directory, filename)
                 with open(template_path, 'w', encoding='utf-8') as handle:
@@ -647,7 +572,7 @@ class WebServer:
             if auth_error is not None:
                 return auth_error
 
-            safe_filename = self._sanitize_template_filename(filename)
+            safe_filename = paths.sanitize_template_filename(filename)
             template_path = os.path.join(self.templates_directory, safe_filename)
 
             if not os.path.isfile(template_path):
@@ -685,7 +610,7 @@ class WebServer:
         @self.app.route('/collage/<session>')
         def view_collage(session):
             """View a single collage fullscreen."""
-            collage_path = self._get_safe_photo_path(session, 'collage.jpg')
+            collage_path = paths.safe_photo_path(self.save_directory, session, 'collage.jpg')
             
             if collage_path is None:
                 return redirect('/')
@@ -698,7 +623,7 @@ class WebServer:
         @self.app.route('/image/<session>/<filename>')
         def serve_image(session, filename):
             """Serve an image file."""
-            image_path = self._get_safe_photo_path(session, filename)
+            image_path = paths.safe_photo_path(self.save_directory, session, filename)
             
             if image_path is None:
                 return "Not found", 404
@@ -710,7 +635,7 @@ class WebServer:
         @self.app.route('/download/<session>/<filename>')
         def download_image(session, filename):
             """Download an image file."""
-            image_path = self._get_safe_photo_path(session, filename)
+            image_path = paths.safe_photo_path(self.save_directory, session, filename)
             
             if image_path is None:
                 return "Not found", 404

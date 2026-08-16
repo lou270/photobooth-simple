@@ -21,16 +21,8 @@ def test_log_files_are_sorted_newest_first(tmp_path):
     assert [item['filename'] for item in server._get_log_files()] == ['new.log', 'old.log']
 
 
-def test_log_path_rejects_traversal(tmp_path):
-    log_file = tmp_path / 'photobooth.log'
-    log_file.write_text('safe', encoding='utf-8')
-
-    server = WebServer.__new__(WebServer)
-    server.logs_directory = str(tmp_path)
-
-    assert server._get_safe_log_path('photobooth.log') == str(log_file)
-    assert server._get_safe_log_path('../config.ini') is None
-    assert server._get_safe_log_path('missing.log') is None
+# Path resolution itself is covered in test_web_paths.py, against the pure
+# functions in libs.webserver.paths.
 
 
 def test_delete_all_log_files_removes_only_files(tmp_path):
