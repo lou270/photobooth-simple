@@ -1,19 +1,13 @@
 import os
 import sys
-sys.path.append('..')
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 import cv2
 import time
 import signal
 import tempfile
 import numpy as np
-import pytest
-
-try:
-    import libs.gphoto2 as gp
-except (ImportError, OSError) as exc:
-    # libgphoto2 is a Linux shared library: skip rather than break collection
-    # on a workstation, so `pytest test/` stays runnable everywhere.
-    pytest.skip(f'libgphoto2 unavailable: {exc}', allow_module_level=True)
+import libs.gphoto2 as gp
 
 _instance = None
 

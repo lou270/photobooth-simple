@@ -186,56 +186,94 @@ class Gphoto2Camera(Camera):
 
         return normalized
 
+    # Config paths per manufacturer, and the exposure modes in which each setting
+    # can actually be written (None = writable in any mode). Sourced from the
+    # libgphoto2 camera notes:
+    # https://github.com/gphoto/libgphoto2/tree/master/camlibs/ptp2/cameras
+    DSLR_PROFILES = {
+        'Canon Inc.': {
+            'mode_path': '/main/capturesettings/autoexposuremode',
+            'SHUTTERSPEED': ('/main/capturesettings/shutterspeed', ('Manual', 'TV')),
+            'APERTURE': ('/main/capturesettings/aperture', ('Manual', 'AV')),
+            'FOCUSMODE': ('/main/capturesettings/focusmode', None),
+            'ISO': ('/main/imgsettings/iso', None),
+        },
+        'Nikon Corporation': {
+            'mode_path': '/main/capturesettings/expprogram',
+            'SHUTTERSPEED': ('/main/capturesettings/shutterspeed', ('M', 'S')),
+            'APERTURE': ('/main/capturesettings/f-number', ('M', 'A')),
+            'FOCUSMODE': ('/main/capturesettings/focusmode', None),
+            'ISO': ('/main/imgsettings/iso', None),
+        },
+        'Sony Corporation': {
+            'mode_path': '/main/capturesettings/expprogram',
+            'SHUTTERSPEED': ('/main/capturesettings/shutterspeed', ('M', 'S')),
+            'APERTURE': ('/main/capturesettings/f-number', ('M', 'A')),
+            'FOCUSMODE': ('/main/capturesettings/focusmode', None),
+            'ISO': ('/main/imgsettings/iso', None),
+        },
+    }
+    DSLR_SETTINGS = ('SHUTTERSPEED', 'APERTURE', 'FOCUSMODE', 'ISO')
+
+    @staticmethod
+    def _read_config(config, path):
+        """Read a widget, or None when this camera model does not expose it."""
+        widget = config.get_path(path)
+        return widget.get_value() if widget is not None else None
+
+    @staticmethod
+    def _write_config(config, path, value):
+        """Write a widget when the camera exposes it; report when it does not."""
+        widget = config.get_path(path)
+        if widget is None:
+            Logger.warning('Gphoto2Camera: camera does not expose %s, setting skipped', path)
+            return False
+        widget.set_value(value)
+        return True
+
     def _set_parameters(self, params):
         """
         Applies DSLR parameters (config.ini key -> value dict) according to manufacturer.
         If a parameter is missing or None, it is not changed.
+
+        Every lookup goes through _read_config/_write_config: get_path() returns
+        None for a widget the model does not expose, and dereferencing that used
+        to raise AttributeError inside a caller that swallows failures at debug
+        level, so configured settings silently never reached the camera.
         """
         if not params: return
 
         config = self._instance.get_config()
-        manufacturer = config.get_path('/main/status/manufacturer').get_value()
+        manufacturer = self._read_config(config, '/main/status/manufacturer')
+        profile = self.DSLR_PROFILES.get(manufacturer)
+        if profile is None:
+            Logger.info('Gphoto2Camera: unsupported camera model: %s', manufacturer)
+            return
 
-        if manufacturer == 'Canon Inc.':
-            # From https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/cameras/canon-eos2000d.txt
-            current_mode = config.get_path('/main/capturesettings/autoexposuremode').get_value()
-            if (v := self._get_param(params, 'SHUTTERSPEED')) and current_mode in ['Manual', 'TV']:
-                config.get_path('/main/capturesettings/shutterspeed').set_value(v)
-            if (v := self._normalize_aperture_for_manufacturer(self._get_param(params, 'APERTURE'), manufacturer)) and current_mode in ['Manual', 'AV']:
-                config.get_path('/main/capturesettings/aperture').set_value(v)
-            if v := self._get_param(params, 'FOCUSMODE'):
-                config.get_path('/main/capturesettings/focusmode').set_value(v)
-            if v := self._get_param(params, 'ISO'):
-                config.get_path('/main/imgsettings/iso').set_value(v)
+        current_mode = self._read_config(config, profile['mode_path'])
+        wrote_any_setting = False
 
-        elif manufacturer == 'Nikon Corporation':
-            # From https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/cameras/nikon-z6.txt
-            current_mode = config.get_path('/main/capturesettings/expprogram').get_value()
-            if (v := self._get_param(params, 'SHUTTERSPEED')) and current_mode in ['M', 'S']:
-                config.get_path('/main/capturesettings/shutterspeed').set_value(v)
-            if (v := self._normalize_aperture_for_manufacturer(self._get_param(params, 'APERTURE'), manufacturer)) and current_mode in ['M', 'A']:
-                config.get_path('/main/capturesettings/f-number').set_value(v)
-            if v := self._get_param(params, 'FOCUSMODE'):
-                config.get_path('/main/capturesettings/focusmode').set_value(v)
-            if v := self._get_param(params, 'ISO'):
-                config.get_path('/main/imgsettings/iso').set_value(v)
+        for setting in self.DSLR_SETTINGS:
+            path, required_modes = profile[setting]
+            value = self._get_param(params, setting)
+            if setting == 'APERTURE':
+                value = self._normalize_aperture_for_manufacturer(value, manufacturer)
+            if not value:
+                continue
 
-        elif manufacturer == 'Sony Corporation':
-            # From https://github.com/gphoto/libgphoto2/blob/master/camlibs/ptp2/cameras/sony-a7c.txt
-            current_mode = config.get_path('/main/capturesettings/expprogram').get_value()
-            if (v := self._get_param(params, 'SHUTTERSPEED')) and current_mode in ['M', 'S']:
-                config.get_path('/main/capturesettings/shutterspeed').set_value(v)
-            if (v := self._normalize_aperture_for_manufacturer(self._get_param(params, 'APERTURE'), manufacturer)) and current_mode in ['M', 'A']:
-                config.get_path('/main/capturesettings/f-number').set_value(v)
-            if v := self._get_param(params, 'FOCUSMODE'):
-                config.get_path('/main/capturesettings/focusmode').set_value(v)
-            if v := self._get_param(params, 'ISO'):
-                config.get_path('/main/imgsettings/iso').set_value(v)
+            if required_modes is not None and current_mode not in required_modes:
+                # Worth saying out loud: this is the usual reason a configured
+                # aperture or shutter speed appears to be ignored.
+                Logger.info(
+                    'Gphoto2Camera: %s needs exposure mode %s but the camera is in %s, setting skipped',
+                    setting, '/'.join(required_modes), current_mode,
+                )
+                continue
 
-        else:
-            Logger.info('Unsupported camera model: %s', manufacturer)
+            wrote_any_setting |= self._write_config(config, path, value)
 
-        self._instance.commit_config(config)
+        if wrote_any_setting:
+            self._instance.commit_config(config)
 
     def _preview_loop(self):
         """Dedicated thread: continuous capture + decode so as not to block the UI."""
