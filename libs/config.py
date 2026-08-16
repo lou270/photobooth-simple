@@ -1,9 +1,18 @@
 import configparser
 import ast
+import logging
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / 'config.ini'
+
+# Child of Kivy's logger so records land in the application log when Kivy is
+# running, without importing Kivy here: config must stay readable headless.
+Logger = logging.getLogger('kivy.photobooth')
+
+# Capture backends accepted by CAMERA. 'auto' probes the hardware, 'fake'
+# runs the whole application with a synthetic camera and no hardware at all.
+CAMERA_BACKENDS = ('auto', 'gphoto2', 'picamera2', 'opencv', 'fake')
 
 class Config:
     def __init__(self):
@@ -86,11 +95,36 @@ class Config:
         max_prints = self._get_string(('Print', 'Picture'), 'MAX_PRINTS', fallback='None').strip()
         if not max_prints or max_prints.upper() == 'NONE':
             return None
-        return max(0, int(max_prints))
+        try:
+            return max(0, int(max_prints))
+        except ValueError:
+            # A malformed value must never keep the booth from starting on site.
+            Logger.warning('Config: invalid MAX_PRINTS=%r, printing left unlimited', max_prints)
+            return None
+
+    def get_camera_backend(self):
+        backend = self._get_string(('Capture',), 'CAMERA', fallback='auto').strip().lower()
+        if backend not in CAMERA_BACKENDS:
+            Logger.warning("Config: unknown CAMERA=%r, falling back to 'auto'", backend)
+            return 'auto'
+        return backend
 
     def get_calibration(self):
-        calibration = self._get_string(('Capture', 'Picture'), 'CALIBRATION', fallback='None')
-        return ast.literal_eval(calibration) if calibration != 'None' else None
+        calibration = self._get_string(('Capture', 'Picture'), 'CALIBRATION', fallback='None').strip()
+        if not calibration or calibration.upper() == 'NONE':
+            return None
+        try:
+            parsed = ast.literal_eval(calibration)
+        except (ValueError, SyntaxError):
+            Logger.warning('Config: invalid CALIBRATION=%r, calibration disabled', calibration)
+            return None
+        if not isinstance(parsed, (tuple, list)) or len(parsed) != 3:
+            Logger.warning(
+                'Config: CALIBRATION must be a (zoom, offset_x, offset_y) triple, got %r, calibration disabled',
+                calibration,
+            )
+            return None
+        return tuple(parsed)
 
     def get_filters(self):
         return self._get_boolean(('Capture', 'Picture'), 'FILTERS', fallback=False)

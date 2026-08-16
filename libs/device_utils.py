@@ -7,6 +7,7 @@ import numpy as np
 from kivy.logger import Logger
 
 from libs.file_utils import FileUtils
+from libs.hardware import Camera, FakeCamera
 
 try:
     import cups
@@ -30,69 +31,6 @@ try:
 except:
     gp = None
 
-class CaptureDevice:
-    _instance = None
-
-    def get_preview_fps(self):
-        """Recommended FPS for preview refresh (30 by default)."""
-        return 30
-
-    def get_preview_frame_id(self):
-        return 0
-
-    def get_preview(self, aspect_ratio=None):
-        pass
-
-    def capture(self, output_name, aspect_ratio=None, flash_fn=None):
-        pass
-
-    def has_physical_flash(self):
-        return False
-
-    def close(self):
-        pass
-
-    def is_healthy(self):
-        return self._instance is not None
-
-    def _crop_to_aspect_ratio(self, image, aspect_ratio):
-        """
-        Crop image to match the target aspect ratio (width/height).
-        
-        Args:
-            image: Input image
-            aspect_ratio: Target aspect ratio (width/height). 
-                         1.0 for square, >1.0 for landscape, <1.0 for portrait
-        
-        Returns:
-            Cropped image
-        """
-        if aspect_ratio is None:
-            return image
-            
-        height, width, _ = image.shape
-        current_ratio = width / height
-        
-        if abs(current_ratio - aspect_ratio) < 0.01:
-            # Already at target ratio
-            return image
-        
-        if current_ratio > aspect_ratio:
-            # Current image is wider, crop width
-            new_width = int(height * aspect_ratio)
-            left = (width - new_width) // 2
-            return image[:, left:left + new_width]
-        else:
-            # Current image is taller, crop height
-            new_height = int(width / aspect_ratio)
-            top = (height - new_height) // 2
-            return image[top:top + new_height, :]
-
-    def cv2_imshow(self, im, size=None):
-        if size: im = im.reshape((size[1], size[0], 3))
-        im = cv2.flip(im, 0)
-        cv2.imshow('Camera', im)
-
 class PrintDevice:
     _instance = None
 
@@ -102,7 +40,7 @@ class PrintDevice:
     def get_print_status(self, task_id):
         pass
 
-class Cv2Camera(CaptureDevice):
+class Cv2Camera(Camera):
     def __init__(self, port=-1):
         self._preview_lock = threading.Lock()
         self._camera_lock = threading.Lock()
@@ -184,20 +122,8 @@ class Cv2Camera(CaptureDevice):
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
         if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
 
-        # Dump to file
-        FileUtils.write_image(output_name, im)
-
-        # Create small preview in background thread (non-blocking)
-        threading.Thread(target=self._create_small_async, args=(im.copy(), output_name), daemon=True).start()
+        self._write_capture(output_name, im)
     
-    def _create_small_async(self, image, output_name):
-        """Create small preview image asynchronously to avoid blocking capture."""
-        try:
-            resized_im = FileUtils.resize(image)
-            FileUtils.write_image(FileUtils.get_small_path(output_name), resized_im)
-        except Exception as e:
-            Logger.error(f'Error creating small preview: {e}')
-
     def close(self):
         self._preview_stop = True
         if self._preview_thread is not None and self._preview_thread.is_alive():
@@ -206,7 +132,7 @@ class Cv2Camera(CaptureDevice):
             self._instance.release()
             self._instance = None
 
-class Gphoto2Camera(CaptureDevice):
+class Gphoto2Camera(Camera):
     def __init__(self, dslr_liveview_params=None, dslr_capture_params=None):
         self._preview_failures = 0
         if gp:
@@ -386,20 +312,8 @@ class Gphoto2Camera(CaptureDevice):
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
         if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
 
-        # Dump to file
-        FileUtils.write_image(output_name, im)
+        self._write_capture(output_name, im)
 
-        # Create small preview in background thread (non-blocking)
-        threading.Thread(target=self._create_small_async, args=(im.copy(), output_name), daemon=True).start()
-
-
-    def _create_small_async(self, image, output_name):
-        """Create small preview image asynchronously to avoid blocking capture."""
-        try:
-            resized_im = FileUtils.resize(image)
-            FileUtils.write_image(FileUtils.get_small_path(output_name), resized_im)
-        except Exception as e:
-            Logger.error(f'Error creating small preview: {e}')
 
     def close(self):
         self._preview_stop = True
@@ -412,14 +326,14 @@ class Gphoto2Camera(CaptureDevice):
                 Logger.warning('Gphoto2Camera: could not close camera cleanly: %s', e)
             self._instance = None
 
-class Picamera2Camera(CaptureDevice):
+class Picamera2Camera(Camera):
     def __init__(self, port=0):
         self._preview_lock = threading.Lock()
         self._camera_lock = threading.Lock()
         self._preview_frame = None
         self._preview_thread = None
         self._preview_stop = False
-        self._preview_fps = 60
+        self._preview_fps = 30
         self._capturing = False
         if Picamera2:
             try:
@@ -427,7 +341,7 @@ class Picamera2Camera(CaptureDevice):
                 self._preview_config = self._instance.create_preview_configuration(
                     main={'format': 'RGB888', 'size': (1280, 720)},
                     transform=Transform(hflip=1, vflip=1),
-                    controls={'FrameRate': 60},
+                    controls={'FrameRate': 30},
                 )
                 self._still_config = self._instance.create_still_configuration(main={"size": (2304, 1296), "format": "RGB888"}, buffer_count=2, controls={'FrameRate': 30})
                 self._instance.configure(self._preview_config)
@@ -492,20 +406,8 @@ class Picamera2Camera(CaptureDevice):
             self._capturing = False
         if zoom and zoom[0] < 1.0: im = FileUtils.zoom(im, zoom)
 
-        # Dump to file
-        FileUtils.write_image(output_name, im)
-
-        # Create small preview in background thread (non-blocking)
-        threading.Thread(target=self._create_small_async, args=(im.copy(), output_name), daemon=True).start()
+        self._write_capture(output_name, im)
     
-    def _create_small_async(self, image, output_name):
-        """Create small preview image asynchronously to avoid blocking capture."""
-        try:
-            resized_im = FileUtils.resize(image)
-            FileUtils.write_image(FileUtils.get_small_path(output_name), resized_im)
-        except Exception as e:
-            Logger.error(f'Error creating small preview: {e}')
-
     def close(self):
         self._preview_stop = True
         if self._preview_thread is not None and self._preview_thread.is_alive():
@@ -606,8 +508,9 @@ class DeviceUtils:
     _printer = None
 
     def __init__(self, printer_name=None, picamera2_port=0, cv2_port=-1, zoom=None,
-                 dslr_liveview_params=None, dslr_capture_params=None):
+                 dslr_liveview_params=None, dslr_capture_params=None, camera_backend='auto'):
         self._zoom = zoom
+        backend = (camera_backend or 'auto').strip().lower()
 
         try:
             self._printer = CupsPrinter(printer_name)
@@ -615,23 +518,30 @@ class DeviceUtils:
             Logger.warning('DeviceUtils: printer initialization failed: %s', e)
             self._printer = None
 
-        # Try to load cameras
-        try:
-            pi2_camera = Picamera2Camera(picamera2_port)
-        except Exception as e:
-            Logger.warning('DeviceUtils: Picamera2 unavailable: %s', e)
-            pi2_camera = None
-        try:
-            g2_camera = Gphoto2Camera(dslr_liveview_params=dslr_liveview_params,
-                                      dslr_capture_params=dslr_capture_params)
-        except Exception as e:
-            Logger.warning('DeviceUtils: gPhoto2 unavailable: %s', e)
-            g2_camera = None
-        try:
-            cv2_camera = Cv2Camera(cv2_port)
-        except Exception as e:
-            Logger.warning('DeviceUtils: OpenCV camera unavailable: %s', e)
-            cv2_camera = None
+        if backend == 'fake':
+            Logger.warning('DeviceUtils: CAMERA=fake, running without any capture hardware')
+            self._preview = self._capture = FakeCamera()
+            return
+
+        # An explicit backend keeps startup fast and predictable: probing every
+        # backend opens webcams that are not meant to be used and costs seconds.
+        pi2_camera = g2_camera = cv2_camera = None
+        if backend in ('auto', 'picamera2'):
+            try:
+                pi2_camera = Picamera2Camera(picamera2_port)
+            except Exception as e:
+                Logger.warning('DeviceUtils: Picamera2 unavailable: %s', e)
+        if backend in ('auto', 'gphoto2'):
+            try:
+                g2_camera = Gphoto2Camera(dslr_liveview_params=dslr_liveview_params,
+                                          dslr_capture_params=dslr_capture_params)
+            except Exception as e:
+                Logger.warning('DeviceUtils: gPhoto2 unavailable: %s', e)
+        if backend in ('auto', 'opencv'):
+            try:
+                cv2_camera = Cv2Camera(cv2_port)
+            except Exception as e:
+                Logger.warning('DeviceUtils: OpenCV camera unavailable: %s', e)
 
         # Switch to the best option
         if pi2_camera and g2_camera:
@@ -655,8 +565,11 @@ class DeviceUtils:
             self._preview = cv2_camera
             self._capture = cv2_camera
         else:
-            Logger.info('Cannot find any camera nor DSLR')
-            raise Exception('This app requires at least a piCamera, a DSLR or a webcam to work.')
+            Logger.error('DeviceUtils: no camera available (CAMERA=%s)', backend)
+            raise Exception(
+                'This app requires at least a piCamera, a DSLR or a webcam to work. '
+                'Set CAMERA = fake in config.ini to run without hardware.'
+            )
 
     def has_physical_flash(self):
         return self._capture.has_physical_flash()

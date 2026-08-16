@@ -19,6 +19,9 @@ KivyConfig.set('kivy', 'log_enable', '1')
 KivyConfig.set('kivy', 'log_dir', str(LOG_DIRECTORY))
 KivyConfig.set('kivy', 'log_name', 'photobooth_%y-%m-%d_%_.txt')
 KivyConfig.set('kivy', 'exit_on_escape', '0')
+# The Pi's VideoCore has no spare fill rate for antialiasing: multisampling costs
+# several ms per frame here and buys nothing on a photobooth UI.
+KivyConfig.set('graphics', 'multisamples', '0')
 
 # os.environ['KIVY_NO_CONSOLELOG'] = '1'
 from kivy.app import App
@@ -71,6 +74,7 @@ class PhotoboothApp(App):
         self.PRINTER = config.get_printer()
         self.MAX_PRINTS = config.get_max_prints()
         self.CALIBRATION = config.get_calibration()
+        self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
         self._dslr_capture_params = config.get_dslr_capture_params()
         self._log_retention_days = config.get_log_retention_days()
@@ -111,6 +115,7 @@ class PhotoboothApp(App):
             zoom=self.CALIBRATION,
             dslr_liveview_params=self._dslr_liveview_params,
             dslr_capture_params=self._dslr_capture_params,
+            camera_backend=self.CAMERA_BACKEND,
         )
         
         # Load templates from JSON files
@@ -550,6 +555,7 @@ class PhotoboothApp(App):
             zoom=self.CALIBRATION,
             dslr_liveview_params=self._dslr_liveview_params,
             dslr_capture_params=self._dslr_capture_params,
+            camera_backend=self.CAMERA_BACKEND,
         )
         self._log_runtime_snapshot('devices_reset')
 
