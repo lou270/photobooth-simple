@@ -12,18 +12,37 @@ from kivy.properties import ColorProperty, StringProperty, ListProperty, Numeric
 from kivy.metrics import dp, sp
 from kivy.logger import Logger
 from kivy.core.window import Window
+import time
 import numpy as np
 import cv2
 
 
 from libs.file_utils import FileUtils
 
+
+def is_offscreen(widget):
+    """True when the widget belongs to a screen the ScreenManager is not showing.
+
+    Every screen is built once at startup and kept by the ScreenManager, so a
+    widget animating itself from __init__ keeps running on screens nobody can
+    see. Only the current screen is attached to the window, so a widget with no
+    root window is not being drawn.
+    """
+    return widget.get_root_window() is None
+
 # Widget to display camera
 class KivyCamera(Image):
+    # Preview cost is logged periodically: it is the one number worth watching
+    # on the booth itself, and it cannot be measured from a workstation.
+    STATS_INTERVAL_SECONDS = 10.0
+
     def __init__(self, app, fps=30, blur=False, blur_refresh_frames=1, **kwargs):
         super(KivyCamera, self).__init__(**kwargs)
         self._app = app
         self._fps = fps
+        self._stats_frames = 0
+        self._stats_time = 0.0
+        self._stats_since = time.perf_counter()
         self._blur = blur
         self._blur_refresh_frames = max(1, int(blur_refresh_frames))
         self._blur_cache = None
@@ -83,7 +102,30 @@ class KivyCamera(Image):
         self._blur_cache = None
         self._frame_count = 0
         self._last_frame_id = None
+        self._reset_stats()
         self._clock = Clock.schedule_once(self._update, 1.0 / self._fps)
+
+    def _reset_stats(self):
+        self._stats_frames = 0
+        self._stats_time = 0.0
+        self._stats_since = time.perf_counter()
+
+    def _record_frame(self, duration):
+        self._stats_frames += 1
+        self._stats_time += duration
+
+        elapsed = time.perf_counter() - self._stats_since
+        if elapsed < self.STATS_INTERVAL_SECONDS:
+            return
+
+        texture_size = self._reuse_texture.size if self._reuse_texture is not None else (0, 0)
+        Logger.info(
+            'KivyCamera: preview %.1f fps, %.1f ms/frame, texture %sx%s, blur=%s',
+            self._stats_frames / elapsed,
+            1000.0 * self._stats_time / max(1, self._stats_frames),
+            texture_size[0], texture_size[1], self._blur,
+        )
+        self._reset_stats()
 
     def stop(self):
         self._stop = True
@@ -106,6 +148,7 @@ class KivyCamera(Image):
         self.texture = texture
 
     def _update(self, args):
+        started_at = time.perf_counter()
         try:
             frame_id = self._app.devices.get_preview_frame_id()
             if frame_id == self._last_frame_id:
@@ -126,7 +169,7 @@ class KivyCamera(Image):
                 max_w, max_h = 1280, 720
                 if frame_w > max_w or frame_h > max_h:
                     scale = min(max_w / frame_w, max_h / frame_h)
-                    im = cv2.resize(im, (int(frame_w * scale), int(frame_h * scale)), interpolation=cv2.INTER_AREA)
+                    im = cv2.resize(im, (int(frame_w * scale), int(frame_h * scale)), interpolation=cv2.INTER_LINEAR)
                 refresh_blur = (self._frame_count % self._blur_refresh_frames) == 0
                 im, self._blur_cache = FileUtils.blurry_borders(
                     im,
@@ -134,8 +177,18 @@ class KivyCamera(Image):
                     blur_cache=self._blur_cache,
                     refresh_blur=refresh_blur,
                     return_cache=True,
+                    # Live preview: speed over the last bit of downscale quality.
+                    interpolation=cv2.INTER_LINEAR,
                 )
                 self._frame_count += 1
+            elif im.shape[1] > display_size[0] or im.shape[0] > display_size[1]:
+                # Never upload more pixels than the widget actually draws. A 1080p
+                # frame is 6 MB copied by tobytes() and 6 MB pushed to the GPU on
+                # every frame, and the GPU would only scale the surplus away. The
+                # blur path already resizes to the widget, hence the elif.
+                # INTER_LINEAR, not INTER_AREA: measured on this pipeline, AREA
+                # costs more CPU than the upload it saves, LINEAR halves it.
+                im = cv2.resize(im, display_size, interpolation=cv2.INTER_LINEAR)
 
             # Réutiliser la texture si la taille est identique (évite Texture.create à chaque frame)
             w, h = im.shape[1], im.shape[0]
@@ -149,6 +202,7 @@ class KivyCamera(Image):
                 self.texture = self._reuse_texture
 
             self._sync_display_size()
+            self._record_frame(time.perf_counter() - started_at)
 
         except Exception as e:
             Logger.error('Cannot read camera stream.')
@@ -441,6 +495,9 @@ class BreezyBorderedLabel(Label):
             self.breeze_alpha = 0
     
     def _update_breeze(self, dt):
+        if is_offscreen(self):
+            return
+
         max_width = dp(100)
         min_alpha = 0.4
         speed = dp(30)
@@ -494,6 +551,8 @@ class RotatingImage(AsyncImage):
         Clock.schedule_interval(self.update, 1/30)
 
     def update(self, dt):
+        if is_offscreen(self):
+            return
         self.angle -= 4  # Was 2 at 60fps, now 4 at 30fps for same visual speed
         self.angle %= 360
 
@@ -517,6 +576,8 @@ class RotatingLabel(ResizeLabel):
         Clock.schedule_interval(self.update, 1/30)
 
     def update(self, dt):
+        if is_offscreen(self):
+            return
         self.angle -= 4  # Was 2 at 60fps, now 4 at 30fps for same visual speed
         self.angle %= 360
 

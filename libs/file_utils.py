@@ -174,10 +174,16 @@ class FileUtils:
         return im[y_start:y_end, x_start:x_end, :]
 
     @staticmethod
-    def blurry_borders(im, size, blur_cache=None, refresh_blur=True, return_cache=False):
+    def blurry_borders(im, size, blur_cache=None, refresh_blur=True, return_cache=False,
+                       interpolation=cv2.INTER_AREA):
         """
         Add blurry borders to an image.
         OPTIMIZED: Reduced blur kernel size from (101,101) to (51,51) for 4x faster performance.
+
+        `interpolation` defaults to INTER_AREA, the better choice for the stills
+        shown on the confirm and review screens. The live preview passes
+        INTER_LINEAR: it runs this every frame, and AREA costs about twice as
+        much for a difference nobody sees on a moving image.
         """
         width, height = (max(1, int(size[0])), max(1, int(size[1])))
         im_height, im_width = im.shape[:2]
@@ -190,7 +196,7 @@ class FileUtils:
         new_size = (int(im_width * scale_factor), int(im_height * scale_factor))
         if new_size[0] <= 0 or new_size[1] <= 0:
             return (im, blur_cache) if return_cache else im
-        im = cv2.resize(im, new_size, interpolation=cv2.INTER_AREA)
+        im = cv2.resize(im, new_size, interpolation=interpolation)
 
         im_height, im_width = im.shape[:2]
         difference_h = int((width - im_width) // 2)
