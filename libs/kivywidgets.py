@@ -40,9 +40,8 @@ class KivyCamera(Image):
         super(KivyCamera, self).__init__(**kwargs)
         self._app = app
         self._fps = fps
-        self._stats_frames = 0
-        self._stats_time = 0.0
-        self._stats_since = time.perf_counter()
+        self._reuse_texture = None
+        self._reset_stats()
         self._blur = blur
         self._blur_refresh_frames = max(1, int(blur_refresh_frames))
         self._blur_cache = None
@@ -108,26 +107,43 @@ class KivyCamera(Image):
     def _reset_stats(self):
         self._stats_frames = 0
         self._stats_time = 0.0
+        self._stats_camera_time = 0.0
         self._stats_since = time.perf_counter()
 
-    def _record_frame(self, duration):
+    def _record_frame(self, duration, camera_duration):
         self._stats_frames += 1
         self._stats_time += duration
+        self._stats_camera_time += camera_duration
 
+        if time.perf_counter() - self._stats_since >= self.STATS_INTERVAL_SECONDS:
+            self._flush_stats()
+
+    def _flush_stats(self):
+        """Report the preview cost, split between the camera and the display.
+
+        The split is what makes the number actionable: a slow DSLR over USB and
+        a slow blur pipeline look identical in a single figure.
+        """
         elapsed = time.perf_counter() - self._stats_since
-        if elapsed < self.STATS_INTERVAL_SECONDS:
+        if not self._stats_frames or elapsed <= 0:
             return
 
         texture_size = self._reuse_texture.size if self._reuse_texture is not None else (0, 0)
+        camera_ms = 1000.0 * self._stats_camera_time / self._stats_frames
+        total_ms = 1000.0 * self._stats_time / self._stats_frames
         Logger.info(
-            'KivyCamera: preview %.1f fps, %.1f ms/frame, texture %sx%s, blur=%s',
+            'KivyCamera: preview %.1f fps, %.1f ms/frame (camera %.1f, display %.1f), '
+            'texture %sx%s, blur=%s',
             self._stats_frames / elapsed,
-            1000.0 * self._stats_time / max(1, self._stats_frames),
+            total_ms, camera_ms, total_ms - camera_ms,
             texture_size[0], texture_size[1], self._blur,
         )
         self._reset_stats()
 
     def stop(self):
+        # Flush before resetting: a countdown is shorter than the reporting
+        # interval, so without this a whole preview session goes unmeasured.
+        self._flush_stats()
         self._stop = True
         Clock.unschedule(self._clock)
         self._blur_cache = None
@@ -153,7 +169,9 @@ class KivyCamera(Image):
             frame_id = self._app.devices.get_preview_frame_id()
             if frame_id == self._last_frame_id:
                 return
+            camera_started_at = time.perf_counter()
             im = self._app.devices.get_preview(self._aspect_ratio)
+            camera_duration = time.perf_counter() - camera_started_at
             if im is None:
                 return
             self._last_frame_id = frame_id
@@ -202,7 +220,7 @@ class KivyCamera(Image):
                 self.texture = self._reuse_texture
 
             self._sync_display_size()
-            self._record_frame(time.perf_counter() - started_at)
+            self._record_frame(time.perf_counter() - started_at, camera_duration)
 
         except Exception as e:
             Logger.error('Cannot read camera stream.')

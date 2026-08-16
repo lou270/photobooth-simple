@@ -40,7 +40,12 @@ class FakeCamera(Camera):
     # --- frame generation ------------------------------------------------
 
     def _build_background(self):
-        """Static gradient, computed once: only the moving parts cost per frame."""
+        """Everything static, drawn once.
+
+        Keeping text and guides out of the per-frame path matters: this camera
+        is used to measure the preview pipeline, and a fake whose own rendering
+        costs more than a real sensor read would make that measurement lie.
+        """
         gradient_x = np.linspace(40, 190, self._width, dtype=np.float32)
         gradient_y = np.linspace(90, 20, self._height, dtype=np.float32)
         base = gradient_y[:, None] + gradient_x[None, :]
@@ -49,19 +54,6 @@ class FakeCamera(Camera):
         frame[:, :, 0] = np.clip(base * 0.90, 0, 255)  # B
         frame[:, :, 1] = np.clip(base * 0.55, 0, 255)  # G
         frame[:, :, 2] = np.clip(base * 0.40, 0, 255)  # R
-        return frame
-
-    def _frame_index(self):
-        return int((time.monotonic() - self._started_at) * self._preview_fps)
-
-    def _render_frame(self):
-        frame = self._background.copy()
-        index = self._frame_index()
-
-        # A moving band makes a frozen preview obvious at a glance.
-        band_width = max(8, self._width // 40)
-        band_x = int((index * 6) % (self._width + band_width)) - band_width
-        cv2.rectangle(frame, (band_x, 0), (band_x + band_width, self._height), (255, 255, 255), -1)
 
         # Centre lines: quick visual check of the crop and calibration.
         cv2.line(frame, (self._width // 2, 0), (self._width // 2, self._height), (255, 255, 255), 1)
@@ -72,13 +64,23 @@ class FakeCamera(Camera):
             frame, 'FAKE CAMERA', (int(24 * scale), int(56 * scale)),
             cv2.FONT_HERSHEY_SIMPLEX, 1.1 * scale, (255, 255, 255), max(1, int(2 * scale)), cv2.LINE_AA,
         )
-        with self._lock:
-            captures = self._capture_count
         cv2.putText(
-            frame, f'frame {index} | {self._width}x{self._height} | shots {captures}',
-            (int(24 * scale), int(96 * scale)),
+            frame, f'{self._width}x{self._height}', (int(24 * scale), int(96 * scale)),
             cv2.FONT_HERSHEY_SIMPLEX, 0.6 * scale, (255, 255, 255), max(1, int(scale)), cv2.LINE_AA,
         )
+        return frame
+
+    def _frame_index(self):
+        return int((time.monotonic() - self._started_at) * self._preview_fps)
+
+    def _render_frame(self):
+        """One copy plus one filled rectangle: the cheapest thing that still
+        makes a frozen preview obvious at a glance."""
+        frame = self._background.copy()
+
+        band_width = max(8, self._width // 40)
+        band_x = int((self._frame_index() * 6) % (self._width + band_width)) - band_width
+        cv2.rectangle(frame, (band_x, 0), (band_x + band_width, self._height), (255, 255, 255), -1)
         return frame
 
     def _frame_for_output(self, aspect_ratio, zoom, apply_zoom):
