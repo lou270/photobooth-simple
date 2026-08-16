@@ -6,7 +6,14 @@ import time
 import signal
 import tempfile
 import numpy as np
-import libs.gphoto2 as gp
+import pytest
+
+try:
+    import libs.gphoto2 as gp
+except (ImportError, OSError) as exc:
+    # libgphoto2 is a Linux shared library: skip rather than break collection
+    # on a workstation, so `pytest test/` stays runnable everywhere.
+    pytest.skip(f'libgphoto2 unavailable: {exc}', allow_module_level=True)
 
 _instance = None
 
