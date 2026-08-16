@@ -8,6 +8,22 @@ from libs.device_utils import DeviceUtils
 from photoboothapp import PhotoboothApp
 
 
+class FakeStorage:
+    def __init__(self, print_collage):
+        self._print_collage = print_collage
+
+    def get_print_collage(self):
+        return self._print_collage
+
+    def log_disk_usage(self, context):
+        pass
+
+
+class UnlimitedPrints:
+    def can_print(self):
+        return True
+
+
 class FakePrinter:
     def __init__(self):
         self.file_path = None
@@ -67,10 +83,11 @@ def test_trigger_print_ignores_stale_print_collage_for_fullpage(tmp_path):
     app = PhotoboothApp.__new__(PhotoboothApp)
     app.devices = printer
     app.print_formats = [FakePrintFormat({'PageSize': 'w288h432'}, uses_print_version=False)]
+    app.storage = FakeStorage(str(print_collage))
+    app.stats_store = UnlimitedPrints()
     app.get_collage = lambda: str(collage)
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
-    app._log_disk_space = lambda context: None
 
     assert app.trigger_print(1, format=0) == 123
     assert printer.file_path == str(collage)
@@ -87,10 +104,11 @@ def test_trigger_print_uses_print_collage_for_duplicated_strip(tmp_path):
     app = PhotoboothApp.__new__(PhotoboothApp)
     app.devices = printer
     app.print_formats = [FakePrintFormat({'PageSize': 'w288h432-div2'}, uses_print_version=True)]
+    app.storage = FakeStorage(str(print_collage))
+    app.stats_store = UnlimitedPrints()
     app.get_collage = lambda: str(collage)
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
-    app._log_disk_space = lambda context: None
 
     assert app.trigger_print(1, format=0) == 123
     assert printer.file_path == str(print_collage)
