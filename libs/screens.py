@@ -18,9 +18,12 @@ from kivy.graphics.texture import Texture
 from kivy.metrics import dp, sp
 from kivy.core.image import Image as CoreImage
 
+from kivy.animation import Animation
+
 from libs.kivywidgets import *
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
+from libs.version import APP_VERSION
 
 # Font sizes as fractions of min(Window.width, Window.height) — DPI-independent and
 # orientation-independent: the shortest side is always the binding constraint so fonts
@@ -288,17 +291,18 @@ class StartScreen(BackgroundScreen):
         )
         overlay_layout.add_widget(icon)
 
-        # Version
-        version = Label(
-            text='Version 1.2',
+        # Version: useful to the operator powering the booth up, and to nobody
+        # else. Shown at startup, then faded out before the first guest arrives.
+        self._version_label = Label(
+            text=f'Version {APP_VERSION}',
             font_size=TINY_FONT(),
             halign='left',
             valign='middle',
             size_hint=(0.1, 0.05),
             pos_hint={'x': 0.9, 'y': 0.95},
         )
-        wh_bind(version, 'font_size', TINY_FONT)
-        overlay_layout.add_widget(version)
+        wh_bind(self._version_label, 'font_size', TINY_FONT)
+        overlay_layout.add_widget(self._version_label)
 
         overlay_layout.bind(on_release=self.on_click)
 
@@ -306,6 +310,9 @@ class StartScreen(BackgroundScreen):
 
     def on_entry(self, kwargs={}):
         Logger.info('StartScreen: on_entry().')
+        if self._version_label is not None:
+            Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
+            self._version_label = None  # only the first time, at power-up
         self.app.ringled.start_rainbow()
         self._purge_when_idle()
 
