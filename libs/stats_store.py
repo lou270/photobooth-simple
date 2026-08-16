@@ -32,10 +32,12 @@ class StatsStore:
             'gallery_views': 0,
             'collage_views': 0,
             'image_views': 0,
+            'remote_uploads': 0,
             'first_photo_date': None,
             'last_photo_date': None,
             'last_print_date': None,
             'last_download_date': None,
+            'last_remote_upload_date': None,
             'sessions': [],
         }
 
@@ -102,6 +104,7 @@ class StatsStore:
             'gallery_view': ('gallery_views', None),
             'collage_view': ('collage_views', None),
             'image_view': ('image_views', None),
+            'remote_upload': ('remote_uploads', 'last_remote_upload_date'),
         }.get(event_type)
         if fields is None:
             return

@@ -10,6 +10,7 @@ from libs.screens.countdown import CountdownScreen
 from libs.screens.error import ErrorScreen
 from libs.screens.names import ScreenNames
 from libs.screens.processing import ProcessingScreen
+from libs.screens.remote_gallery import RemoteGalleryScreen
 from libs.screens.review import ReviewScreen
 from libs.screens.select_format import SelectFormatScreen
 from libs.screens.start import StartScreen
@@ -40,6 +41,11 @@ class ScreenMgr(ScreenNames, ScreenManager):
             self.SUCCESS            : SuccessScreen(app, name=self.SUCCESS),
             self.COPYING            : CopyingScreen(app, name=self.COPYING),
         }
+        # Only built where it can be reached: the welcome screen offers the way
+        # in under the same condition, and an unused screen still costs textures.
+        if app.has_remote_capture():
+            self.pb_screens[self.REMOTE_GALLERY] = RemoteGalleryScreen(app, name=self.REMOTE_GALLERY)
+
         for screen in self.pb_screens.values(): self.add_widget(screen)
 
         self.current = self.START

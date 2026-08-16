@@ -1,6 +1,7 @@
 #!/usr/bin/python3
 
 import os
+import shutil
 import sys
 import signal
 import threading
@@ -30,8 +31,10 @@ from kivy.uix.screenmanager import FadeTransition
 from libs.config import Config
 from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
+from libs.net_utils import build_url
 from libs.screens import ScreenMgr
 from libs.hardware.led import create_led
+from libs.remote_store import RemoteStore
 from libs.stats_store import StatsStore
 from libs.template_collage import load_templates
 from libs.usb_transfer import UsbTransfer
@@ -62,6 +65,7 @@ class PhotoboothApp(App):
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()
         self.WEB_HOST = config.get_web_host()
+        self.REMOTE_CAPTURE = config.get_remote_capture()
         self.FILTERS_ENABLED = config.get_filters()
         self.PREVIEW_BLUR_REFRESH_FRAMES = config.get_preview_blur_refresh_frames()
         self.BLUR_CAMERA = config.get_blur_camera()
@@ -124,6 +128,27 @@ class PhotoboothApp(App):
             max_prints=self.MAX_PRINTS,
         )
 
+        # Photos guests take with their own phone, kept beside the sessions
+        # rather than inside them: nothing here is a session until someone at the
+        # booth picks it and prints it.
+        self.remote_store = None
+        self.remote_url = None
+        if self.REMOTE_CAPTURE:
+            self.remote_store = RemoteStore(
+                os.path.join(self.DCIM_DIRECTORY, 'remote'),
+                max_pending=config.get_remote_max_pending(),
+                max_per_sender=config.get_remote_max_per_sender(),
+                max_upload_bytes=config.get_remote_max_upload_mb() * 1024 * 1024,
+                max_image_pixels=config.get_remote_max_image_pixels(),
+                min_upload_interval=config.get_remote_min_upload_interval(),
+            )
+            self.remote_url = build_url(
+                self.WEB_PORT, '/remote',
+                host=self.WEB_HOST,
+                override=config.get_remote_url(),
+            )
+            Logger.info('PhotoboothApp: remote camera enabled, phones send photos to %s', self.remote_url)
+
         # Start USB transfer
         if self.USB_EXPORT:
             self.usb_transfer = UsbTransfer(self, self.save_directory, min_free_gb=self.USB_MIN_FREE_GB)
@@ -140,6 +165,8 @@ class PhotoboothApp(App):
             admin_password=config.get_admin_password(),
             stats_store=self.stats_store,
             restart_callback=self.request_restart,
+            remote_store=self.remote_store,
+            remote_enabled=self.REMOTE_CAPTURE,
         )
         if self.web_server.start():
             Logger.info(
@@ -238,6 +265,55 @@ class PhotoboothApp(App):
     def get_format_aspect_ratio(self, format_idx):
         """Get the aspect ratio (width/height) for the given format."""
         return self.print_formats[format_idx].get_aspect_ratio()
+
+    def get_single_photo_format_index(self):
+        """The format that prints one photo on its own.
+
+        A photo sent from a phone arrives alone, so a strip expecting four of
+        them would print the same face four times. Falls back to the first
+        format when the booth only carries multi-photo templates.
+        """
+        for format_idx, print_format in enumerate(self.print_formats):
+            if print_format.get_photos_required() == 1:
+                return format_idx
+        return 0
+
+    # --- photos sent from phones -----------------------------------------
+
+    def has_remote_capture(self):
+        return bool(self.REMOTE_CAPTURE and self.remote_store is not None)
+
+    def get_remote_pending_count(self):
+        if not self.has_remote_capture():
+            return 0
+        return self.remote_store.count_pending()
+
+    def get_pending_remote_photos(self):
+        if not self.has_remote_capture():
+            return []
+        return self.remote_store.list_entries(status=RemoteStore.STATUS_PENDING)
+
+    def get_remote_photo_path(self, entry_id, small=False):
+        if not self.has_remote_capture():
+            return None
+        return self.remote_store.photo_path(entry_id, small=small)
+
+    def stage_remote_photo(self, entry_id):
+        """Put a photo a phone sent where the print pipeline expects a capture.
+
+        From here on the photo is an ordinary session: the collage is assembled
+        from it, the review screen offers print and share, and saving files it in
+        the gallery next to the ones taken at the booth. It leaves the queue at
+        the same moment, so two guests cannot walk off with the same print.
+        """
+        Logger.info('PhotoboothApp: stage_remote_photo(%s).', entry_id)
+        photo_path = self.get_remote_photo_path(entry_id)
+        if photo_path is None:
+            raise FileNotFoundError(f'Remote photo {entry_id} is no longer available')
+
+        self.storage.purge_tmp()
+        shutil.copyfile(photo_path, self.get_shot(0))
+        self.remote_store.set_status(entry_id, RemoteStore.STATUS_PRINTED)
 
     def _rotate_logs(self):
         try:

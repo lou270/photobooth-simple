@@ -228,6 +228,7 @@ def create_blueprint(server):
             'gallery_views': 0,
             'collage_views': 0,
             'image_views': 0,
+            'remote_uploads': 0,
             'first_photo_date': None,
             'last_photo_date': None,
             'last_print_date': None,

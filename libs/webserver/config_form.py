@@ -56,6 +56,19 @@ CONFIG_FORM_SECTIONS = (
         ),
     },
     {
+        'title': 'Remote camera',
+        'description': 'Photos guests take with their own phone and send to the booth.',
+        'fields': (
+            {'section': 'Remote', 'option': 'REMOTE_CAPTURE', 'label': 'Phone camera', 'control': 'checkbox', 'help': 'Show the QR code on the welcome screen and accept photos from phones.'},
+            {'section': 'Remote', 'option': 'REMOTE_URL', 'label': 'Public address', 'control': 'text', 'placeholder': 'None', 'none_means_empty': True, 'help': 'Leave empty to derive it from the interface the booth answers on, or give the whole address, port included.'},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_UPLOAD_MB', 'label': 'Maximum upload (MB)', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_IMAGE_PIXELS', 'label': 'Longest side kept (pixels)', 'control': 'number', 'number_type': 'int', 'min': 640, 'step': 10},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_PER_SENDER', 'label': 'Photos per phone', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_PENDING', 'label': 'Photos waiting in total', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1},
+            {'section': 'Remote', 'option': 'REMOTE_MIN_UPLOAD_INTERVAL', 'label': 'Seconds between two sends', 'control': 'number', 'number_type': 'int', 'min': 0, 'step': 1},
+        ),
+    },
+    {
         'title': 'Capture',
         'description': 'Camera countdown, calibration and preview behavior.',
         'fields': (

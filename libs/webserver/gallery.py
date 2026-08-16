@@ -84,6 +84,11 @@ def create_blueprint(server):
     @blueprint.route('/check_network_status.txt')
     @blueprint.route('/mobile/status.php')
     def captive():
+        # A phone joining the booth's access point opens one of these by itself.
+        # Where a booth takes photos from phones, that is the page worth landing
+        # on: it is the reason the guest was asked to join the network at all.
+        if server.remote_enabled and server.remote_store is not None:
+            return redirect('/remote')
         return redirect('/')
 
     return blueprint

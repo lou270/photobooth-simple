@@ -32,7 +32,8 @@ class WebServer:
         '1234', '12345678', '123456789', '1234567890', 'azertyuiop', 'qwertyuiop',
     })
 
-    def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None, restart_callback=None):
+    def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
+                 restart_callback=None, remote_store=None, remote_enabled=False):
         self.save_directory = save_directory
         self.host = host
         self.port = port
@@ -40,6 +41,11 @@ class WebServer:
         self.login_throttle = LoginThrottle()
         self.stats_store = stats_store
         self.restart_callback = restart_callback
+        # The queue phones send photos to. Kept as a flag of its own rather than
+        # inferred from the store: the operator turns the feature off without
+        # the photos already received going anywhere.
+        self.remote_store = remote_store
+        self.remote_enabled = bool(remote_enabled)
         # libs/webserver/server.py -> the project root is three levels up.
         self.project_root = str(Path(__file__).resolve().parents[2])
         self.web_directory = os.path.join(self.project_root, 'web')
@@ -283,6 +289,11 @@ class WebServer:
                     shutil.rmtree(session_path)
                     deleted_sessions += 1
 
+            # Photos phones sent are guest data of the same kind: an operator
+            # clearing the booth between two events expects them gone as well.
+            if self.remote_store is not None:
+                self.remote_store.purge()
+
             if self.stats_store is not None:
                 self.stats_store.reset()
         except Exception as e:
@@ -432,10 +443,11 @@ class WebServer:
         server is constructed the package is fully loaded, so the cycle only
         exists at import time and this sidesteps it.
         """
-        from libs.webserver import admin, api, gallery
+        from libs.webserver import admin, api, gallery, remote
 
-        for area in (gallery, admin, api):
+        for area in (gallery, admin, api, remote):
             self.app.register_blueprint(area.create_blueprint(self))
+
     def start(self, force_restart=False):
         """Start the web server in a separate thread."""
         with self._server_lock:

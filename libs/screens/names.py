@@ -16,3 +16,4 @@ class ScreenNames:
     REVIEW = 'review'
     SUCCESS = 'success'
     COPYING = 'copying'
+    REMOTE_GALLERY = 'remote_gallery'

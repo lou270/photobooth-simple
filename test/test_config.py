@@ -79,3 +79,46 @@ def test_camera_backend_defaults_to_auto_when_absent(tmp_path, monkeypatch):
         SHARE = True
     """)
     assert config.get_camera_backend() == 'auto'
+
+
+def test_remote_capture_is_off_when_the_section_is_absent(tmp_path, monkeypatch):
+    """An existing installation upgrading must not start accepting uploads."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        SHARE = True
+    """)
+    assert config.get_remote_capture() is False
+    assert config.get_remote_url() is None
+
+
+def test_remote_url_none_means_derive_it(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Remote]
+        REMOTE_URL = None
+    """)
+    assert config.get_remote_url() is None
+
+
+def test_remote_url_is_returned_when_set(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Remote]
+        REMOTE_URL = photobooth.local:5000
+    """)
+    assert config.get_remote_url() == 'photobooth.local:5000'
+
+
+def test_remote_limits_are_clamped_to_something_usable(tmp_path, monkeypatch):
+    """A zero or negative limit would refuse every photo, or store none of it."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Remote]
+        REMOTE_MAX_UPLOAD_MB = 0
+        REMOTE_MAX_IMAGE_PIXELS = 10
+        REMOTE_MAX_PER_SENDER = 0
+        REMOTE_MAX_PENDING = -5
+        REMOTE_MIN_UPLOAD_INTERVAL = -1
+    """)
+    assert config.get_remote_max_upload_mb() == 1
+    assert config.get_remote_max_image_pixels() == 640
+    assert config.get_remote_max_per_sender() == 1
+    assert config.get_remote_max_pending() == 1
+    assert config.get_remote_min_upload_interval() == 0

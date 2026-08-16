@@ -12,6 +12,7 @@ A simple and intuitive photobooth application designed to be easy to use, even f
 - **Multiple Photo Formats:** Support for different collage layouts
 - **Touch Screen Interface:** Optimized for 7" Ingcool touchscreen and above
 - **WiFi Sharing:** Share photos via WiFi network (QR code generation)
+- **Phone as a Remote Camera:** Guests photograph anywhere at the event from their own phone and print it at the booth
 
 ## Screenshots
 
@@ -81,6 +82,10 @@ The photobooth application follows this screen navigation flow:
            └─────────────┘
 
 Note: All screens have a "Home" button to return to the Start Screen
+
+Second entry point, when REMOTE_CAPTURE is enabled: from the Start Screen, the
+button counting the photos phones have sent opens the Remote Gallery, and
+picking one there joins the flow at the Processing Screen.
 ```
 
 ### Screen Descriptions
@@ -93,6 +98,7 @@ Note: All screens have a "Home" button to return to the Start Screen
 - **Review Screen:** Final saved-collage screen with available actions: print, share, or go home
 - **Print Popup:** Shows print progress and reports print errors while keeping the saved photo available
 - **QR Code Popup:** Shows the sharing QR code without leaving the review screen
+- **Remote Gallery Screen:** Photos guests sent from their phone, waiting to be printed (see [Phone as a remote camera](#phone-as-a-remote-camera))
 - **Success Screen:** Final confirmation before returning to start
 - **Error Screen:** Displayed when an error occurs during the process
 - **Maintenance Screen:** Displayed for operator intervention, such as storage, camera, web server, printer, or USB export issues
@@ -159,6 +165,7 @@ python3 photoboothapp.py
 You can edit `config.ini` to change various parameters such as:
  - **FULLSCREEN:** Full screen window mode
  - **SHARE:** Enable/disable share buttons using a QRCode
+ - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
  - **COUNTDOWN:** Countdown time before photo capture
  - **DCIM_DIRECTORY:** Directory where photos and collages are stored
@@ -183,6 +190,61 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 - **Live Preview:** Real-time preview with scaling and duplication visualization
 
 ![Template Editor](doc/template_editor.png)
+
+## Phone as a remote camera
+
+The booth only sees what stands in front of it. With `REMOTE_CAPTURE = True`, every guest phone
+becomes a second camera: someone photographs the speeches at the far end of the room, sends the
+photo to the booth, walks over and prints it.
+
+### What a guest does
+
+1. Joins the booth's WiFi network. Phones open the booth's page by themselves at that point, since
+   the captive portal detection now lands on the capture page.
+2. Or scans the QR code shown at the bottom right of the welcome screen, which carries the address
+   of that same page. Note that the phone must already be on the booth's network for it to open.
+3. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
+   became of it, and lets the guest take a photo back before anyone prints it.
+4. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
+   it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
+
+The capture itself is done by the phone's own camera application, through a file input, rather than
+by the browser. That is deliberate: `getUserMedia` is refused outside a secure context, and a booth
+serving plain HTTP from its own access point has no way to offer one. Where the page *is* served
+over HTTPS, it additionally offers a live viewfinder inside the page.
+
+### What the booth does with it
+
+Incoming photos are re-encoded before anything else. That bounds what a 12 MP phone leaves on the
+disk, and it drops the EXIF block on the way, so the GPS coordinates of whoever pressed the shutter
+never reach the booth or the gallery.
+
+A photo picked at the booth is copied into the working directory as an ordinary capture, assembled
+with the first single-photo template, then printed, shared and saved like any other session. It
+appears in the gallery and in the USB export with the rest of the evening.
+
+### Moderating
+
+Anything sent by a phone shows up under **Admin → Phone photos** (`/admin/remote`). An unwanted photo
+can be rejected, which takes it out of the booth queue while the guest still sees what happened to
+it, or deleted outright. Deleting all sessions from the admin page also clears this queue.
+
+### Settings
+
+All in the `[Remote]` section of `config.ini`, and in the admin configuration form:
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `REMOTE_CAPTURE` | `False` | Turns the whole feature on. While off, the routes answer 404 and no QR code is shown. |
+| `REMOTE_URL` | `None` | Address the QR code carries. Derived from the booth's own interface when left empty. |
+| `REMOTE_MAX_UPLOAD_MB` | `12` | Largest upload accepted. |
+| `REMOTE_MAX_IMAGE_PIXELS` | `2400` | Longest side kept when the photo is re-encoded. |
+| `REMOTE_MAX_PER_SENDER` | `20` | Photos one phone may leave waiting. |
+| `REMOTE_MAX_PENDING` | `200` | Photos the queue holds, all phones together. |
+| `REMOTE_MIN_UPLOAD_INTERVAL` | `3` | Seconds a phone must wait between two sends. |
+
+The last four exist so that one guest, or one script within WiFi range, cannot fill the booth's disk
+on their own.
 
 ## USB Photo Export
 

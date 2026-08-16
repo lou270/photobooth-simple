@@ -69,6 +69,31 @@ class Config:
         """
         return self._get_string(('Web',), 'WEB_HOST', fallback='0.0.0.0').strip() or '0.0.0.0'
 
+    def get_remote_capture(self):
+        """Whether guests may send photos taken with their own phone."""
+        return self._get_boolean(('Remote',), 'REMOTE_CAPTURE', fallback=False)
+
+    def get_remote_url(self):
+        """Address printed in the QR code, or None to derive it from the booth."""
+        url = self._get_string(('Remote',), 'REMOTE_URL', fallback='').strip()
+        return url if url and url.upper() != 'NONE' else None
+
+    def get_remote_max_upload_mb(self):
+        return max(1, self._get_int(('Remote',), 'REMOTE_MAX_UPLOAD_MB', fallback=12))
+
+    def get_remote_max_image_pixels(self):
+        """Longest side kept when an incoming photo is re-encoded."""
+        return max(640, self._get_int(('Remote',), 'REMOTE_MAX_IMAGE_PIXELS', fallback=2400))
+
+    def get_remote_max_per_sender(self):
+        return max(1, self._get_int(('Remote',), 'REMOTE_MAX_PER_SENDER', fallback=20))
+
+    def get_remote_max_pending(self):
+        return max(1, self._get_int(('Remote',), 'REMOTE_MAX_PENDING', fallback=200))
+
+    def get_remote_min_upload_interval(self):
+        return max(0, self._get_int(('Remote',), 'REMOTE_MIN_UPLOAD_INTERVAL', fallback=3))
+
     def get_countdown(self):
         return self._get_int(('Capture', 'Picture'), 'COUNTDOWN', fallback=5)
 

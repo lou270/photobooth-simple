@@ -42,6 +42,9 @@ SHOT_TIMEOUT_SECONDS = 10
 REVIEW_HOME_TIMEOUT_SECONDS = 60
 COUNTDOWN_HOME_TIMEOUT_SECONDS = 30
 CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS = 30
+# Longer than the others: a guest browsing the photos phones sent is reading a
+# wall of faces, not answering a prompt.
+REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
 
 def lighten_rgba(color, amount=0.35):
     return (
@@ -70,6 +73,7 @@ HOME_COLOR = hex_to_rgba('#534969')
 HOME_PROGRESS_COLOR = darken_rgba(HOME_COLOR) #lighten_rgba(HOME_COLOR)
 BADGE_COLOR = hex_to_rgba('#8b4846')
 SHARE_COLOR = hex_to_rgba('#667eea')
+REMOTE_COLOR = hex_to_rgba('#4a7c8c')
 
 # Icons
 ICON_TTF = './assets/fonts/hugeicons.ttf' # https://hugeicons.com/free-icon-font and https://hugeicons.com/icons?style=Stroke&type=Rounded

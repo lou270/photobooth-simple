@@ -26,6 +26,33 @@ WEB_PORT = 5000
 # 192.168.x.y pinned to a single interface
 WEB_HOST = 0.0.0.0
 
+[Remote]
+# Turn every guest phone into a camera for the booth: the welcome screen shows a
+# QR code, the phone opens a page, takes a photo and sends it here. The photos
+# wait in a queue the booth displays, and a guest prints the one they want.
+REMOTE_CAPTURE = False
+
+# Address the QR code points at. None derives it from the interface the booth
+# answers on, which is what you want on its own access point. Set it by hand
+# when the booth sits behind a captive portal name or a port forward, and give
+# the whole address, port included: photobooth.local:5000
+REMOTE_URL = None
+
+# Largest upload accepted, in megabytes
+REMOTE_MAX_UPLOAD_MB = 12
+
+# Longest side kept when an incoming photo is re-encoded. Above the print
+# resolution there is nothing to gain and a lot of disk to lose.
+REMOTE_MAX_IMAGE_PIXELS = 2400
+
+# How many photos one phone may leave waiting, and how many the queue holds in
+# total. Both are there so one guest cannot fill the booth on their own.
+REMOTE_MAX_PER_SENDER = 20
+REMOTE_MAX_PENDING = 200
+
+# Seconds a phone must wait between two sends
+REMOTE_MIN_UPLOAD_INTERVAL = 3
+
 [Log]
 # Keep logs bounded for long unattended runs
 LOG_RETENTION_DAYS = 14

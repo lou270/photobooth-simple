@@ -1,0 +1,136 @@
+"""What the booth does with a photo a phone sent.
+
+The web side stops at the queue. From the moment a guest picks a photo on the
+booth it must become an ordinary session: one capture in the working directory,
+assembled, printed and saved like any other. These tests cover that handover,
+which is the only place the two halves of the feature touch.
+"""
+
+import os
+import sys
+from pathlib import Path
+
+import cv2
+import numpy as np
+import pytest
+
+sys.path.append(str(Path(__file__).resolve().parents[1]))
+from libs.core import SessionStorage
+from libs.remote_store import RemoteStore, new_sender_id
+from libs.screens.remote_gallery import RemoteGalleryScreen
+from photoboothapp import PhotoboothApp
+
+
+class FakeFormat:
+    def __init__(self, photos_required):
+        self._photos_required = photos_required
+
+    def get_photos_required(self):
+        return self._photos_required
+
+
+def jpeg_bytes(width=1200, height=900):
+    image = np.full((height, width, 3), (40, 110, 180), dtype=np.uint8)
+    return cv2.imencode('.jpg', image)[1].tobytes()
+
+
+def make_app(tmp_path, remote_capture=True):
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.REMOTE_CAPTURE = remote_capture
+    app.storage = SessionStorage(str(tmp_path / 'DCIM'))
+    app.remote_store = RemoteStore(str(tmp_path / 'DCIM' / 'remote'), min_upload_interval=0) if remote_capture else None
+    return app
+
+
+def test_a_photo_from_a_phone_is_printed_alone_when_a_format_allows_it(tmp_path):
+    app = make_app(tmp_path)
+    app.print_formats = [FakeFormat(4), FakeFormat(1), FakeFormat(2)]
+
+    assert app.get_single_photo_format_index() == 1
+
+
+def test_without_a_single_photo_format_the_first_one_is_used(tmp_path):
+    """Better a face repeated across a strip than a crash in front of a guest."""
+    app = make_app(tmp_path)
+    app.print_formats = [FakeFormat(3), FakeFormat(4)]
+
+    assert app.get_single_photo_format_index() == 0
+
+
+def test_the_feature_is_off_without_a_queue(tmp_path):
+    app = make_app(tmp_path, remote_capture=False)
+
+    assert app.has_remote_capture() is False
+    assert app.get_remote_pending_count() == 0
+    assert app.get_pending_remote_photos() == []
+    assert app.get_remote_photo_path('20260816_120000_deadbeef') is None
+
+
+def test_staging_puts_the_photo_where_a_capture_would_be(tmp_path):
+    app = make_app(tmp_path)
+    entry = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+
+    app.stage_remote_photo(entry['id'])
+
+    staged = app.get_shot(0)
+    assert os.path.isfile(staged)
+    assert cv2.imread(staged) is not None
+
+
+def test_staging_clears_whatever_the_previous_session_left(tmp_path):
+    app = make_app(tmp_path)
+    leftover = Path(app.storage.tmp_directory, 'capture-1.jpg')
+    leftover.write_bytes(b'previous session')
+    entry = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+
+    app.stage_remote_photo(entry['id'])
+
+    # Otherwise a four-photo strip would print three faces from the session
+    # before and one from the phone.
+    assert not leftover.exists()
+    assert sorted(p.name for p in Path(app.storage.tmp_directory).iterdir()) == ['capture-0.jpg']
+
+
+def test_a_staged_photo_leaves_the_queue(tmp_path):
+    """Two guests must not walk off with a print of the same photo."""
+    app = make_app(tmp_path)
+    entry = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+
+    app.stage_remote_photo(entry['id'])
+
+    assert app.get_remote_pending_count() == 0
+    assert app.remote_store.get(entry['id'])['status'] == RemoteStore.STATUS_PRINTED
+
+
+def test_a_photo_withdrawn_before_printing_is_reported(tmp_path):
+    """The sender can remove it from their phone between the tap and the copy."""
+    app = make_app(tmp_path)
+    entry = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+    app.remote_store.delete(entry['id'])
+
+    with pytest.raises(FileNotFoundError):
+        app.stage_remote_photo(entry['id'])
+
+
+def test_only_waiting_photos_are_offered_at_the_booth(tmp_path):
+    app = make_app(tmp_path)
+    first = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+    second = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+    app.stage_remote_photo(first['id'])
+
+    waiting = app.get_pending_remote_photos()
+
+    assert [entry['id'] for entry in waiting] == [second['id']]
+    assert app.get_remote_pending_count() == 1
+
+
+@pytest.mark.parametrize('received_at,expected', [
+    ('2026-08-16T21:47:03', '21:47'),
+    ('2026-08-16T09:05:00', '09:05'),
+    ('2026-08-16', ''),
+    ('', ''),
+    (None, ''),
+])
+def test_a_card_is_labelled_with_the_time_the_photo_arrived(received_at, expected):
+    """The clock time is how a guest recognises their own photo on the wall."""
+    assert RemoteGalleryScreen._format_time(received_at) == expected

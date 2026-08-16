@@ -212,48 +212,57 @@ class PrintStatusPopup(FloatLayout):
             self.on_dismiss()
 
 class QRCodePopup(FloatLayout):
-    """Popup overlay to show QR code."""
-    
-    # Class-level cache for QR code texture (shared across all instances)
-    _qr_texture_cache = None
-    _qr_png_cache = None
-    _qr_generating = False
+    """Popup overlay to show QR code.
+
+    Two payloads exist so far: the WiFi credentials that get a phone onto the
+    booth's network, and the address of the remote capture page. They are cached
+    per payload rather than one at a time, because the welcome screen may offer
+    both and building a code costs a visible fraction of a second on a Pi.
+    """
+
+    WIFI_PAYLOAD = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
+
+    # Class-level caches, shared across instances and keyed by payload.
+    _qr_texture_cache = {}
+    _qr_png_cache = {}
+    _qr_generating = set()
 
     @classmethod
-    def preload(cls):
+    def preload(cls, payload=WIFI_PAYLOAD):
         """Build the QR texture on the UI thread if async preload did not finish yet."""
-        if cls._qr_texture_cache is not None:
+        if payload in cls._qr_texture_cache:
             return
 
-        if cls._qr_png_cache is not None:
+        png = cls._qr_png_cache.get(payload)
+        if png is not None:
             started_at = time.monotonic()
-            cls._cache_texture_from_png(cls._qr_png_cache)
+            cls._cache_texture_from_png(payload, png)
             Logger.info('QRCodePopup: QR texture cached in %.2fs', time.monotonic() - started_at)
             return
 
-        cls.preload_async()
+        cls.preload_async(payload)
 
     @classmethod
-    def preload_async(cls):
+    def preload_async(cls, payload=WIFI_PAYLOAD):
         """Generate QR PNG in a worker, then create the Kivy texture on the UI thread."""
-        if cls._qr_texture_cache is not None or cls._qr_generating:
+        if payload in cls._qr_texture_cache or payload in cls._qr_generating:
             return
 
-        cls._qr_generating = True
+        cls._qr_generating.add(payload)
 
         def generate_png():
             started_at = time.monotonic()
             try:
-                png = cls._build_qr_png()
+                png = cls._build_qr_png(payload)
             except Exception as exc:
-                cls._qr_generating = False
+                cls._qr_generating.discard(payload)
                 Logger.error('QRCodePopup: QR async generation failed: %s', exc)
                 return
 
             def cache_on_main(dt):
-                cls._qr_png_cache = png
-                cls._cache_texture_from_png(png)
-                cls._qr_generating = False
+                cls._qr_png_cache[payload] = png
+                cls._cache_texture_from_png(payload, png)
+                cls._qr_generating.discard(payload)
                 Logger.info('QRCodePopup: QR code generated and cached in %.2fs', time.monotonic() - started_at)
 
             Clock.schedule_once(cache_on_main, 0)
@@ -261,18 +270,17 @@ class QRCodePopup(FloatLayout):
         threading.Thread(target=generate_png, name='photobooth-qr-preload', daemon=True).start()
 
     @classmethod
-    def _build_qr_png(cls):
+    def _build_qr_png(cls, payload):
         import qrcode
 
-        wifi_qr_data = "WIFI:T:nopass;S:PhotoBooth;P:;H:false;;"
-
         qr = qrcode.QRCode(
-            version=1,
+            # fit=True picks the version: a URL does not fit in version 1, which
+            # a WiFi payload does, and pinning it would raise on the longer one.
             error_correction=qrcode.constants.ERROR_CORRECT_L,
             box_size=10,
             border=4,
         )
-        qr.add_data(wifi_qr_data)
+        qr.add_data(payload)
         qr.make(fit=True)
 
         img = qr.make_image(fill_color="black", back_color="white")
@@ -281,14 +289,16 @@ class QRCodePopup(FloatLayout):
         return buf.getvalue()
 
     @classmethod
-    def _cache_texture_from_png(cls, png):
+    def _cache_texture_from_png(cls, payload, png):
         buf = io.BytesIO(png)
         core_image = CoreImage(buf, ext='png')
-        cls._qr_texture_cache = core_image.texture
-    
-    def __init__(self, on_dismiss=None, **kwargs):
+        cls._qr_texture_cache[payload] = core_image.texture
+
+    def __init__(self, on_dismiss=None, payload=WIFI_PAYLOAD, title='SCAN ME',
+                 hint='Go to http://192.168.4.1', **kwargs):
         super(QRCodePopup, self).__init__(**kwargs)
         self.on_dismiss = on_dismiss
+        self.payload = payload
         self._close_scheduled = False
         
         # Semi-transparent overlay
@@ -314,7 +324,7 @@ class QRCodePopup(FloatLayout):
         self.card.bind(pos=self._update_card, size=self._update_card)
 
         scan_label = ResizeLabel(
-            text='SCAN ME',
+            text=title,
             size_hint=(1, 0.1),
             wh_fraction=0.055,
             bold=True,
@@ -332,7 +342,7 @@ class QRCodePopup(FloatLayout):
         self.card.add_widget(self.qr_image)
 
         hint_label = ResizeLabel(
-            text='Go to http://192.168.4.1',
+            text=hint,
             size_hint=(1, 0.08),
             wh_fraction=0.022,
             bold=True,
@@ -380,10 +390,11 @@ class QRCodePopup(FloatLayout):
         self.card_rect.size = instance.size
     
     def _generate_qr_code(self):
-        """Generate WiFi QR code with caching for better performance."""
-        QRCodePopup.preload()
-        if QRCodePopup._qr_texture_cache is not None:
-            self.qr_image.texture = QRCodePopup._qr_texture_cache
+        """Generate the QR code for this payload, with caching for better performance."""
+        QRCodePopup.preload(self.payload)
+        texture = QRCodePopup._qr_texture_cache.get(self.payload)
+        if texture is not None:
+            self.qr_image.texture = texture
             Logger.info('QRCodePopup: Using cached QR code')
     
     def _close(self, obj):

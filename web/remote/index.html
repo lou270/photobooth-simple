@@ -1,0 +1,494 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#26495c">
+    <title>PhotoBooth - Send a photo</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <style>
+        /* A page held in one hand, at arm's length, in a dark room: everything
+           is sized for a thumb and nothing depends on hovering. */
+        body {
+            background: #26495c;
+            color: #ffffff;
+        }
+
+        .remote-shell {
+            width: min(560px, 100%);
+            margin: 0 auto;
+            padding: 20px 16px calc(28px + env(safe-area-inset-bottom));
+        }
+
+        .remote-header {
+            text-align: center;
+            margin-bottom: 22px;
+        }
+
+        .remote-header h1 {
+            margin: 0 0 6px;
+            font-size: 26px;
+            letter-spacing: 0.02em;
+        }
+
+        .remote-header p {
+            margin: 0;
+            color: rgba(255, 255, 255, 0.75);
+            font-size: 15px;
+            line-height: 1.5;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: var(--radius-lg);
+            padding: 18px;
+            margin-bottom: 18px;
+        }
+
+        .btn-block {
+            width: 100%;
+            min-height: 64px;
+            font-size: 18px;
+        }
+
+        .btn-capture {
+            background: #538a64;
+            color: #ffffff;
+        }
+
+        .btn-send {
+            background: #667eea;
+            color: #ffffff;
+        }
+
+        .btn-quiet {
+            background: rgba(255, 255, 255, 0.12);
+            color: #ffffff;
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+
+        .preview-frame {
+            position: relative;
+            margin-bottom: 14px;
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.35);
+        }
+
+        .preview-frame img,
+        .preview-frame video {
+            display: block;
+            width: 100%;
+            max-height: 55vh;
+            object-fit: contain;
+        }
+
+        .row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .row .btn {
+            flex: 1;
+        }
+
+        .hint {
+            margin: 12px 0 0;
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 13px;
+            line-height: 1.5;
+            text-align: center;
+        }
+
+        .feedback {
+            margin-bottom: 16px;
+            padding: 14px 16px;
+            border-radius: var(--radius-md);
+            font-size: 15px;
+            line-height: 1.45;
+        }
+
+        .feedback.ok {
+            background: rgba(83, 138, 100, 0.25);
+            border: 1px solid rgba(83, 138, 100, 0.6);
+        }
+
+        .feedback.ko {
+            background: rgba(139, 72, 70, 0.3);
+            border: 1px solid rgba(139, 72, 70, 0.7);
+        }
+
+        .sent-list {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .sent-item {
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            background: rgba(0, 0, 0, 0.3);
+        }
+
+        .sent-item img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+        }
+
+        .sent-meta {
+            padding: 8px 10px;
+            font-size: 12px;
+        }
+
+        .chip {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 999px;
+            font-weight: 700;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .chip.pending { background: rgba(253, 126, 20, 0.3); color: #ffd8b5; }
+        .chip.printed { background: rgba(40, 167, 69, 0.3); color: #bdf0c8; }
+        .chip.rejected { background: rgba(220, 53, 69, 0.3); color: #ffc9ce; }
+
+        .link-button {
+            margin-top: 6px;
+            padding: 0;
+            border: 0;
+            background: none;
+            color: rgba(255, 255, 255, 0.65);
+            font-size: 12px;
+            text-decoration: underline;
+            cursor: pointer;
+        }
+
+        .hidden { display: none !important; }
+
+        h2 {
+            margin: 0 0 14px;
+            font-size: 17px;
+        }
+    </style>
+</head>
+<body>
+    <main class="remote-shell">
+        <header class="remote-header">
+            <h1>Your phone is a camera</h1>
+            <p>Take a photo anywhere at the party, send it to the booth, then print it there.</p>
+        </header>
+
+        <div id="feedback" class="feedback hidden" role="status" aria-live="polite"></div>
+
+        <section class="card">
+            <!-- Capture step: the phone's own camera application, opened by the
+                 file input. The browser camera API needs a secure context, which
+                 a booth on its own access point cannot offer, so the live view
+                 below is only wired up when the page happens to have one. -->
+            <div id="capture-step">
+                <label class="btn btn-capture btn-block" for="photo-input">Take a photo</label>
+                <input id="photo-input" type="file" accept="image/*" capture="environment" class="hidden">
+                <button id="live-button" type="button" class="btn btn-quiet btn-block hidden" style="margin-top: 10px;">
+                    Use the camera in this page
+                </button>
+                <p class="hint">The photo stays on the booth and is deleted at the end of the event.</p>
+            </div>
+
+            <div id="live-step" class="hidden">
+                <div class="preview-frame">
+                    <video id="live-video" playsinline muted></video>
+                </div>
+                <div class="row">
+                    <button id="live-shoot" type="button" class="btn btn-capture">Shoot</button>
+                    <button id="live-cancel" type="button" class="btn btn-quiet">Cancel</button>
+                </div>
+            </div>
+
+            <div id="review-step" class="hidden">
+                <div class="preview-frame">
+                    <img id="preview-image" alt="Photo to send">
+                </div>
+                <button id="send-button" type="button" class="btn btn-send btn-block">Send to the booth</button>
+                <div class="row" style="margin-top: 10px;">
+                    <button id="retake-button" type="button" class="btn btn-quiet">Take another one</button>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2>Photos you sent</h2>
+            <div id="sent-list" class="sent-list"></div>
+            <p id="sent-empty" class="hint">Nothing sent yet. Your photos will appear here.</p>
+        </section>
+
+        <p class="hint">
+            Up to {{ max_per_sender }} photos per phone, {{ max_upload_mb }} MB each.
+        </p>
+    </main>
+
+    <canvas id="scratch" class="hidden"></canvas>
+
+    <script>
+        (function () {
+            'use strict';
+
+            // Long side kept before sending. The booth re-encodes anyway; doing it
+            // here first is what makes a send take a second instead of a minute on
+            // a phone at the far end of the room.
+            var MAX_DIMENSION = {{ max_image_pixels }};
+            var JPEG_QUALITY = 0.85;
+            var REFRESH_MS = 15000;
+
+            var elements = {
+                feedback: document.getElementById('feedback'),
+                captureStep: document.getElementById('capture-step'),
+                reviewStep: document.getElementById('review-step'),
+                liveStep: document.getElementById('live-step'),
+                input: document.getElementById('photo-input'),
+                preview: document.getElementById('preview-image'),
+                send: document.getElementById('send-button'),
+                retake: document.getElementById('retake-button'),
+                liveButton: document.getElementById('live-button'),
+                liveVideo: document.getElementById('live-video'),
+                liveShoot: document.getElementById('live-shoot'),
+                liveCancel: document.getElementById('live-cancel'),
+                list: document.getElementById('sent-list'),
+                empty: document.getElementById('sent-empty'),
+                canvas: document.getElementById('scratch')
+            };
+
+            var pendingBlob = null;
+            var previewUrl = null;
+            var liveStream = null;
+
+            var STATUS_LABELS = {
+                pending: 'At the booth',
+                printed: 'Printed',
+                rejected: 'Removed'
+            };
+
+            function say(message, ok) {
+                elements.feedback.textContent = message;
+                elements.feedback.className = 'feedback ' + (ok ? 'ok' : 'ko');
+            }
+
+            function clearFeedback() {
+                elements.feedback.className = 'feedback hidden';
+            }
+
+            function show(step) {
+                elements.captureStep.classList.toggle('hidden', step !== 'capture');
+                elements.reviewStep.classList.toggle('hidden', step !== 'review');
+                elements.liveStep.classList.toggle('hidden', step !== 'live');
+            }
+
+            function releasePreview() {
+                if (previewUrl) {
+                    URL.revokeObjectURL(previewUrl);
+                    previewUrl = null;
+                }
+            }
+
+            function offerPhoto(blob) {
+                pendingBlob = blob;
+                releasePreview();
+                previewUrl = URL.createObjectURL(blob);
+                elements.preview.src = previewUrl;
+                show('review');
+            }
+
+            function drawToBlob(source, width, height) {
+                var scale = Math.min(1, MAX_DIMENSION / Math.max(width, height));
+                elements.canvas.width = Math.round(width * scale);
+                elements.canvas.height = Math.round(height * scale);
+                elements.canvas.getContext('2d').drawImage(source, 0, 0, elements.canvas.width, elements.canvas.height);
+                return new Promise(function (resolve) {
+                    elements.canvas.toBlob(resolve, 'image/jpeg', JPEG_QUALITY);
+                });
+            }
+
+            function shrink(file) {
+                // imageOrientation tells the decoder to apply the EXIF rotation. A
+                // canvas has nowhere to record it afterwards, so skipping this is
+                // how a portrait photo arrives lying on its side.
+                if (typeof createImageBitmap !== 'function') {
+                    return Promise.resolve(file);
+                }
+                return createImageBitmap(file, { imageOrientation: 'from-image' })
+                    .then(function (bitmap) {
+                        return drawToBlob(bitmap, bitmap.width, bitmap.height).then(function (blob) {
+                            bitmap.close();
+                            return blob || file;
+                        });
+                    })
+                    .catch(function () {
+                        // Any failure here is not worth blocking a send over: the
+                        // booth accepts the original file just as well.
+                        return file;
+                    });
+            }
+
+            elements.input.addEventListener('change', function () {
+                var file = elements.input.files && elements.input.files[0];
+                elements.input.value = '';
+                if (!file) {
+                    return;
+                }
+                clearFeedback();
+                shrink(file).then(offerPhoto);
+            });
+
+            elements.retake.addEventListener('click', function () {
+                pendingBlob = null;
+                releasePreview();
+                clearFeedback();
+                show('capture');
+            });
+
+            elements.send.addEventListener('click', function () {
+                if (!pendingBlob) {
+                    return;
+                }
+                elements.send.disabled = true;
+                elements.send.textContent = 'Sending...';
+
+                var payload = new FormData();
+                payload.append('photo', pendingBlob, 'phone.jpg');
+
+                fetch('/remote/upload', { method: 'POST', body: payload })
+                    .then(function (response) {
+                        return response.json().then(function (body) {
+                            return { ok: response.ok, body: body };
+                        });
+                    })
+                    .then(function (result) {
+                        if (!result.ok) {
+                            say(result.body.error || 'The booth refused this photo.', false);
+                            return;
+                        }
+                        say('Sent. Go to the booth to print it.', true);
+                        pendingBlob = null;
+                        releasePreview();
+                        show('capture');
+                        refreshSent();
+                    })
+                    .catch(function () {
+                        say('No connection to the booth. Stay on its WiFi and try again.', false);
+                    })
+                    .then(function () {
+                        elements.send.disabled = false;
+                        elements.send.textContent = 'Send to the booth';
+                    });
+            });
+
+            // --- live camera, only where the browser allows it ----------------
+
+            function stopLive() {
+                if (liveStream) {
+                    liveStream.getTracks().forEach(function (track) { track.stop(); });
+                    liveStream = null;
+                }
+                elements.liveVideo.srcObject = null;
+            }
+
+            if (window.isSecureContext && navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                elements.liveButton.classList.remove('hidden');
+
+                elements.liveButton.addEventListener('click', function () {
+                    navigator.mediaDevices.getUserMedia({
+                        video: { facingMode: 'environment', width: { ideal: 1920 } },
+                        audio: false
+                    }).then(function (stream) {
+                        liveStream = stream;
+                        elements.liveVideo.srcObject = stream;
+                        elements.liveVideo.play();
+                        clearFeedback();
+                        show('live');
+                    }).catch(function () {
+                        say('The camera could not be opened. Use "Take a photo" instead.', false);
+                    });
+                });
+
+                elements.liveShoot.addEventListener('click', function () {
+                    var video = elements.liveVideo;
+                    drawToBlob(video, video.videoWidth, video.videoHeight).then(function (blob) {
+                        stopLive();
+                        if (blob) {
+                            offerPhoto(blob);
+                        } else {
+                            show('capture');
+                        }
+                    });
+                });
+
+                elements.liveCancel.addEventListener('click', function () {
+                    stopLive();
+                    show('capture');
+                });
+            }
+
+            // --- what this phone already sent ---------------------------------
+
+            function withdraw(id) {
+                fetch('/remote/photo/' + encodeURIComponent(id), { method: 'DELETE' })
+                    .then(refreshSent)
+                    .catch(function () {
+                        say('Could not remove that photo.', false);
+                    });
+            }
+
+            function renderSent(photos) {
+                elements.list.textContent = '';
+                elements.empty.classList.toggle('hidden', photos.length > 0);
+
+                photos.forEach(function (photo) {
+                    var item = document.createElement('div');
+                    item.className = 'sent-item';
+
+                    var image = document.createElement('img');
+                    image.src = '/remote/photo/' + encodeURIComponent(photo.id) + '?size=small';
+                    image.alt = 'Photo sent at ' + photo.received_at;
+                    item.appendChild(image);
+
+                    var meta = document.createElement('div');
+                    meta.className = 'sent-meta';
+
+                    var chip = document.createElement('span');
+                    chip.className = 'chip ' + photo.status;
+                    chip.textContent = STATUS_LABELS[photo.status] || photo.status;
+                    meta.appendChild(chip);
+
+                    if (photo.status === 'pending') {
+                        var remove = document.createElement('button');
+                        remove.type = 'button';
+                        remove.className = 'link-button';
+                        remove.textContent = 'Remove';
+                        remove.addEventListener('click', function () { withdraw(photo.id); });
+                        meta.appendChild(document.createElement('br'));
+                        meta.appendChild(remove);
+                    }
+
+                    item.appendChild(meta);
+                    elements.list.appendChild(item);
+                });
+            }
+
+            function refreshSent() {
+                fetch('/remote/mine')
+                    .then(function (response) { return response.json(); })
+                    .then(function (body) { renderSent(body.photos || []); })
+                    .catch(function () { /* the next tick tries again */ });
+            }
+
+            window.addEventListener('pagehide', stopLive);
+            refreshSent();
+            setInterval(refreshSent, REFRESH_MS);
+        }());
+    </script>
+</body>
+</html>

@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PhotoBooth - Phone photos</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <style>
+        .remote-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 18px;
+        }
+
+        .remote-card {
+            overflow: hidden;
+        }
+
+        .remote-card img {
+            display: block;
+            width: 100%;
+            aspect-ratio: 1 / 1;
+            object-fit: cover;
+            background: var(--panel-muted);
+        }
+
+        .remote-card-body {
+            padding: 14px;
+        }
+
+        .remote-meta {
+            margin: 0 0 10px;
+            color: var(--text-secondary);
+            font-size: 13px;
+        }
+
+        .chip {
+            display: inline-block;
+            margin-bottom: 8px;
+            padding: 3px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+
+        .chip.pending { background: #fff3e6; color: #9a4d00; }
+        .chip.printed { background: #eaf7ee; color: #166534; }
+        .chip.rejected { background: #fdecee; color: #8f1d2c; }
+
+        .empty-state {
+            padding: 24px;
+            color: var(--text-secondary);
+        }
+
+        .filters {
+            margin-bottom: 18px;
+        }
+
+        .filters .btn.active {
+            background: var(--accent);
+            color: #ffffff;
+            border-color: var(--accent);
+        }
+    </style>
+</head>
+<body>
+    <main class="page-shell">
+        <div class="page-container">
+            <section class="page-hero">
+                <div>
+                    <span class="eyebrow">Administration</span>
+                    <h1>Photos from phones</h1>
+                    <p>Everything guests sent from the remote capture page. Rejecting a photo takes it out of the booth queue; deleting also removes the file.</p>
+                </div>
+                <div class="actions">
+                    <a href="/admin" class="btn btn-ghost">Back to admin</a>
+                    <a href="/admin/logout" class="btn btn-secondary">Log out</a>
+                </div>
+            </section>
+
+            {% if not remote_enabled %}
+            <div class="warning-box" style="margin-bottom: 18px;">
+                Remote capture is disabled. Turn on <strong>REMOTE_CAPTURE</strong> in the admin configuration and restart the application.
+            </div>
+            {% endif %}
+
+            <div class="actions filters">
+                <button type="button" class="btn btn-ghost active" data-filter="all">All</button>
+                <button type="button" class="btn btn-ghost" data-filter="pending">Waiting</button>
+                <button type="button" class="btn btn-ghost" data-filter="printed">Printed</button>
+                <button type="button" class="btn btn-ghost" data-filter="rejected">Rejected</button>
+                <button id="refreshButton" type="button" class="btn btn-primary">Refresh</button>
+            </div>
+
+            <section id="grid" class="remote-grid"></section>
+            <div id="emptyState" class="panel empty-state">Loading photos...</div>
+        </div>
+    </main>
+
+    <script>
+        const grid = document.getElementById('grid');
+        const emptyState = document.getElementById('emptyState');
+        const refreshButton = document.getElementById('refreshButton');
+        const filterButtons = document.querySelectorAll('[data-filter]');
+
+        const STATUS_LABELS = {
+            pending: 'Waiting at the booth',
+            printed: 'Printed',
+            rejected: 'Rejected',
+        };
+
+        let photos = [];
+        let activeFilter = 'all';
+
+        function render() {
+            const visible = activeFilter === 'all'
+                ? photos
+                : photos.filter((photo) => photo.status === activeFilter);
+
+            grid.replaceChildren(...visible.map(buildCard));
+            emptyState.hidden = visible.length > 0;
+            if (!visible.length) {
+                emptyState.textContent = photos.length
+                    ? 'No photo with this status.'
+                    : 'No phone has sent a photo yet.';
+            }
+        }
+
+        function buildCard(photo) {
+            const card = document.createElement('article');
+            card.className = 'panel remote-card';
+
+            const image = document.createElement('img');
+            image.src = `/remote/photo/${encodeURIComponent(photo.id)}?size=small`;
+            image.alt = `Photo received on ${photo.received_at}`;
+            image.loading = 'lazy';
+            card.appendChild(image);
+
+            const body = document.createElement('div');
+            body.className = 'remote-card-body';
+
+            const chip = document.createElement('span');
+            chip.className = `chip ${photo.status}`;
+            chip.textContent = STATUS_LABELS[photo.status] || photo.status;
+            body.appendChild(chip);
+
+            const meta = document.createElement('p');
+            meta.className = 'remote-meta';
+            meta.textContent = `${photo.received_at.replace('T', ' ')} · phone ${photo.sender}`;
+            body.appendChild(meta);
+
+            const actions = document.createElement('div');
+            actions.className = 'actions';
+
+            if (photo.status !== 'rejected') {
+                actions.appendChild(makeButton('Reject', 'btn-warning', () => reject(photo.id)));
+            }
+            actions.appendChild(makeButton('Delete', 'btn-danger', () => remove(photo.id)));
+
+            body.appendChild(actions);
+            card.appendChild(body);
+            return card;
+        }
+
+        function makeButton(label, variant, onClick) {
+            const button = document.createElement('button');
+            button.type = 'button';
+            button.className = `btn ${variant}`;
+            button.textContent = label;
+            button.addEventListener('click', onClick);
+            return button;
+        }
+
+        async function load() {
+            try {
+                const response = await fetch('/api/remote/photos');
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Unable to load photos');
+                photos = data.photos || [];
+                render();
+            } catch (error) {
+                grid.replaceChildren();
+                emptyState.hidden = false;
+                emptyState.textContent = error.message;
+            }
+        }
+
+        async function reject(id) {
+            await call(`/api/remote/photos/${encodeURIComponent(id)}/reject`, 'POST');
+        }
+
+        async function remove(id) {
+            if (!confirm('Delete this photo permanently?')) return;
+            await call(`/api/remote/photos/${encodeURIComponent(id)}`, 'DELETE');
+        }
+
+        async function call(url, method) {
+            try {
+                const response = await fetch(url, { method });
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || 'Action failed');
+                await load();
+            } catch (error) {
+                emptyState.hidden = false;
+                emptyState.textContent = error.message;
+            }
+        }
+
+        filterButtons.forEach((button) => {
+            button.addEventListener('click', () => {
+                activeFilter = button.dataset.filter;
+                filterButtons.forEach((other) => other.classList.toggle('active', other === button));
+                render();
+            });
+        });
+
+        refreshButton.addEventListener('click', load);
+        load();
+    </script>
+</body>
+</html>
