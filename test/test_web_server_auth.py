@@ -106,3 +106,39 @@ def test_a_wrong_password_does_not_open_the_api(client):
 
 def test_the_gallery_stays_open_to_guests(client):
     assert client.get('/gallery').status_code == 200
+
+
+@pytest.mark.parametrize('weak_password', ['admin', 'Admin', 'password', '1234', 'court'])
+def test_a_weak_admin_password_keeps_admin_access_disabled(tmp_path, weak_password):
+    """Fail closed: the booth still takes photos, only the web admin stays shut."""
+    server = WebServer(str(tmp_path / 'save'), admin_password=weak_password)
+
+    assert server.admin_password is None
+
+    response = server.app.test_client().post('/admin/login', data={'password': weak_password})
+    assert response.status_code == 403
+    assert b'Admin access is disabled' in response.data
+
+
+def test_a_strong_admin_password_is_accepted(tmp_path):
+    server = WebServer(str(tmp_path / 'save'), admin_password='un mot de passe convenable')
+    assert server.admin_password == 'un mot de passe convenable'
+
+
+def test_repeated_failures_lock_the_client_out(client):
+    for _ in range(4):
+        assert login(client, password='wrong').status_code == 403
+
+    assert login(client, password='wrong').status_code == 429
+    # Even the right password has to wait out the lockout.
+    assert login(client).status_code == 429
+
+
+def test_a_successful_login_clears_earlier_failures(client):
+    login(client, password='wrong')
+    login(client, password='wrong')
+
+    assert login(client).status_code == 302
+
+    client.get('/admin/logout')
+    assert login(client, password='wrong').status_code == 403

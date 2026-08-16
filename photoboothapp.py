@@ -57,6 +57,7 @@ class PhotoboothApp(App):
         self.FULLSCREEN = config.get_fullscreen()
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()
+        self.WEB_HOST = config.get_web_host()
         self.FILTERS = config.get_filters()
         self.PREVIEW_BLUR_REFRESH_FRAMES = config.get_preview_blur_refresh_frames()
         self.BLUR_CAMERA = config.get_blur_camera()
@@ -130,7 +131,7 @@ class PhotoboothApp(App):
         abs_save_directory = os.path.abspath(self.save_directory)
         self.web_server = WebServer(
             abs_save_directory,
-            host='0.0.0.0',
+            host=self.WEB_HOST,
             port=self.WEB_PORT,
             admin_password=config.get_admin_password(),
             stats_store=self.stats_store,

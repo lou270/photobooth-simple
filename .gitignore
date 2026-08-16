@@ -4,3 +4,6 @@ __pycache__/
 DCIM/
 .DS_Store
 logs/
+# Local configuration: holds the admin password, never commit it.
+# Start from config.ini.example.
+config.ini

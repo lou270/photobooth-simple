@@ -2,18 +2,29 @@
 # If set to True, the window fill be fullscren
 FULLSCREEN = False
 
-# If set to True, the SHARE buttons are displayed in the UI (web server always runs)
-SHARE = True
+# If set to True, the SHARE buttons and the WiFi QR code are displayed in the UI.
+# Leave it False when guests are not meant to reach the gallery during an event:
+# the booth then shows no QR code pointing at a server they cannot use.
+SHARE = False
 
 # If set to True, RingLed will be enabled (requires spidev hardware)
 RINGLED = True
 
-# Password used by the web admin page to delete all saved photos and sessions (None to disable)
-ADMIN_PASSWORD = admin
+# Password protecting the admin pages: config editor, template editor, log viewer
+# and deletion of every saved session. Use None to keep admin access disabled.
+# Must be at least 10 characters and not a well-known value, otherwise admin
+# access stays disabled and a message is written to the log.
+ADMIN_PASSWORD = None
 
 [Web]
 # Port used by the gallery and admin web server
 WEB_PORT = 5000
+
+# Address the web server binds to.
+# 0.0.0.0    reachable from every network the booth is attached to
+# 127.0.0.1  local only, nothing reachable from the network
+# 192.168.x.y pinned to a single interface
+WEB_HOST = 0.0.0.0
 
 [Log]
 # Keep logs bounded for long unattended runs

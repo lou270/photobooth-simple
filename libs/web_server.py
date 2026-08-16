@@ -12,10 +12,20 @@ from flask import Flask, jsonify, request, send_file, render_template, redirect,
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
+from libs.login_throttle import LoginThrottle
 from libs.template_schema import TemplateValidationError, validate_template
 
 class WebServer:
     """Flask web server for photo gallery with captive portal."""
+
+    # The admin password is the only application-level gate on a booth that is
+    # reachable from whatever network it sits on, so refuse the obvious ones
+    # outright rather than trusting the operator to have changed the default.
+    MIN_ADMIN_PASSWORD_LENGTH = 10
+    FORBIDDEN_ADMIN_PASSWORDS = frozenset({
+        'admin', 'password', 'photobooth', 'motdepasse', 'changeme', '0000',
+        '1234', '12345678', '123456789', '1234567890', 'azertyuiop', 'qwertyuiop',
+    })
 
     SESSION_PATTERN = re.compile(r'^\d{8}_\d{6}$')
     IMAGE_FILENAME_PATTERN = re.compile(r'^(?:collage|capture-\d+)\.jpg$', re.IGNORECASE)
@@ -144,7 +154,8 @@ class WebServer:
         self.save_directory = save_directory
         self.host = host
         self.port = port
-        self.admin_password = admin_password.strip() if isinstance(admin_password, str) and admin_password.strip() else None
+        self.admin_password = self._accept_admin_password(admin_password)
+        self.login_throttle = LoginThrottle()
         self.stats_store = stats_store
         self.restart_callback = restart_callback
         self.project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -675,6 +686,41 @@ class WebServer:
 
         return ''.join(rendered_lines)
 
+    @classmethod
+    def _accept_admin_password(cls, admin_password):
+        """Return the password to use, or None to keep admin access disabled.
+
+        Refusing a weak password fails closed: the booth keeps taking photos,
+        only the web admin stays shut until a real password is configured.
+        """
+        if not isinstance(admin_password, str):
+            return None
+
+        password = admin_password.strip()
+        if not password:
+            return None
+
+        if password.lower() in cls.FORBIDDEN_ADMIN_PASSWORDS:
+            Logger.error(
+                'WebServer: ADMIN_PASSWORD is a well-known value, admin access stays disabled. '
+                'Set a different password in config.ini.'
+            )
+            return None
+
+        if len(password) < cls.MIN_ADMIN_PASSWORD_LENGTH:
+            Logger.error(
+                'WebServer: ADMIN_PASSWORD is shorter than %s characters, admin access stays '
+                'disabled. Set a longer password in config.ini.',
+                cls.MIN_ADMIN_PASSWORD_LENGTH,
+            )
+            return None
+
+        return password
+
+    def _client_key(self):
+        """Identify the caller for throttling purposes."""
+        return request.remote_addr or 'unknown'
+
     def _is_admin_password_valid(self, password):
         """Validate provided admin password."""
         if self.admin_password is None:
@@ -712,8 +758,12 @@ class WebServer:
             return
 
         configured_password = password_match.group(1).strip()
-        if configured_password and configured_password.upper() != 'NONE':
-            self.admin_password = configured_password
+        if configured_password.upper() == 'NONE':
+            return
+
+        # Same policy as at startup: saving a weak password from the admin form
+        # must not be a way around it.
+        self.admin_password = self._accept_admin_password(configured_password)
 
     def _render_admin_login_page(self, error_message=None, success_message=None):
         """Render admin login page."""
@@ -1002,11 +1052,26 @@ class WebServer:
             if self.admin_password is None:
                 return self._render_admin_login_page(error_message='Admin access is disabled. Configure ADMIN_PASSWORD in config.ini.'), 403
 
+            client_key = self._client_key()
+            retry_after = self.login_throttle.retry_after(client_key)
+            if retry_after:
+                session.clear()
+                return self._render_admin_login_page(
+                    error_message=f'Too many failed attempts. Try again in {retry_after} seconds.',
+                ), 429
+
             provided_password = request.form.get('password') or ''
             if not self._is_admin_password_valid(provided_password):
                 session.clear()
+                locked_for = self.login_throttle.record_failure(client_key)
+                Logger.warning('WebServer: failed admin login from %s', client_key)
+                if locked_for:
+                    return self._render_admin_login_page(
+                        error_message=f'Too many failed attempts. Try again in {locked_for} seconds.',
+                    ), 429
                 return self._render_admin_login_page(error_message='Invalid password.'), 403
 
+            self.login_throttle.record_success(client_key)
             session.clear()
             session['is_admin_authenticated'] = True
             return redirect('/admin')

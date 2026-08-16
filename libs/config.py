@@ -19,7 +19,10 @@ class Config:
         self.config = configparser.ConfigParser()
         loaded_files = self.config.read(CONFIG_PATH)
         if not loaded_files:
-            raise FileNotFoundError(f'Cannot load configuration file: {CONFIG_PATH}')
+            raise FileNotFoundError(
+                f'Cannot load configuration file: {CONFIG_PATH}. '
+                'Copy config.ini.example to config.ini and adjust it.'
+            )
 
     def _get_value(self, getter_name, sections, option, fallback=None):
         getter = getattr(self.config, getter_name)
@@ -55,6 +58,16 @@ class Config:
 
     def get_web_port(self):
         return self._get_int(('Web', 'Global'), 'WEB_PORT', fallback=5000)
+
+    def get_web_host(self):
+        """Address the web server binds to.
+
+        0.0.0.0 exposes the admin to every network the booth is attached to,
+        which on a venue LAN or a home network is more than intended. Set
+        127.0.0.1 to keep it local, or a specific address to pin it to one
+        interface.
+        """
+        return self._get_string(('Web',), 'WEB_HOST', fallback='0.0.0.0').strip() or '0.0.0.0'
 
     def get_countdown(self):
         return self._get_int(('Capture', 'Picture'), 'COUNTDOWN', fallback=5)
