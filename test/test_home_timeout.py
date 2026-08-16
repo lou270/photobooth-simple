@@ -1,4 +1,4 @@
-"""Sending an abandoned session home, shared by the three screens that wait."""
+"""Sending an abandoned session home, shared by every screen that waits."""
 
 import os
 import sys
@@ -20,6 +20,7 @@ from libs.screens import (
     HomeTimeoutMixin,
     ReviewScreen,
     ScreenMgr,
+    SelectFormatScreen,
 )
 
 
@@ -122,7 +123,7 @@ def test_the_home_button_goes_home(app):
 
 # --- the real screens ------------------------------------------------------
 
-@pytest.mark.parametrize('screen', [CountdownScreen, ConfirmCaptureScreen, ReviewScreen])
+@pytest.mark.parametrize('screen', [CountdownScreen, ConfirmCaptureScreen, ReviewScreen, SelectFormatScreen])
 def test_every_waiting_screen_shares_the_behaviour(screen):
     assert issubclass(screen, HomeTimeoutMixin)
     assert screen.HOME_TIMEOUT_SECONDS > 0
@@ -132,6 +133,7 @@ def test_only_the_countdown_owns_the_ring():
     assert CountdownScreen.HOME_TIMEOUT_HIDES_RING is True
     assert ConfirmCaptureScreen.HOME_TIMEOUT_HIDES_RING is False
     assert ReviewScreen.HOME_TIMEOUT_HIDES_RING is False
+    assert SelectFormatScreen.HOME_TIMEOUT_HIDES_RING is False
 
 
 def test_the_review_home_button_offers_the_success_screen_instead():

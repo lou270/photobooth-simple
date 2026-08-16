@@ -6,16 +6,20 @@ from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.image import Image
 from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 
-from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba
+from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, make_icon_button, hex_to_rgba
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_THINKNESS, SMALL_FONT, wh_bind
-from libs.screens.base import ColorScreen
+from libs.screens.theme import BORDER_THINKNESS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_TTF, SELECT_FORMAT_HOME_TIMEOUT_SECONDS, SMALL_FONT, wh_bind
+from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
-class SelectFormatScreen(ColorScreen):
+class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
+    HOME_TIMEOUT_SECONDS = SELECT_FORMAT_HOME_TIMEOUT_SECONDS
+
     """
     +-----------------+
     |  Select format  |
@@ -38,6 +42,7 @@ class SelectFormatScreen(ColorScreen):
         Logger.info('SelectFormatScreen: __init__().')
         super(SelectFormatScreen, self).__init__(**kwargs)
         self.app = app
+        self._init_home_timeout()
 
         # Format cards container (scrollable if needed)
         from kivy.uix.gridlayout import GridLayout
@@ -75,13 +80,39 @@ class SelectFormatScreen(ColorScreen):
             self.cards_grid.add_widget(card)
             self.format_cards.append(card)
 
-        self.add_widget(scroll_view)
-        
+        # The cards live below a band kept clear for the home button, so a card
+        # never ends up underneath it.
+        content = BoxLayout(orientation='vertical')
+        self.home_band = Widget(size_hint=(1, None), height=self._home_band_height())
+        content.add_widget(self.home_band)
+        content.add_widget(scroll_view)
+        self.add_widget(content)
+
+        # Home button - top left, with the walk-away countdown drawn around it
+        self.overlay_layout = FloatLayout()
+        self.btn_home = make_icon_button(ICON_HOME,
+                             size=0.14,
+                             pos_hint={'x': 0.05, 'top': 0.95},
+                             font=ICON_TTF,
+                             font_size_fraction=0.07,
+                             bgcolor=HOME_COLOR,
+                             progress=True,
+                             progress_color=HOME_PROGRESS_COLOR,
+                             progress_line_width_fraction=0.028,
+                             on_release=self.home_event
+                             )
+        self.overlay_layout.add_widget(self.btn_home)
+        self.add_widget(self.overlay_layout)
+
         # Bind to window resize events
         Window.bind(on_resize=self._on_window_resize)
-        
+
         # Initial card size calculation
         self._update_card_sizes()
+
+    def _home_band_height(self):
+        """Height the home button occupies at the top: its 5% margin plus its own size."""
+        return Window.height * 0.05 + min(Window.size) * 0.14
 
     def _calculate_card_size(self):
         """Calculate card size and column count that fills the screen optimally for any aspect ratio."""
@@ -105,8 +136,8 @@ class SelectFormatScreen(ColorScreen):
         available_width = Window.width - (2 * padding) - (n_spacings * spacing) - border
         width_from_w = available_width / cols
 
-        # Width derived from vertical space (aspect ratio 1:1.5)
-        available_height = Window.height - (2 * padding) - border
+        # Width derived from vertical space (aspect ratio 1:1.5), minus the home button band
+        available_height = Window.height - self._home_band_height() - (2 * padding) - border
         width_from_h = available_height / 1.5
 
         card_width = max(self.MIN_CARD_WIDTH, min(self.MAX_CARD_WIDTH, min(width_from_w, width_from_h)))
@@ -118,6 +149,7 @@ class SelectFormatScreen(ColorScreen):
         """Update all card sizes based on current window size."""
         card_width, card_height, cols = self._calculate_card_size()
 
+        self.home_band.height = self._home_band_height()
         self.cards_grid.cols = cols
         self.cards_grid.spacing = Window.height * 0.033
         self.cards_grid.row_default_height = card_height
@@ -244,13 +276,16 @@ class SelectFormatScreen(ColorScreen):
         # Previously: reloaded all previews on every entry (slow)
         # Now: previews are generated once and cached in TemplateCollage
         self.app.ringled.start_rainbow()
+        self._start_home_timeout()
 
     def on_exit(self, kwargs={}):
         Logger.info('SelectFormatScreen: on_exit().')
+        self._stop_home_timeout()
         self.app.ringled.clear()
 
     def on_format_selected(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
         format_idx = obj.format_idx
         Logger.info(f'SelectFormatScreen: on_format_selected({format_idx}).')
+        self._stop_home_timeout()
         self.app.transition_to(ScreenNames.COUNTDOWN, shot=0, format=format_idx)

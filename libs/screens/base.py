@@ -13,10 +13,10 @@ from libs.screens.theme import BACKGROUND_COLOR, BORDER_COLOR, BORDER_THINKNESS
 class HomeTimeoutMixin:
     """Send an abandoned session back to the start screen.
 
-    Three screens wait on a guest who may simply have walked away, and the ring
+    Several screens wait on a guest who may simply have walked away, and the ring
     drawn around the home button doubles as the visual countdown. Starting the
     timeout, animating the ring and going home are one behaviour; they used to
-    be copy-pasted three times, differing only by the delay.
+    be copy-pasted on each screen, differing only by the delay.
 
     Screens set HOME_TIMEOUT_SECONDS, and HOME_TIMEOUT_HIDES_RING when the ring
     has to disappear while something else owns the screen.
