@@ -14,7 +14,7 @@ from types import SimpleNamespace
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.web_server import WebServer
+from libs.webserver import WebServer
 
 ADMIN_PASSWORD = 'correct horse'
 

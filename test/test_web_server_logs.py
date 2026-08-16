@@ -4,7 +4,7 @@ from pathlib import Path
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from libs.stats_store import StatsStore
-from libs.web_server import WebServer
+from libs.webserver import WebServer
 
 
 def test_log_files_are_sorted_newest_first(tmp_path):

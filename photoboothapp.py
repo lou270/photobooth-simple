@@ -35,7 +35,7 @@ from libs.hardware.led import create_led
 from libs.stats_store import StatsStore
 from libs.template_collage import load_templates
 from libs.usb_transfer import UsbTransfer
-from libs.web_server import WebServer
+from libs.webserver import WebServer
 
 RINGLED = None
 
