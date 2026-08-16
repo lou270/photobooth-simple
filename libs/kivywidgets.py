@@ -631,7 +631,7 @@ Builder.load_string("""
         RoundedRectangle:
             pos: self.pos
             size: self.size
-            radius: [20,]
+            radius: [dp(18),]
 """)
 class RoundedButton(FeedbackButtonBehavior, Label):
     background_color = ListProperty([1, 1, 1, 1])
@@ -682,7 +682,7 @@ Builder.load_string("""
         RoundedRectangle:
             pos: self.pos
             size: self.size
-            radius: [20,]
+            radius: [dp(18),]
 """)
 class IconTextButton(FeedbackButtonBehavior, BoxLayout):
     background_color = ListProperty([1, 1, 1, 1])

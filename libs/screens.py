@@ -18,9 +18,13 @@ from kivy.graphics.texture import Texture
 from kivy.metrics import dp, sp
 from kivy.core.image import Image as CoreImage
 
+from kivy.animation import Animation
+
 from libs.kivywidgets import *
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
+from libs.ui_theme import DISPLAY_FONT, UI_FONT, SoftShadow, vertical_gradient_texture
+from libs.version import APP_VERSION
 
 # Font sizes as fractions of min(Window.width, Window.height) — DPI-independent and
 # orientation-independent: the shortest side is always the binding constraint so fonts
@@ -75,8 +79,14 @@ def darken_rgba(color, amount=0.25):
         color[3],
     )
 
-# Colors
-BACKGROUND_COLOR = hex_to_rgba('#26495c')
+# Colors. A single flat fill is the strongest "old application" signal there is,
+# so the background is a gradient in the same hue family and the surfaces above
+# it are spaced apart in lightness rather than sitting at the same level.
+BACKGROUND_TOP_COLOR = hex_to_rgba('#2c5468')
+BACKGROUND_BOTTOM_COLOR = hex_to_rgba('#16262f')
+BACKGROUND_COLOR = BACKGROUND_TOP_COLOR
+CARD_COLOR = hex_to_rgba('#35505f')
+CARD_PANEL_COLOR = hex_to_rgba('#43616f')
 BORDER_COLOR = hex_to_rgba('#c4a35a')
 BORDER_THINKNESS = dp(0)#Window.height * 0.011
 PROGRESS_COLOR = hex_to_rgba('#e5e5e5')
@@ -224,6 +234,17 @@ class BackgroundScreen(Screen):
     def on_update(self, kwargs={}):
         pass
 
+_BACKGROUND_TEXTURE = None
+
+
+def background_texture():
+    """The shared background ramp, built on first use so GL is ready."""
+    global _BACKGROUND_TEXTURE
+    if _BACKGROUND_TEXTURE is None:
+        _BACKGROUND_TEXTURE = vertical_gradient_texture(BACKGROUND_TOP_COLOR, BACKGROUND_BOTTOM_COLOR)
+    return _BACKGROUND_TEXTURE
+
+
 class ColorScreen(Screen):
     def __init__(self, **kwargs):
         super(ColorScreen, self).__init__(**kwargs)
@@ -235,9 +256,13 @@ class ColorScreen(Screen):
             else:
                 self.border_rect = None
 
-            # Background
-            Color(*BACKGROUND_COLOR)
-            self.background_rect = Rectangle(pos=(self.x + BORDER_THINKNESS, self.y + BORDER_THINKNESS), size=(self.width - BORDER_THINKNESS*2, self.height - BORDER_THINKNESS*2))
+            # Background: one small texture the GPU stretches, not a flat fill.
+            Color(1, 1, 1, 1)
+            self.background_rect = Rectangle(
+                pos=(self.x + BORDER_THINKNESS, self.y + BORDER_THINKNESS),
+                size=(self.width - BORDER_THINKNESS*2, self.height - BORDER_THINKNESS*2),
+                texture=background_texture(),
+            )
 
     def on_pos(self, *args):
         if self.border_rect: self.border_rect.pos = self.pos
@@ -268,6 +293,7 @@ class StartScreen(BackgroundScreen):
 
         start = BreezyBorderedLabel(
             text='PHOTO BOOTH',
+            font_name=DISPLAY_FONT,
             border_color=(1,1,1,1),
             border_width=Window.height * 0.006,
             size_hint=(0.7, 0.2),
@@ -288,17 +314,19 @@ class StartScreen(BackgroundScreen):
         )
         overlay_layout.add_widget(icon)
 
-        # Version
-        version = Label(
-            text='Version 1.2',
+        # Version: useful to the operator powering the booth up, and to nobody
+        # else. Shown at startup, then faded out before the first guest arrives.
+        self._version_label = Label(
+            text=f'Version {APP_VERSION}',
+            font_name=UI_FONT,
             font_size=TINY_FONT(),
             halign='left',
             valign='middle',
             size_hint=(0.1, 0.05),
             pos_hint={'x': 0.9, 'y': 0.95},
         )
-        wh_bind(version, 'font_size', TINY_FONT)
-        overlay_layout.add_widget(version)
+        wh_bind(self._version_label, 'font_size', TINY_FONT)
+        overlay_layout.add_widget(self._version_label)
 
         overlay_layout.bind(on_release=self.on_click)
 
@@ -306,6 +334,9 @@ class StartScreen(BackgroundScreen):
 
     def on_entry(self, kwargs={}):
         Logger.info('StartScreen: on_entry().')
+        if self._version_label is not None:
+            Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
+            self._version_label = None  # only the first time, at power-up
         self.app.ringled.start_rainbow()
         self._purge_when_idle()
 
@@ -353,6 +384,11 @@ class SelectFormatScreen(ColorScreen):
     @property
     def MAX_CARD_HEIGHT(self): return Window.height * 0.92
 
+    # A screen with two centred cards and nothing else reads as unfinished. The
+    # heading costs a slice of the height the cards could have used and gives
+    # the eye somewhere to start.
+    TITLE_HEIGHT_FRACTION = 0.15
+
     def __init__(self, app, **kwargs):
         Logger.info('SelectFormatScreen: __init__().')
         super(SelectFormatScreen, self).__init__(**kwargs)
@@ -361,7 +397,21 @@ class SelectFormatScreen(ColorScreen):
         # Format cards container (scrollable if needed)
         from kivy.uix.gridlayout import GridLayout
         from kivy.uix.scrollview import ScrollView
-        
+
+        page = BoxLayout(orientation='vertical')
+
+        self.title = Label(
+            text='CHOOSE YOUR FORMAT',
+            font_name=DISPLAY_FONT,
+            font_size=NORMAL_FONT(),
+            size_hint=(1, self.TITLE_HEIGHT_FRACTION),
+            halign='center',
+            valign='middle',
+        )
+        wh_bind(self.title, 'font_size', NORMAL_FONT)
+        self.title.bind(size=self.title.setter('text_size'))
+        page.add_widget(self.title)
+
         scroll_view = ScrollView(
             size_hint=(1, 1),
             do_scroll_x=False,
@@ -394,8 +444,9 @@ class SelectFormatScreen(ColorScreen):
             self.cards_grid.add_widget(card)
             self.format_cards.append(card)
 
-        self.add_widget(scroll_view)
-        
+        page.add_widget(scroll_view)
+        self.add_widget(page)
+
         # Bind to window resize events
         Window.bind(on_resize=self._on_window_resize)
         
@@ -424,8 +475,8 @@ class SelectFormatScreen(ColorScreen):
         available_width = Window.width - (2 * padding) - (n_spacings * spacing) - border
         width_from_w = available_width / cols
 
-        # Width derived from vertical space (aspect ratio 1:1.5)
-        available_height = Window.height - (2 * padding) - border
+        # Width derived from vertical space (aspect ratio 1:1.5), minus the heading
+        available_height = Window.height * (1 - self.TITLE_HEIGHT_FRACTION) - (2 * padding) - border
         width_from_h = available_height / 1.5
 
         card_width = max(self.MIN_CARD_WIDTH, min(self.MAX_CARD_WIDTH, min(width_from_w, width_from_h)))
@@ -469,17 +520,20 @@ class SelectFormatScreen(ColorScreen):
             spacing=Window.height * 0.011,
         )
         
-        # Draw rounded card background using canvas
+        # Rounded card, lifted off the background so it reads as touchable.
+        radius = Window.height * 0.022
+        shadow = SoftShadow(card.canvas.before, radius)
         with card.canvas.before:
-            Color(*hex_to_rgba('#3d4f5c'))
+            Color(*CARD_COLOR)
             card_bg = RoundedRectangle(
                 pos=card.pos,
                 size=card.size,
-                radius=[Window.height * 0.022,]
+                radius=[radius,]
             )
-        
+
         # Bind to update background when card size/pos changes
         def update_card_bg(instance, value):
+            shadow.update(instance.pos, instance.size)
             card_bg.pos = instance.pos
             card_bg.size = instance.size
         card.bind(pos=update_card_bg, size=update_card_bg)
@@ -494,7 +548,7 @@ class SelectFormatScreen(ColorScreen):
         
         # Draw rounded preview background
         with preview_container.canvas.before:
-            Color(*hex_to_rgba('#4a5c6a'))
+            Color(*CARD_PANEL_COLOR)
             preview_bg = RoundedRectangle(
                 pos=preview_container.pos,
                 size=preview_container.size,
@@ -530,6 +584,7 @@ class SelectFormatScreen(ColorScreen):
         # Format name
         name_label = Label(
             text=format_template.get_name(),
+            font_name=DISPLAY_FONT,
             size_hint=(1, 0.15),
             font_size=SMALL_FONT(),
             halign='center',
@@ -604,6 +659,7 @@ class ErrorScreen(ColorScreen):
         self.title = Label(
             size_hint=(1, 0.10),
             text='Error',
+            font_name=DISPLAY_FONT,
             font_size=LARGE_FONT(),
             bold=True,
             halign='center',
@@ -1154,7 +1210,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         
         # Draw rounded card background
         with card.canvas.before:
-            Color(*hex_to_rgba('#3d4f5c'))
+            Color(*CARD_COLOR)
             card_bg = RoundedRectangle(
                 pos=card.pos,
                 size=card.size,
@@ -1477,6 +1533,7 @@ class PrintStatusPopup(FloatLayout):
 
         self.title = ResizeLabel(
             text='PRINTING',
+            font_name=DISPLAY_FONT,
             size_hint=(1, 0.15),
             wh_fraction=0.05,
             bold=True,
@@ -1850,6 +1907,7 @@ class SuccessScreen(ColorScreen):
         title = Label(
             size_hint=(1, 0.10),
             text='Awesome !',
+            font_name=DISPLAY_FONT,
             font_size=LARGE_FONT(),
             bold=True,
             halign='center',
@@ -2060,6 +2118,7 @@ class QRCodePopup(FloatLayout):
 
         scan_label = ResizeLabel(
             text='SCAN ME',
+            font_name=DISPLAY_FONT,
             size_hint=(1, 0.1),
             wh_fraction=0.055,
             bold=True,
