@@ -700,8 +700,8 @@
                 item.innerHTML = `
                     <div class="template-item-row">
                         <div class="template-item-meta">
-                            <div class="template-item-name">${template.name}</div>
-                            <div class="template-item-desc">${template.description}</div>
+                            <div class="template-item-name"></div>
+                            <div class="template-item-desc"></div>
                         </div>
                         <div class="template-item-actions">
                             <button class="btn btn-secondary template-item-icon-btn" title="Duplicate template" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
@@ -709,6 +709,12 @@
                         </div>
                     </div>
                 `;
+
+                // Names and descriptions come from template files: never
+                // interpolate them into markup, or a crafted template runs
+                // script with the admin session that opened this editor.
+                item.querySelector('.template-item-name').textContent = template.name || '';
+                item.querySelector('.template-item-desc').textContent = template.description || '';
 
                 listEl.appendChild(item);
             });

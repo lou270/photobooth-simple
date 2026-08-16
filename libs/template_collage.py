@@ -7,6 +7,7 @@ import tempfile
 import numpy as np
 
 from libs.file_utils import FileUtils
+from libs.template_schema import TemplateValidationError, validate_template
 
 # Child of Kivy's logger so records land in the application log when Kivy is
 # running, without importing Kivy: collage building must stay testable headless.
@@ -53,7 +54,10 @@ class TemplateCollage:
         if template is None:
             with open(template_path, 'r') as f:
                 template = json.load(f)
-        self._template = template
+
+        # Validate on the way in as well as on the way out: a template can reach
+        # the booth as a plain file, without ever going through the web editor.
+        self._template = validate_template(template)
         
         # Cache template properties
         self._name = self._template.get('name', 'Unnamed Template')
@@ -341,6 +345,8 @@ def load_templates(templates_dir='templates'):
                 template = TemplateCollage(template_path)
                 templates.append(template)
                 Logger.info(f'Loaded template: {template.get_name()} from {filename}')
+            except TemplateValidationError as e:
+                Logger.error(f'Rejected template {filename}: {e}')
             except Exception as e:
                 Logger.error(f'Error loading template {filename}: {e}')
 

@@ -12,6 +12,8 @@ from flask import Flask, jsonify, request, send_file, render_template, redirect,
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
+from libs.template_schema import TemplateValidationError, validate_template
+
 class WebServer:
     """Flask web server for photo gallery with captive portal."""
 
@@ -158,6 +160,9 @@ class WebServer:
         self.app.config.update(
             SESSION_COOKIE_HTTPONLY=True,
             SESSION_COOKIE_SAMESITE='Lax',
+            # Templates carry embedded images, so uploads are legitimately large;
+            # the cap keeps a single request from exhausting memory on a Pi.
+            MAX_CONTENT_LENGTH=32 * 1024 * 1024,
         )
         self.server_thread = None
         self.server = None
@@ -688,6 +693,17 @@ class WebServer:
 
         return redirect('/admin/login')
 
+    def _require_admin_api_auth(self):
+        """Reject unauthenticated API calls with 401.
+
+        Redirecting to the HTML login page instead would hand a fetch() caller a
+        200 full of HTML, which it then fails to parse as JSON.
+        """
+        if self._is_admin_authenticated():
+            return None
+
+        return jsonify({'error': 'Authentication required'}), 401
+
     def _refresh_admin_password_from_config(self, content):
         """Refresh in-memory admin password from config text."""
         self.admin_password = None
@@ -761,18 +777,18 @@ class WebServer:
         @self.app.route('/api/admin/logs', methods=['GET'])
         def list_admin_logs():
             """List available log files for authenticated admins."""
-            auth_redirect = self._require_admin_auth()
-            if auth_redirect is not None:
-                return auth_redirect
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
 
             return jsonify({'logs': self._get_log_files()})
 
         @self.app.route('/api/admin/logs/<path:filename>', methods=['GET'])
         def read_admin_log(filename):
             """Read one log file for authenticated admins."""
-            auth_redirect = self._require_admin_auth()
-            if auth_redirect is not None:
-                return auth_redirect
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
 
             log_path = self._get_safe_log_path(filename)
             if log_path is None:
@@ -790,9 +806,9 @@ class WebServer:
         @self.app.route('/api/admin/logs', methods=['DELETE'])
         def delete_admin_logs():
             """Delete all log files for authenticated admins."""
-            auth_redirect = self._require_admin_auth()
-            if auth_redirect is not None:
-                return auth_redirect
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
 
             try:
                 deleted_files = self._delete_all_log_files()
@@ -805,21 +821,27 @@ class WebServer:
         @self.app.route('/api/templates', methods=['GET'])
         def list_templates():
             """List templates stored on disk."""
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
+
             return jsonify({'templates': self._load_template_definitions()})
 
         @self.app.route('/api/templates', methods=['POST'])
         def save_template():
             """Save a template into the templates directory."""
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
+
             payload = request.get_json(silent=True)
             if not isinstance(payload, dict):
                 return jsonify({'error': 'Invalid JSON payload'}), 400
 
-            template_data = payload.get('template')
-            if not isinstance(template_data, dict):
-                return jsonify({'error': 'Missing template object'}), 400
-
-            if 'name' not in template_data or 'page' not in template_data:
-                return jsonify({'error': 'Template must include at least name and page'}), 400
+            try:
+                template_data = validate_template(payload.get('template'))
+            except TemplateValidationError as exc:
+                return jsonify({'error': str(exc)}), 400
 
             requested_filename = payload.get('filename')
             filename = self._sanitize_template_filename(
@@ -846,6 +868,10 @@ class WebServer:
         @self.app.route('/api/templates/<path:filename>', methods=['DELETE'])
         def delete_template(filename):
             """Delete a stored template from the templates directory."""
+            auth_error = self._require_admin_api_auth()
+            if auth_error is not None:
+                return auth_error
+
             safe_filename = self._sanitize_template_filename(filename)
             template_path = os.path.join(self.templates_directory, safe_filename)
 
@@ -1074,7 +1100,11 @@ class WebServer:
         
         @self.app.route('/stats')
         def statistics():
-            """Hidden statistics page - shows usage analytics."""
+            """Usage analytics: lists every session, so admin only."""
+            auth_redirect = self._require_admin_auth()
+            if auth_redirect is not None:
+                return auth_redirect
+
             stats = self.stats_store.load() if self.stats_store is not None else {
                 'photos_taken': 0,
                 'prints': 0,
