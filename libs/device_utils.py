@@ -491,14 +491,47 @@ class CupsPrinter(PrintDevice):
             raise RuntimeError(f"Printer '{self._name}' is not available")
         return self._instance.printFile(self._name, os.path.abspath(file_path), os.path.basename(file_path), print_params)
 
+    # IPP job-state values, RFC 8011 section 5.3.7. Naming them because the bare
+    # numbers were read backwards: 9 is completed, not canceled, so every
+    # successful print was reported as a failure and every failed one as a
+    # success. The print counter never advanced either, which left MAX_PRINTS
+    # unable to ever trigger.
+    JOB_STATE_PROCESSING_STOPPED = 6
+    JOB_STATE_CANCELED = 7
+    JOB_STATE_ABORTED = 8
+    JOB_STATE_COMPLETED = 9
+
+    @staticmethod
+    def _format_job_reasons(attributes):
+        """job-state-reasons is a string on some CUPS versions, a list on others."""
+        reasons = attributes.get('job-state-reasons') or 'unknown'
+        if isinstance(reasons, (list, tuple)):
+            return ', '.join(str(reason) for reason in reasons) or 'unknown'
+        return str(reasons)
+
     def get_print_status(self, task_id):
         attributes = self._instance.getJobAttributes(task_id)
-        status = attributes['job-state']
-        if status == 9:
-            reasons = attributes.get('job-state-reasons', 'unknown')
-            raise RuntimeError(f'Print job canceled: {reasons}')
-        if status >= 6:
+        state = attributes['job-state']
+
+        if state == self.JOB_STATE_COMPLETED:
             return 'done'
+
+        if state == self.JOB_STATE_CANCELED:
+            raise RuntimeError(f'Print job canceled: {self._format_job_reasons(attributes)}')
+
+        if state == self.JOB_STATE_ABORTED:
+            raise RuntimeError(f'Print job aborted: {self._format_job_reasons(attributes)}')
+
+        if state == self.JOB_STATE_PROCESSING_STOPPED:
+            # Recoverable and common: out of paper, ribbon spent, cover open.
+            # Keep waiting so the job finishes once the operator intervenes; the
+            # caller's timeout is what eventually gives up.
+            Logger.warning(
+                'CupsPrinter: printer stopped on job %s: %s',
+                task_id, self._format_job_reasons(attributes),
+            )
+            return 'pending'
+
         return 'pending'
 
     def cancel_stale_jobs(self):

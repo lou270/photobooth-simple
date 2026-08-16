@@ -418,15 +418,6 @@ class PhotoboothApp(App):
         with self._pending_photo_lock:
             self._pending_photo_error = None
 
-    def is_print_completed(self, print_task_id):
-        try:
-            status = self.devices.get_print_status(print_task_id)
-            Logger.info('PhotoboothApp: print status task=%s status=%s', print_task_id, status)
-            return status == 'done'
-        except Exception as exc:
-            Logger.error('PhotoboothApp: print status check failed task=%s error=%s', print_task_id, exc)
-            return False
-
     def reset_devices(self, reason='unknown'):
         """Rebuild the capture devices. Returns False when that was not safe."""
         Logger.warning('PhotoboothApp: resetting devices reason=%s', reason)
