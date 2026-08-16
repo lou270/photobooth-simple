@@ -121,65 +121,67 @@ class TemplateCollage:
         """Return True when printing needs the generated _print collage."""
         return self._duplicate_horizontal or self._duplicate_vertical
     
-    def _load_image(self, image_data, imread_flags=cv2.IMREAD_UNCHANGED, cache_key=None):
+    def _decode_image(self, image_data, imread_flags=cv2.IMREAD_UNCHANGED):
         """
-        Load an image from either base64 data or file path with caching.
-        
+        Decode a layer from either base64 data or a file path.
+
         Args:
-            image_data: Either a base64 data URI (data:image/png;base64,...) or a file path
+            image_data: Either a base64 data URI (data:image/png;base64,...) or a file name
             imread_flags: OpenCV imread flags (default: IMREAD_UNCHANGED to preserve alpha)
-            cache_key: Optional key for caching ('background' or 'foreground')
-            
+
         Returns:
-            Loaded image as numpy array, or None if loading failed
+            Decoded image as numpy array, or None when it could not be read
         """
         if not image_data:
             return None
-        
-        # Check cache first
-        if cache_key == 'background' and self._background_cache is not None:
-            return self._background_cache.copy()
-        if cache_key == 'foreground' and self._foreground_cache is not None:
-            return self._foreground_cache.copy()
-            
-        # Check if it's base64 data
+
         if isinstance(image_data, str) and image_data.startswith('data:image'):
             try:
-                # Extract base64 data after the comma
                 encoded = image_data.split(',', 1)[1]
-                # Decode base64 to bytes
-                img_bytes = base64.b64decode(encoded)
-                # Convert to numpy array
-                nparr = np.frombuffer(img_bytes, np.uint8)
-                # Decode image
-                img = cv2.imdecode(nparr, imread_flags)
-                
-                # Cache if requested
-                if cache_key == 'background':
-                    self._background_cache = img.copy()
-                elif cache_key == 'foreground':
-                    self._foreground_cache = img.copy()
-                
-                return img
+                nparr = np.frombuffer(base64.b64decode(encoded), np.uint8)
+                image = cv2.imdecode(nparr, imread_flags)
             except Exception as e:
                 Logger.error(f'Failed to decode base64 image: {e}')
                 return None
-        else:
-            # It's a file path - resolve relative to template directory
-            path = os.path.join(self._template_dir, image_data)
-            if os.path.exists(path):
-                img = cv2.imread(path, imread_flags)
-                
-                # Cache if requested
-                if cache_key == 'background':
-                    self._background_cache = img.copy()
-                elif cache_key == 'foreground':
-                    self._foreground_cache = img.copy()
-                
-                return img
-            else:
-                Logger.warning(f'Image file not found: {path}')
-                return None
+            if image is None:
+                Logger.error('Embedded image could not be decoded')
+            return image
+
+        # A file name, resolved against the template directory.
+        path = os.path.join(self._template_dir, image_data)
+        if not os.path.exists(path):
+            Logger.warning(f'Image file not found: {path}')
+            return None
+
+        image = cv2.imread(path, imread_flags)
+        if image is None:
+            # imread returns None rather than raising; the old code then called
+            # .copy() on it and turned a bad file into an AttributeError.
+            Logger.warning(f'Image file could not be decoded: {path}')
+        return image
+
+    def _get_page_layer(self, image_data, imread_flags, cache_attribute):
+        """Return a layer already scaled to the page, decoded and resized once.
+
+        The source art is far larger than the page it is drawn on: the shipped
+        full-page frame is 4370x2880 RGBA, 48 MB in memory, for an 1800x1200
+        page. It used to be copied out of the cache and resized again on every
+        single collage. Caching it at page size removes both, and keeps the
+        resident copy at page size instead of source size.
+        """
+        cached = getattr(self, cache_attribute)
+        if cached is not None:
+            return cached
+
+        image = self._decode_image(image_data, imread_flags)
+        if image is None:
+            return None
+
+        if image.shape[1] != self._page_width or image.shape[0] != self._page_height:
+            image = cv2.resize(image, (self._page_width, self._page_height), interpolation=cv2.INTER_AREA)
+
+        setattr(self, cache_attribute, image)
+        return image
     
     def get_preview(self):
         """
@@ -227,12 +229,13 @@ class TemplateCollage:
         # Step 1: Create canvas with white background
         canvas = np.full((self._page_height, self._page_width, 3), 255, dtype=np.uint8)
         
-        # Step 2: Apply background image if specified (resize to exact canvas size)
+        # Step 2: Apply background image if specified (already at canvas size)
         if self._background:
-            bg = self._load_image(self._background, cv2.IMREAD_COLOR, cache_key='background')
-            if bg is not None:
-                bg = cv2.resize(bg, (self._page_width, self._page_height), interpolation=cv2.INTER_AREA)
-                canvas = bg
+            background = self._get_page_layer(self._background, cv2.IMREAD_COLOR, '_background_cache')
+            if background is not None:
+                # Copy: photos are pasted into the canvas, and the cache is shared
+                # with every later collage.
+                canvas = background.copy()
         
         # Step 3: Place each photo according to template (clip if needed)
         for i, photo_spec in enumerate(self._photos):
@@ -262,11 +265,11 @@ class TemplateCollage:
             if paste_height > 0 and paste_width > 0:
                 canvas[y:y + paste_height, x:x + paste_width] = img_resized[0:paste_height, 0:paste_width]
         
-        # Step 4: Apply foreground overlay if specified (resize to exact canvas size)
+        # Step 4: Apply foreground overlay if specified (already at canvas size)
         if self._foreground:
-            overlay = self._load_image(self._foreground, cv2.IMREAD_UNCHANGED, cache_key='foreground')
+            overlay = self._get_page_layer(self._foreground, cv2.IMREAD_UNCHANGED, '_foreground_cache')
             if overlay is not None:
-                overlay = cv2.resize(overlay, (self._page_width, self._page_height), interpolation=cv2.INTER_AREA)
+                # _apply_overlay only reads the overlay, so the cache can be shared.
                 canvas = self._apply_overlay(canvas, overlay)
         
         # Step 5: Save base collage (without duplication for web gallery)
