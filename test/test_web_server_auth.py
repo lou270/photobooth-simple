@@ -136,6 +136,70 @@ def test_an_empty_gallery_reports_nothing_to_download(client, server):
     assert client.get('/download/all-photos').status_code == 404
 
 
+# --- saving the configuration ----------------------------------------------
+
+@pytest.fixture
+def editable_config(server, tmp_path):
+    """Point the server at a copy, so a test never rewrites the real config.ini."""
+    original = Path(__file__).resolve().parents[1] / 'config.ini.example'
+    config_file = tmp_path / 'config.ini'
+    config_file.write_text(original.read_text(encoding='utf-8'), encoding='utf-8')
+    server.config_file = str(config_file)
+    return config_file
+
+
+def submitted_form(config_file, **overrides):
+    from libs.webserver.config_form import CONFIG_FORM_SECTIONS, field_name, load_parser, normalize_value
+
+    parser = load_parser(config_file.read_text(encoding='utf-8'))
+    form = {}
+    for section_spec in CONFIG_FORM_SECTIONS:
+        for field_spec in section_spec['fields']:
+            name = field_name(field_spec['section'], field_spec['option'])
+            value = parser.get(field_spec['section'], field_spec['option'], fallback='')
+            if field_spec['control'] == 'checkbox':
+                if value.strip().lower() in ('1', 'true', 'yes', 'on'):
+                    form[name] = 'on'
+                continue
+            form[name] = normalize_value(field_spec, value)
+    form.update(overrides)
+    return form
+
+
+def test_saving_the_configuration_writes_the_file(client, editable_config):
+    from libs.webserver.config_form import field_name
+
+    login(client)
+    form = submitted_form(editable_config, **{field_name('Capture', 'COUNTDOWN'): '9'})
+
+    response = client.post('/admin/config', data=form)
+
+    assert response.status_code == 200
+    assert 'COUNTDOWN = 9' in editable_config.read_text(encoding='utf-8')
+
+
+def test_a_refused_value_leaves_the_file_alone(client, editable_config):
+    from libs.webserver.config_form import field_name
+
+    login(client)
+    before = editable_config.read_text(encoding='utf-8')
+    form = submitted_form(editable_config, **{field_name('Web', 'WEB_PORT'): '0'})
+
+    response = client.post('/admin/config', data=form)
+
+    assert response.status_code == 400
+    assert editable_config.read_text(encoding='utf-8') == before
+
+
+def test_saving_the_configuration_requires_admin(client, editable_config):
+    before = editable_config.read_text(encoding='utf-8')
+
+    response = client.post('/admin/config', data={})
+
+    assert response.status_code == 302
+    assert editable_config.read_text(encoding='utf-8') == before
+
+
 # --- watchdog --------------------------------------------------------------
 
 def test_the_watchdog_gives_up_instead_of_retrying_forever(tmp_path):

@@ -6,6 +6,7 @@ import zipfile
 from flask import Blueprint, Response, redirect, render_template, request, session
 from kivy.logger import Logger
 
+from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
 
 
