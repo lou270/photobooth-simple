@@ -201,17 +201,16 @@ photo to the booth, walks over and prints it.
 
 1. Taps the QR button at the bottom right of the welcome screen, which shows two codes.
 2. Scans the first: it carries the booth's WiFi credentials, so the phone joins the access point.
-3. Scans the second: it carries the booth's address, so the browser opens the capture page.
+   The capture page usually opens by itself at that point, through the captive portal.
+3. Scans the second only if it did not: that code carries the booth's address.
 4. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
    became of it, and lets the guest take a photo back before anyone prints it.
 5. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
    it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
 
-It takes two codes because no phone reads a payload that both joins a network and opens a page, and
-because nothing opens the page by itself here — see [A network that keeps their mobile data
-alive](#a-network-that-keeps-their-mobile-data-alive) for why that is deliberate. The second code
-carries a literal address rather than a name, since a phone on this network sends its lookups to the
-cellular resolver, which has never heard of the booth. The address is `/`, so the capture page is
+It takes two codes because no phone reads a payload that both joins a network and opens a page. The
+second one carries a literal address rather than a name: phones do not reliably send their lookups
+to this network's resolver, and an address needs none. That address is `/`, so the capture page is
 what the booth serves at its root while the feature is on; the gallery stays at `/gallery`.
 
 The capture itself is done by the phone's own camera application, through a file input, rather than
@@ -229,50 +228,53 @@ A photo picked at the booth is copied into the working directory as an ordinary 
 with the first single-photo template, then printed, shared and saved like any other session. It
 appears in the gallery and in the USB export with the rest of the evening.
 
-### A network that keeps their mobile data alive
+### The network, and why it is a captive portal
 
-The booth's access point has no uplink to share, and this is where most event WiFi goes wrong. A
-network that claims to route to the internet and then does not is a network phones fight: Android
-flags it, offers to leave it for mobile data and eventually does; iOS reopens a sign-in sheet all
-evening. Guests lose Instagram the moment they join, which they notice immediately and blame on the
-booth.
+The booth's access point has no uplink to share, and that shapes everything. A phone joining it
+decides for itself whether the network is worth staying on, and it decides by fetching a known URL
+and comparing the answer byte for byte.
 
-So the access point never makes the claim. `install.sh` configures dnsmasq to hand out an address
-and **no default route**:
+Handing out **no default route** was tried first, on the theory that iOS and Android read a
+route-less network as local only, keep the cellular radio for the internet and use the WiFi for the
+booth alone. Both vendors describe that behaviour, and the first half works. The second half does
+not: with mobile data active, phones send the local traffic to the cellular interface as well, and
+the booth's own address simply times out in the browser. Apple's developer forums carry the same
+report, answered by their own engineer as "a bit like a bug", with disabling mobile data as the only
+workaround; the ESP32 community hit it identically. So the booth does the opposite of clever.
 
-```
-dhcp-option=3
-```
+`install.sh` gives the network a default route pointing at the booth, resolves every domain to it,
+and answers the connectivity probes as a real portal does:
 
-An empty value is how dnsmasq suppresses an option it would otherwise send. iOS and Android both
-read a route-less network as *local only*: they keep the cellular radio for the internet and use the
-WiFi for the booth alone. Guests stay on their own data the whole evening, and nothing nags them.
-Apple documents the behaviour directly — on a network joined by hand that does not lead to the
-internet, iOS stays connected and leaves the default route on cellular.
+- A phone that has not been through the portal is redirected, which is what makes the sign-in sheet
+  open on the capture page by itself.
+- Once the guest has sent a photo — or tapped **Keep this WiFi connected** on the page — the same
+  probes start answering exactly what each operating system expects: a bare 204 for Android, Apple's
+  `Success` page, Microsoft's `Microsoft Connect Test`. The phone stops flagging the network and
+  stops offering to leave it for mobile data.
 
-Two consequences worth knowing:
+The booth also serves the Captive Portal API of RFC 8908 at `/captive-portal/api`, advertised by the
+DHCP option of RFC 8910, which iOS 14 and Android 11 read before falling back to probing. That URI
+must be the API endpoint and not a web page: a phone that finds HTML there ignores the whole
+mechanism.
 
-- **Nothing opens the page by itself.** There is no captive portal, by design, which is why the
-  welcome screen shows the address as a second QR code rather than trusting a sheet to pop.
-- **Names do not resolve.** With no default route on this interface, phones send their lookups to
-  the cellular resolver. The booth still answers for `photobooth.lan`, and laptops will use it, but
-  no phone should be told to type a name. Every address the booth hands out is a literal IP, which
-  is what `WIFI_AP_ADDRESS` is for.
-
-If a venue does have a spare ethernet port, sharing a real uplink (NAT from `wlan0` to `eth0`) makes
-all of this unnecessary: the network becomes ordinary, and the captive portal question disappears.
+What no configuration can fix: **while a guest is connected, they have no internet.** The booth has
+none to give. The page says so after each send, and the flow is built around a short visit rather
+than an evening spent connected. If a venue offers a spare ethernet port, or the Pi can carry a USB
+WiFi dongle onto the venue's own network, sharing a real uplink (NAT from `wlan0`) removes the
+trade-off entirely and makes the portal unnecessary.
 
 ### Upgrading a booth that is already installed
 
-`install.sh` writes this configuration on a fresh install. An existing booth needs three lines
-changed in `/etc/dnsmasq.conf` — replace the router option, and delete the captive portal hijacking:
+`install.sh` writes this configuration on a fresh install, and rewrites `/etc/dnsmasq.conf` whole,
+so the simplest way to move an existing booth onto it is to run the installer again and answer *no*
+to every step except the WiFi access point one:
 
 ```bash
-sudo sed -i 's|^dhcp-option=3,192.168.4.1|dhcp-option=3|; /^dhcp-option=114/d; /^address=\/#\//d; /^address=\/.*\/192.168.4.1$/d' /etc/dnsmasq.conf && echo 'address=/photobooth.lan/192.168.4.1' | sudo tee -a /etc/dnsmasq.conf && sudo systemctl restart dnsmasq
+./install.sh
 ```
 
-Phones already connected keep their old lease, with its old default route, until it expires. Ask
-them to forget the network and rejoin, or wait out the lease.
+Phones already connected keep their old lease, and its old routing, until it expires. Ask them to
+forget the network and rejoin rather than wondering why nothing changed.
 
 ### Moderating
 

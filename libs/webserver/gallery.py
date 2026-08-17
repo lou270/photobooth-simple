@@ -12,10 +12,10 @@ def create_blueprint(server):
     @blueprint.route('/')
     def index():
         """Main page - show gallery, or the capture page when phones may send."""
-        # The bare address of the booth, which is the shortest thing a guest can
-        # be given and the one the QR code carries. Where the booth takes photos
-        # from phones, that is what they came for; the gallery stays one link
-        # away at /gallery.
+        # Where a phone that just joined the WiFi arrives: the access point
+        # advertises this address as its captive portal, and it is also what the
+        # second QR code carries. Where the booth takes photos from phones, that
+        # is what the guest came for; the gallery stays one link away.
         if server.remote_enabled and server.remote_store is not None:
             return redirect('/remote')
 
