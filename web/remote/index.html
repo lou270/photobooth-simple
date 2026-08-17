@@ -231,14 +231,14 @@
             {% if show_gallery_link %}<br><a href="/gallery">See the photos taken at the booth</a>{% endif %}
         </p>
 
-        <!-- This network carries no internet, and a phone has to be told that
-             plainly or it spends the evening asking. Sending a photo answers it
-             on its own; this button is for the guest who only came to look. -->
-        <button id="keep-wifi" type="button" class="btn btn-quiet btn-block" style="margin-top: 14px;">
-            Keep this WiFi connected
-        </button>
-        <p id="keep-wifi-done" class="hint hidden">
-            Done. Your phone will stop asking about this network.
+        <!-- This network carries no internet, and Android says so with its own
+             notification rather than anything this page can dismiss. Sending a
+             photo quiets the connectivity probes on the server side, but the
+             notification itself is only cleared by the guest, from the system
+             tray, tapping the option below. -->
+        <p class="hint">
+            If your phone warns that this WiFi has no internet, open the notification and choose
+            <strong>"Use this network as is"</strong> (Android: "Utiliser ce réseau tel quel").
         </p>
     </main>
 
@@ -270,9 +270,7 @@
                 liveCancel: document.getElementById('live-cancel'),
                 list: document.getElementById('sent-list'),
                 empty: document.getElementById('sent-empty'),
-                canvas: document.getElementById('scratch'),
-                keepWifi: document.getElementById('keep-wifi'),
-                keepWifiDone: document.getElementById('keep-wifi-done')
+                canvas: document.getElementById('scratch')
             };
 
             var pendingBlob = null;
@@ -499,20 +497,6 @@
                     .then(function (body) { renderSent(body.photos || []); })
                     .catch(function () { /* the next tick tries again */ });
             }
-
-            function keepWifiConnected() {
-                elements.keepWifi.disabled = true;
-                fetch('/captive-portal/release', { method: 'POST' })
-                    .then(function () {
-                        elements.keepWifi.classList.add('hidden');
-                        elements.keepWifiDone.classList.remove('hidden');
-                    })
-                    .catch(function () {
-                        elements.keepWifi.disabled = false;
-                    });
-            }
-
-            elements.keepWifi.addEventListener('click', keepWifiConnected);
 
             window.addEventListener('pagehide', stopLive);
             refreshSent();
