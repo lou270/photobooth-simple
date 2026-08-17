@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhotoBooth - Admin</title>
+    <title>PhotoBooth - {{ t('web.admin.title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         .admin-stack {
@@ -279,12 +279,12 @@
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">Administration</span>
-                    <h1>PhotoBooth control panel</h1>
-                    <p>Everything needed to manage templates, application settings and maintenance is grouped here with the most common actions first.</p>
+                    <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
+                    <h1>{{ t('web.admin.control_panel_title') }}</h1>
+                    <p>{{ t('web.admin.control_panel_intro') }}</p>
                 </div>
                 <div class="actions">
-                    <a href="/admin/logout" class="btn btn-secondary">Log out</a>
+                    <a href="/admin/logout" class="btn btn-secondary">{{ t('web.admin.log_out') }}</a>
                 </div>
             </section>
 
@@ -299,78 +299,78 @@
                     {% endif %}
 
                     {% if not admin_enabled %}
-                    <div class="status error">ADMIN_PASSWORD is not set in <code>config.ini</code>. Admin actions are disabled.</div>
+                    <div class="status error">{{ t('web.admin.password_not_set_actions') }}</div>
                     {% endif %}
                 </div>
 
                 <div class="quick-actions">
                     <article class="quick-card">
-                        <span class="eyebrow">Templates</span>
-                        <h2>Edit layouts</h2>
-                        <p>Create, duplicate and save print templates from the visual editor.</p>
-                        <a href="/admin/editor" class="btn btn-primary">Open template editor</a>
+                        <span class="eyebrow">{{ t('web.admin.templates_eyebrow') }}</span>
+                        <h2>{{ t('web.admin.edit_layouts') }}</h2>
+                        <p>{{ t('web.admin.edit_layouts_hint') }}</p>
+                        <a href="/admin/editor" class="btn btn-primary">{{ t('web.admin.open_template_editor') }}</a>
                     </article>
 
                     <article class="quick-card">
-                        <span class="eyebrow">Maintenance</span>
-                        <h2>Restart or clean</h2>
-                        <p>Restart the booth after changes, or remove all saved sessions from the danger zone below.</p>
+                        <span class="eyebrow">{{ t('web.admin.maintenance_eyebrow') }}</span>
+                        <h2>{{ t('web.admin.restart_or_clean') }}</h2>
+                        <p>{{ t('web.admin.restart_or_clean_hint') }}</p>
                         <form method="post" action="/admin/restart">
                             <div class="actions">
-                                <button type="submit" class="btn btn-warning {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>Restart app</button>
+                                <button type="submit" class="btn btn-warning {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.restart_app') }}</button>
                             </div>
                         </form>
                     </article>
 
                     <article class="quick-card">
-                        <span class="eyebrow">Logs</span>
-                        <h2>Read application logs</h2>
-                        <p>Open the newest log files from the <code>logs</code> folder directly in the browser.</p>
-                        <a href="/admin/logs" class="btn btn-ghost">Open logs</a>
+                        <span class="eyebrow">{{ t('web.admin.logs_eyebrow') }}</span>
+                        <h2>{{ t('web.admin.read_app_logs') }}</h2>
+                        <p>{{ t('web.admin.read_app_logs_hint') }}</p>
+                        <a href="/admin/logs" class="btn btn-ghost">{{ t('web.admin.open_logs') }}</a>
                     </article>
 
                     <article class="quick-card">
-                        <span class="eyebrow">Phone camera</span>
-                        <h2>Moderate phone photos</h2>
-                        <p>See what guests sent from their own phone, and take anything unwanted out of the booth queue.</p>
-                        <a href="/admin/remote" class="btn btn-ghost">Open phone photos</a>
+                        <span class="eyebrow">{{ t('web.admin.phone_camera_eyebrow') }}</span>
+                        <h2>{{ t('web.admin.moderate_phone_photos') }}</h2>
+                        <p>{{ t('web.admin.moderate_phone_photos_hint') }}</p>
+                        <a href="/admin/remote" class="btn btn-ghost">{{ t('web.admin.open_phone_photos') }}</a>
                     </article>
                 </div>
 
                 <article class="quick-card disk-card">
-                    <span class="eyebrow">Disk space</span>
-                    <h2>{{ disk_usage.free }} available</h2>
-                    <div class="disk-bar" aria-label="Disk used {{ disk_usage.used_percent }} percent">
+                    <span class="eyebrow">{{ t('web.admin.disk_space') }}</span>
+                    <h2>{{ t('web.admin.disk_available', free=disk_usage.free) }}</h2>
+                    <div class="disk-bar" aria-label="{{ t('web.admin.disk_used_aria', percent=disk_usage.used_percent) }}">
                         <div class="disk-bar-fill"></div>
                     </div>
                     <div class="disk-stats">
                         <div class="disk-stat">
-                            <div class="disk-label">Used</div>
+                            <div class="disk-label">{{ t('web.admin.used') }}</div>
                             <div class="disk-value">{{ disk_usage.used }}</div>
                         </div>
                         <div class="disk-stat">
-                            <div class="disk-label">Available</div>
+                            <div class="disk-label">{{ t('web.admin.available') }}</div>
                             <div class="disk-value">{{ disk_usage.free }}</div>
                         </div>
                         <div class="disk-stat">
-                            <div class="disk-label">Total</div>
+                            <div class="disk-label">{{ t('web.admin.total') }}</div>
                             <div class="disk-value">{{ disk_usage.total }}</div>
                         </div>
                     </div>
-                    <p class="disk-path">{{ disk_usage.used_percent }}% used on <code>{{ disk_usage.path }}</code></p>
+                    <p class="disk-path">{{ t('web.admin.disk_used_on', percent=disk_usage.used_percent, path=disk_usage.path) }}</p>
                 </article>
             </section>
 
             <section class="admin-stack">
                 <article class="panel section-card" id="config-section">
-                    <span class="eyebrow">Configuration</span>
-                    <h2>Edit <code>config.ini</code></h2>
-                    <p>Use this section when a printer, countdown, port or hardware setting must be changed. Choice-based fields use dropdowns, booleans use checkboxes, and <code>CALIBRATION</code> remains a raw string.</p>
+                    <span class="eyebrow">{{ t('web.admin.configuration_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.edit_config_ini') }}</h2>
+                    <p>{{ t('web.admin.edit_config_ini_hint') }}</p>
 
                     <form method="post" action="/admin/config">
                         <div class="config-toolbar">
-                            <p>Apply your changes here, then restart PhotoBooth so the new configuration is loaded.</p>
-                            <button type="submit" class="btn btn-success {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>Save config.ini</button>
+                            <p>{{ t('web.admin.apply_changes_hint') }}</p>
+                            <button type="submit" class="btn btn-success {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.save_config') }}</button>
                         </div>
                         <div class="config-sections">
                             {% for section in config_sections %}
@@ -447,18 +447,18 @@
                             </section>
                             {% endfor %}
                         </div>
-                        <div class="config-note">Tip: save first, then use the restart action above to apply the updated configuration to the running application.</div>
+                        <div class="config-note">{{ t('web.admin.config_tip') }}</div>
                     </form>
                 </article>
 
                 <article class="panel section-card danger-card">
-                    <span class="eyebrow">Danger Zone</span>
-                    <h2>Delete saved photos</h2>
-                    <p>This permanently removes all saved images, session folders and statistics linked to this session.</p>
-                    <div class="danger-callout">Only use this action when you intentionally want to clear the booth history.</div>
+                    <span class="eyebrow">{{ t('web.admin.danger_zone') }}</span>
+                    <h2>{{ t('web.admin.delete_saved_photos') }}</h2>
+                    <p>{{ t('web.admin.delete_saved_photos_hint') }}</p>
+                    <div class="danger-callout">{{ t('web.admin.delete_saved_photos_warning') }}</div>
                     <form method="post" action="/admin/delete-all">
                         <div class="actions">
-                            <button type="submit" class="btn btn-danger {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>Delete all photos</button>
+                            <button type="submit" class="btn btn-danger {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.delete_all_photos') }}</button>
                         </div>
                     </form>
                 </article>

@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhotoBooth - Admin Login</title>
+    <title>PhotoBooth - {{ t('web.admin.login_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         .login-shell {
@@ -29,9 +29,9 @@
 <body>
     <main class="login-shell">
         <section class="panel login-card">
-            <span class="eyebrow">Administration</span>
-            <h1>Admin login</h1>
-            <p>Authentication is required before opening the PhotoBooth administration area.</p>
+            <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
+            <h1>{{ t('web.admin.login_heading') }}</h1>
+            <p>{{ t('web.admin.login_intro') }}</p>
 
             {% if error_message %}
             <div class="status error">{{ error_message }}</div>
@@ -42,15 +42,15 @@
             {% endif %}
 
             {% if not admin_enabled %}
-            <div class="status error">ADMIN_PASSWORD is not set in <code>config.ini</code>. Admin access is disabled.</div>
+            <div class="status error">{{ t('web.admin.password_not_set') }}</div>
             {% endif %}
 
             <form method="post" action="/admin/login">
-                <label class="field-label" for="password">Admin password</label>
-                <input class="field-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="Password" {% if not admin_enabled %}disabled{% endif %}>
+                <label class="field-label" for="password">{{ t('web.admin.password_label') }}</label>
+                <input class="field-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="{{ t('web.admin.password_placeholder') }}" {% if not admin_enabled %}disabled{% endif %}>
                 <div class="actions">
-                    <button type="submit" class="btn btn-primary {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>Sign in</button>
-                    <a href="/stats" class="btn btn-ghost">Back to stats</a>
+                    <button type="submit" class="btn btn-primary {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.sign_in') }}</button>
+                    <a href="/stats" class="btn btn-ghost">{{ t('web.admin.back_to_stats') }}</a>
                 </div>
             </form>
         </section>

@@ -31,6 +31,7 @@ from kivy.uix.screenmanager import FadeTransition
 from libs.config import Config
 from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
+from libs import i18n
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import ScreenMgr
 from libs.hardware.led import create_led
@@ -61,6 +62,11 @@ class PhotoboothApp(App):
 
         # Load configuration
         config = Config()
+        # Screens are built once at startup and kept for the life of the
+        # process, so the language must be fixed before ScreenMgr builds any
+        # of them.
+        self.LANGUAGE = config.get_language()
+        i18n.set_language(self.LANGUAGE)
         self.FULLSCREEN = config.get_fullscreen()
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()
@@ -187,6 +193,7 @@ class PhotoboothApp(App):
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,
+            booth_language=self.LANGUAGE,
         )
         if self.web_server.start():
             Logger.info(
@@ -315,11 +322,11 @@ class PhotoboothApp(App):
         """
         if self.wifi_payload:
             steps = [
-                (self.wifi_payload, '1. JOIN THE WIFI'),
-                (url, '2. OPEN THE PAGE'),
+                (self.wifi_payload, i18n.t('app.qr_join_wifi')),
+                (url, i18n.t('app.qr_open_page')),
             ]
-            return steps, 'SEND PHOTOS FROM YOUR PHONE', url
-        return [(url, '')], 'SCAN ME', url
+            return steps, i18n.t('app.qr_title'), url
+        return [(url, '')], i18n.t('popups.qr.default_title'), url
 
     # --- photos sent from phones -----------------------------------------
 
@@ -397,7 +404,7 @@ class PhotoboothApp(App):
 
     def _disk_maintenance_kwargs(self):
         return {
-            'message': 'Photo storage is full. Please call an operator.',
+            'message': i18n.t('app.disk_full'),
             'show_continue': False,
             'show_restart': True,
         }
@@ -581,7 +588,7 @@ class PhotoboothApp(App):
                 Logger.error('PhotoboothApp: device recovery failed: %s', exc)
                 Logger.error(traceback.format_exc())
                 self.enter_maintenance_mode(
-                    message='Camera recovery failed. Please call an operator.',
+                    message=i18n.t('app.camera_recovery_failed'),
                 )
 
         threading.Thread(target=recover, name='photobooth-device-recovery', daemon=True).start()

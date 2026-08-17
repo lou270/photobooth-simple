@@ -7,10 +7,11 @@ import threading
 from datetime import datetime
 from pathlib import Path
 
-from flask import Flask, jsonify, request, render_template, redirect, session
+from flask import Flask, g, jsonify, request, render_template, redirect, session
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
+from libs import i18n
 from libs.captive_portal import CaptivePortalClients
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
@@ -34,10 +35,15 @@ class WebServer:
     })
 
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
-                 restart_callback=None, remote_store=None, remote_enabled=False, share_enabled=False):
+                 restart_callback=None, remote_store=None, remote_enabled=False, share_enabled=False,
+                 booth_language=i18n.DEFAULT_LANGUAGE):
         self.save_directory = save_directory
         self.host = host
         self.port = port
+        # The operator's language: admin pages follow it. Guest pages (gallery,
+        # phone camera) instead negotiate their own from Accept-Language, since
+        # a guest's phone and the booth's own language have no reason to match.
+        self.booth_language = booth_language if booth_language in i18n.AVAILABLE_LANGUAGES else i18n.DEFAULT_LANGUAGE
         self.admin_password = self._accept_admin_password(admin_password)
         self.login_throttle = LoginThrottle()
         # Which phones have been through the portal. Held by the server rather
@@ -72,6 +78,11 @@ class WebServer:
             # the cap keeps a single request from exhausting memory on a Pi.
             MAX_CONTENT_LENGTH=32 * 1024 * 1024,
         )
+        # Default every request to the booth's own language; the gallery and
+        # remote blueprints override it from the phone's Accept-Language in
+        # their own before_request, which Flask runs after this one.
+        self.app.before_request(lambda: setattr(g, 'lang', self.booth_language))
+        self.app.jinja_env.globals['t'] = lambda key, **kw: i18n.translate(g.lang, key, **kw)
         self.server_thread = None
         self.server = None
         self._server_lock = threading.Lock()

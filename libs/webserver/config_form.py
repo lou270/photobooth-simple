@@ -39,6 +39,9 @@ CONFIG_FORM_SECTIONS = (
         'title': 'Global',
         'description': 'General application behavior and admin access.',
         'fields': (
+            {'section': 'Global', 'option': 'LANGUAGE', 'label': 'Language', 'control': 'select',
+             'choices': [('en', 'English'), ('fr', 'Français')],
+             'help': 'Booth screen and admin pages. Guests on their own phone get their phone’s language instead.'},
             {'section': 'Global', 'option': 'FULLSCREEN', 'label': 'Fullscreen', 'control': 'checkbox', 'help': 'Launch PhotoBooth in fullscreen kiosk mode.'},
             {'section': 'Global', 'option': 'SHARE', 'label': 'Share buttons', 'control': 'checkbox', 'help': 'Display web sharing actions in the booth interface.'},
             {'section': 'Global', 'option': 'RINGLED', 'label': 'Ring LED', 'control': 'checkbox', 'help': 'Enable the SPI ring light hardware.'},

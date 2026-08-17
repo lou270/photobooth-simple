@@ -11,9 +11,10 @@ The whole area answers 404 while remote capture is disabled, so a booth that
 does not offer the feature does not advertise it either.
 """
 
-from flask import Blueprint, jsonify, make_response, render_template, request, send_file
+from flask import Blueprint, g, jsonify, make_response, render_template, request, send_file
 from kivy.logger import Logger
 
+from libs import i18n
 from libs.remote_store import RemoteSubmissionError, is_valid_sender_id, new_sender_id
 
 # Names the phone that sent a photo, so it can be shown its own queue and
@@ -22,14 +23,61 @@ from libs.remote_store import RemoteSubmissionError, is_valid_sender_id, new_sen
 SENDER_COOKIE = 'photobooth_sender'
 SENDER_COOKIE_MAX_AGE = 12 * 3600
 
+# Strings remote/index.html's own script needs, handed over as JSON: the
+# markup around them is translated by Jinja, but text built in the browser
+# (status chips, fetch() error toasts) has no template to run through. Keys
+# here are the short names the script reads off window.I18N.
+REMOTE_PAGE_JS_KEYS = {
+    'status_pending': 'web.remote.status_pending',
+    'status_printed': 'web.remote.status_printed',
+    'status_rejected': 'web.remote.status_rejected',
+    'sending': 'web.remote.sending',
+    'refused': 'web.remote.refused',
+    'sent_success': 'web.remote.sent_success',
+    'no_connection': 'web.remote.no_connection',
+    'send_to_booth': 'web.remote.send_to_booth',
+    'camera_open_failed': 'web.remote.camera_open_failed',
+    'withdraw_failed': 'web.remote.withdraw_failed',
+    'remove': 'web.remote.remove',
+    'photo_sent_at_alt': 'web.remote.photo_sent_at_alt',
+}
+
+# Same idea for admin/remote.html, the operator's moderation page.
+ADMIN_REMOTE_PAGE_JS_KEYS = {
+    'status_pending': 'web.admin.status_waiting_at_booth',
+    'status_printed': 'web.admin.status_printed',
+    'status_rejected': 'web.admin.status_rejected',
+    'no_photo_with_status': 'web.admin.no_photo_with_status',
+    'no_photo_yet': 'web.admin.no_photo_yet',
+    'photo_received_on_alt': 'web.admin.photo_received_on_alt',
+    'phone_label': 'web.admin.phone_label',
+    'reject': 'web.admin.reject',
+    'delete': 'web.admin.delete',
+    'load_failed': 'web.admin.load_photos_failed',
+    'confirm_delete': 'web.admin.confirm_delete_photo',
+    'action_failed': 'web.admin.action_failed',
+}
+
 
 def create_blueprint(server):
     """Build the remote camera routes, closing over the running WebServer."""
     blueprint = Blueprint('remote', __name__)
 
+    @blueprint.before_request
+    def _negotiate_guest_language():
+        """A guest's phone decides the language on the camera page it opens.
+
+        This blueprint also carries the operator's moderation routes
+        (/admin/remote, /api/remote/*), which stay on the booth's own
+        language instead: an operator standing at the booth, not a guest.
+        """
+        if request.path.startswith('/admin') or request.path.startswith('/api'):
+            return
+        g.lang = request.accept_languages.best_match(i18n.AVAILABLE_LANGUAGES, default=i18n.DEFAULT_LANGUAGE)
+
     def unavailable():
         """The answer a booth with the feature turned off gives to everything here."""
-        return jsonify({'error': 'Remote capture is disabled on this booth.'}), 404
+        return jsonify({'error': i18n.translate(g.lang, 'web.remote.disabled')}), 404
 
     def is_available():
         return bool(server.remote_enabled and server.remote_store is not None)
@@ -71,6 +119,7 @@ def create_blueprint(server):
             # This page took over the captive portal landing, so it owes guests
             # the way back to the gallery, where they were meant to reach it.
             show_gallery_link=server.share_enabled,
+            js_i18n=i18n.bundle(g.lang, REMOTE_PAGE_JS_KEYS),
         ))
         return attach_sender(response, sender_id() or new_sender_id())
 
@@ -84,11 +133,11 @@ def create_blueprint(server):
         if current_sender is None:
             # The cookie is set when the page is served, so it being absent here
             # means a browser that refuses cookies rather than a broken client.
-            return jsonify({'error': 'Enable cookies for this page, then reload it.'}), 400
+            return jsonify({'error': i18n.translate(g.lang, 'web.remote.enable_cookies')}), 400
 
         uploaded_file = request.files.get('photo')
         if uploaded_file is None:
-            return jsonify({'error': 'No photo was attached to the request.'}), 400
+            return jsonify({'error': i18n.translate(g.lang, 'web.remote.no_photo_attached')}), 400
 
         try:
             entry = server.remote_store.submit(
@@ -101,7 +150,7 @@ def create_blueprint(server):
             return jsonify({'error': str(exc)}), 400
         except Exception as exc:
             Logger.error(f'WebServer: Error storing remote photo: {exc}')
-            return jsonify({'error': 'The booth could not store this photo. Try again.'}), 500
+            return jsonify({'error': i18n.translate(g.lang, 'web.remote.store_failed')}), 500
 
         if server.stats_store is not None:
             server.stats_store.track_event('remote_upload')
@@ -127,7 +176,9 @@ def create_blueprint(server):
             return error
 
         limit_mb = server.remote_store.max_upload_bytes / (1024 * 1024) if server.remote_store else 0
-        return jsonify({'error': f'The photo is too large. The limit is {limit_mb:.0f} MB.'}), 413
+        return jsonify({
+            'error': i18n.translate(g.lang, 'web.remote.photo_too_large', limit_mb=f'{limit_mb:.0f}'),
+        }), 413
 
     @blueprint.route('/remote/mine')
     def my_photos():
@@ -171,10 +222,10 @@ def create_blueprint(server):
 
         current_sender = sender_id()
         if current_sender is None:
-            return jsonify({'error': 'This device is not identified.'}), 400
+            return jsonify({'error': i18n.translate(g.lang, 'web.remote.device_not_identified')}), 400
 
         if not server.remote_store.delete(entry_id, sender_id=current_sender):
-            return jsonify({'error': 'Photo not found.'}), 404
+            return jsonify({'error': i18n.translate(g.lang, 'web.remote.photo_not_found')}), 404
 
         return jsonify({'deleted': True, 'id': entry_id})
 
@@ -187,7 +238,11 @@ def create_blueprint(server):
         if auth_redirect is not None:
             return auth_redirect
 
-        return render_template('admin/remote.html', remote_enabled=is_available())
+        return render_template(
+            'admin/remote.html',
+            remote_enabled=is_available(),
+            js_i18n=i18n.bundle(g.lang, ADMIN_REMOTE_PAGE_JS_KEYS),
+        )
 
     @blueprint.route('/api/remote/photos')
     def list_remote_photos():

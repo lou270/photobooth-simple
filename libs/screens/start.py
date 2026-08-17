@@ -9,6 +9,7 @@ from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.label import Label
 
+from libs.i18n import t
 from libs.kivywidgets import LayoutButton, ResizeLabel, BreezyBorderedLabel, make_icon_button
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
@@ -37,7 +38,7 @@ class StartScreen(BackgroundScreen):
         overlay_layout = LayoutButton()
 
         start = BreezyBorderedLabel(
-            text='PHOTO BOOTH',
+            text=t('start.title'),
             border_color=(1,1,1,1),
             border_width=Window.height * 0.006,
             size_hint=(0.7, 0.2),
@@ -61,7 +62,7 @@ class StartScreen(BackgroundScreen):
         # Version: useful to the operator powering the booth up, and to nobody
         # else. Shown at startup, then faded out before the first guest arrives.
         self._version_label = Label(
-            text=f'Version {APP_VERSION}',
+            text=t('start.version', version=APP_VERSION),
             font_size=TINY_FONT(),
             halign='left',
             valign='middle',

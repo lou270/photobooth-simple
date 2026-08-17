@@ -1,13 +1,19 @@
 """What a guest can reach: the collages, and the page they land on first."""
 
-from flask import Blueprint, redirect, render_template, send_file, session
+from flask import Blueprint, g, redirect, render_template, request, send_file, session
 
+from libs import i18n
 from libs.webserver import paths
 
 
 def create_blueprint(server):
     """Build the gallery routes, closing over the running WebServer."""
     blueprint = Blueprint('gallery', __name__)
+
+    @blueprint.before_request
+    def _negotiate_guest_language():
+        """A guest's phone, not the booth, decides the language here."""
+        g.lang = request.accept_languages.best_match(i18n.AVAILABLE_LANGUAGES, default=i18n.DEFAULT_LANGUAGE)
 
     @blueprint.route('/')
     def index():

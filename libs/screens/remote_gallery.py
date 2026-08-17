@@ -21,6 +21,7 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 
+from libs.i18n import t
 from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba, make_icon_button
 from libs.screens.base import ColorScreen, HomeTimeoutMixin
 from libs.screens.names import ScreenNames
@@ -65,7 +66,7 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         self.overlay_layout = FloatLayout()
 
         title = ResizeLabel(
-            text='PHOTOS FROM PHONES',
+            text=t('remote_gallery.title'),
             size_hint=(0.7, 0.09),
             pos_hint={'center_x': 0.5, 'top': 0.99},
             wh_fraction=0.045,
@@ -76,7 +77,7 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         self.overlay_layout.add_widget(title)
 
         self.empty_label = Label(
-            text='Nothing yet.\nScan the QR code on the welcome screen\nto send a photo from your phone.',
+            text=t('remote_gallery.empty'),
             size_hint=(0.8, 0.4),
             pos_hint={'center_x': 0.5, 'center_y': 0.5},
             font_size=SMALL_FONT(),

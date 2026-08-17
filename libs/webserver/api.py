@@ -3,9 +3,10 @@
 import os
 import json
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, g, jsonify, request
 from kivy.logger import Logger
 
+from libs import i18n
 from libs.webserver import paths
 from libs.template_schema import TemplateValidationError, validate_template
 
@@ -32,14 +33,14 @@ def create_blueprint(server):
 
         log_path = paths.safe_log_path(server.logs_directory, filename)
         if log_path is None:
-            return jsonify({'error': 'Log file not found'}), 404
+            return jsonify({'error': i18n.translate(g.lang, 'web.admin.log_not_found')}), 404
 
         try:
             with open(log_path, 'r', encoding='utf-8', errors='replace') as handle:
                 content = handle.read()
         except Exception as e:
             Logger.error(f'WebServer: Error reading log file {filename}: {e}')
-            return jsonify({'error': 'Unable to read log file'}), 500
+            return jsonify({'error': i18n.translate(g.lang, 'web.admin.read_log_failed')}), 500
 
         return jsonify({'filename': os.path.basename(log_path), 'content': content})
 
@@ -54,7 +55,7 @@ def create_blueprint(server):
             deleted_files = server._delete_all_log_files()
         except Exception as e:
             Logger.error(f'WebServer: Error deleting log files: {e}')
-            return jsonify({'error': 'Unable to delete log files'}), 500
+            return jsonify({'error': i18n.translate(g.lang, 'web.admin.delete_logs_failed')}), 500
 
         return jsonify({'deleted': deleted_files})
 

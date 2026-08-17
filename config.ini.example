@@ -1,4 +1,9 @@
 [Global]
+# Interface language: the booth's screen, and the admin web pages. Guests on
+# their own phone (gallery, send-a-photo page) instead get whatever language
+# their phone asks for, independently of this setting. Available: en, fr
+LANGUAGE = en
+
 # If set to True, the window fill be fullscren
 FULLSCREEN = False
 

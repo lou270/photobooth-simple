@@ -4,6 +4,7 @@ from kivy.clock import Clock
 from kivy.logger import Logger
 from kivy.uix.boxlayout import BoxLayout
 
+from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, RotatingLabel
 from libs.screens.names import ScreenNames
 from libs.screens.theme import ICON_LOADING, ICON_PROCESSING, ICON_TTF
@@ -71,7 +72,7 @@ class ProcessingScreen(ColorScreen):
         if self.app.get_pending_photo_error():
             Logger.error('ProcessingScreen: photo preparation failed.')
             Logger.error(self.app.get_pending_photo_error())
-            self.app.transition_to(ScreenNames.ERROR, message='Photo processing failed.')
+            self.app.transition_to(ScreenNames.ERROR, message=t('processing.photo_failed'))
             return
 
         if not self._collage_started:
@@ -87,6 +88,6 @@ class ProcessingScreen(ColorScreen):
             error_details = self.app.get_process_error('collage')
             if error_details:
                 Logger.error(error_details)
-            self.app.transition_to(ScreenNames.ERROR, message='Collage creation failed.')
+            self.app.transition_to(ScreenNames.ERROR, message=t('processing.collage_failed'))
         else:
             self.app.transition_to(ScreenNames.REVIEW, format=self._current_format)
