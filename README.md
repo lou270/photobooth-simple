@@ -199,19 +199,20 @@ photo to the booth, walks over and prints it.
 
 ### What a guest does
 
-1. Scans the QR code at the bottom right of the welcome screen. It carries the booth's WiFi
-   credentials, so scanning it joins the access point the Pi runs.
-2. The capture page then opens by itself: the booth's dnsmasq answers every domain with its own
-   address and advertises itself as a captive portal, so the phone's connectivity check lands there.
-   The address is written under the QR code as well, for the phone whose portal fails to pop.
-3. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
+1. Taps the QR button at the bottom right of the welcome screen, which shows two codes.
+2. Scans the first: it carries the booth's WiFi credentials, so the phone joins the access point.
+3. Scans the second: it carries the booth's address, so the browser opens the capture page.
+4. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
    became of it, and lets the guest take a photo back before anyone prints it.
-4. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
+5. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
    it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
 
-A QR code cannot both join a network and open a page — no phone reads a payload that does both — so
-it does the half that has to come first. The rest is the captive portal's job, which is why `/`
-serves the capture page while the feature is on; the gallery stays one link away at `/gallery`.
+It takes two codes because no phone reads a payload that both joins a network and opens a page, and
+because nothing opens the page by itself here — see [A network that keeps their mobile data
+alive](#a-network-that-keeps-their-mobile-data-alive) for why that is deliberate. The second code
+carries a literal address rather than a name, since a phone on this network sends its lookups to the
+cellular resolver, which has never heard of the booth. The address is `/`, so the capture page is
+what the booth serves at its root while the feature is on; the gallery stays at `/gallery`.
 
 The capture itself is done by the phone's own camera application, through a file input, rather than
 by the browser. That is deliberate: `getUserMedia` is refused outside a secure context, and a booth
@@ -227,6 +228,51 @@ never reach the booth or the gallery.
 A photo picked at the booth is copied into the working directory as an ordinary capture, assembled
 with the first single-photo template, then printed, shared and saved like any other session. It
 appears in the gallery and in the USB export with the rest of the evening.
+
+### A network that keeps their mobile data alive
+
+The booth's access point has no uplink to share, and this is where most event WiFi goes wrong. A
+network that claims to route to the internet and then does not is a network phones fight: Android
+flags it, offers to leave it for mobile data and eventually does; iOS reopens a sign-in sheet all
+evening. Guests lose Instagram the moment they join, which they notice immediately and blame on the
+booth.
+
+So the access point never makes the claim. `install.sh` configures dnsmasq to hand out an address
+and **no default route**:
+
+```
+dhcp-option=3
+```
+
+An empty value is how dnsmasq suppresses an option it would otherwise send. iOS and Android both
+read a route-less network as *local only*: they keep the cellular radio for the internet and use the
+WiFi for the booth alone. Guests stay on their own data the whole evening, and nothing nags them.
+Apple documents the behaviour directly — on a network joined by hand that does not lead to the
+internet, iOS stays connected and leaves the default route on cellular.
+
+Two consequences worth knowing:
+
+- **Nothing opens the page by itself.** There is no captive portal, by design, which is why the
+  welcome screen shows the address as a second QR code rather than trusting a sheet to pop.
+- **Names do not resolve.** With no default route on this interface, phones send their lookups to
+  the cellular resolver. The booth still answers for `photobooth.lan`, and laptops will use it, but
+  no phone should be told to type a name. Every address the booth hands out is a literal IP, which
+  is what `WIFI_AP_ADDRESS` is for.
+
+If a venue does have a spare ethernet port, sharing a real uplink (NAT from `wlan0` to `eth0`) makes
+all of this unnecessary: the network becomes ordinary, and the captive portal question disappears.
+
+### Upgrading a booth that is already installed
+
+`install.sh` writes this configuration on a fresh install. An existing booth needs three lines
+changed in `/etc/dnsmasq.conf` — replace the router option, and delete the captive portal hijacking:
+
+```bash
+sudo sed -i 's|^dhcp-option=3,192.168.4.1|dhcp-option=3|; /^dhcp-option=114/d; /^address=\/#\//d; /^address=\/.*\/192.168.4.1$/d' /etc/dnsmasq.conf && echo 'address=/photobooth.lan/192.168.4.1' | sudo tee -a /etc/dnsmasq.conf && sudo systemctl restart dnsmasq
+```
+
+Phones already connected keep their old lease, with its old default route, until it expires. Ask
+them to forget the network and rejoin, or wait out the lease.
 
 ### Moderating
 
@@ -259,6 +305,12 @@ the sharing one included:
 | `WIFI_SSID` | `PhotoBooth` | Network name put in the code. Must match `ssid=` in `/etc/hostapd/hostapd.conf`. |
 | `WIFI_PASSWORD` | *(empty)* | Empty for an open network, which is how `install.sh` configures it. |
 | `WIFI_HIDDEN` | `False` | Only if hostapd is set to `ignore_broadcast_ssid`. |
+| `WIFI_AP_ADDRESS` | `192.168.4.1` | The booth's address on that network, which the second code carries. |
+
+`WIFI_AP_ADDRESS` cannot be guessed and is not optional on a booth running its own access point:
+that network has no default route, so the address the system would pick for itself belongs to
+whatever else the Pi is plugged into. Leave it empty only for a booth sitting on somebody else's
+WiFi, where guessing is the right answer.
 
 Nothing here configures hostapd; these values only describe it. Renaming the network on the Pi means
 renaming it here too, otherwise the QR code invites guests onto a network that no longer exists.

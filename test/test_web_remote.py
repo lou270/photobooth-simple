@@ -180,30 +180,35 @@ def test_a_phone_can_withdraw_its_photo_but_not_another_one(server, phone):
     assert server.remote_store.count_pending() == 0
 
 
-@pytest.mark.parametrize('path', [
-    '/generate_204',        # what a phone probes to detect a captive portal
-    '/hotspot-detect.html',
-    '/',                    # what the access point advertises as its portal
-])
-def test_joining_the_wifi_lands_a_phone_on_the_capture_page(server, path):
-    """Every way a phone arrives after joining the WiFi has to end up here."""
-    response = server.app.test_client().get(path)
+def test_the_booth_address_alone_opens_the_capture_page(server):
+    """The QR code carries the bare address, so the root has to be the page."""
+    response = server.app.test_client().get('/')
 
     assert response.status_code == 302
     assert response.headers['Location'] == '/remote'
 
 
-@pytest.mark.parametrize('path', ['/generate_204', '/'])
-def test_without_the_feature_a_phone_still_lands_on_the_gallery(tmp_path, path):
+def test_without_the_feature_the_root_is_still_the_gallery(tmp_path):
     client = make_server(tmp_path, enabled=False).app.test_client()
 
-    response = client.get(path)
+    response = client.get('/')
 
     assert response.headers.get('Location') != '/remote'
 
 
+@pytest.mark.parametrize('path', ['/generate_204', '/hotspot-detect.html', '/connecttest.txt'])
+def test_connectivity_probes_are_not_answered(server, path):
+    """The booth's network is local-only and must never claim otherwise.
+
+    Answering these is how a portal tells a phone "this network has internet",
+    which would move the phone's default route here and break the mobile data
+    the guest is still using. Letting them fail is the whole point.
+    """
+    assert server.app.test_client().get(path).status_code == 404
+
+
 def test_the_capture_page_offers_the_gallery_only_when_sharing_is_on(tmp_path):
-    """It took over the captive portal landing, so it owes guests the way back."""
+    """The capture page is where guests land, so it owes them the way back."""
     shared = make_server(tmp_path / 'shared', share=True).app.test_client()
     private = make_server(tmp_path / 'private', share=False).app.test_client()
 

@@ -293,10 +293,22 @@ class QRCodePopup(FloatLayout):
         core_image = CoreImage(buf, ext='png')
         cls._qr_texture_cache[payload] = core_image.texture
 
-    def __init__(self, payload, on_dismiss=None, title='SCAN ME', hint='', **kwargs):
+    @classmethod
+    def preload_steps(cls, steps):
+        """Warm the cache for every code a popup is about to show."""
+        for payload, _caption in steps:
+            cls.preload_async(payload)
+
+    def __init__(self, steps, on_dismiss=None, title='SCAN ME', hint='', **kwargs):
+        """`steps` is [(payload, caption), ...], shown side by side in order.
+
+        Two of them is the normal case on a booth with its own access point:
+        joining the network and opening the page cannot be one code, and asking
+        a guest to type an address in the dark is how a feature goes unused.
+        """
         super(QRCodePopup, self).__init__(**kwargs)
         self.on_dismiss = on_dismiss
-        self.payload = payload
+        self.steps = list(steps)
         self._close_scheduled = False
         
         # Semi-transparent overlay
@@ -332,12 +344,30 @@ class QRCodePopup(FloatLayout):
         )
         self.card.add_widget(scan_label)
 
-        # QR Code image fills remaining space
-        self.qr_image = Image(
+        # The codes fill the remaining space, side by side and in order.
+        self.qr_images = []
+        codes_row = BoxLayout(
+            orientation='horizontal',
             size_hint=(1, 1),
-            fit_mode='contain',
+            spacing=Window.height * 0.02,
         )
-        self.card.add_widget(self.qr_image)
+        for payload, caption in self.steps:
+            column = BoxLayout(orientation='vertical')
+            image = Image(size_hint=(1, 1), fit_mode='contain')
+            column.add_widget(image)
+            if caption:
+                column.add_widget(ResizeLabel(
+                    text=caption,
+                    size_hint=(1, 0.16),
+                    wh_fraction=0.022,
+                    bold=True,
+                    color=(0, 0, 0, 1),
+                    halign='center',
+                    valign='middle',
+                ))
+            codes_row.add_widget(column)
+            self.qr_images.append((payload, image))
+        self.card.add_widget(codes_row)
 
         hint_label = ResizeLabel(
             text=hint,
@@ -388,12 +418,13 @@ class QRCodePopup(FloatLayout):
         self.card_rect.size = instance.size
     
     def _generate_qr_code(self):
-        """Generate the QR code for this payload, with caching for better performance."""
-        QRCodePopup.preload(self.payload)
-        texture = QRCodePopup._qr_texture_cache.get(self.payload)
-        if texture is not None:
-            self.qr_image.texture = texture
-            Logger.info('QRCodePopup: Using cached QR code')
+        """Fill every code this popup shows, from the cache where possible."""
+        for payload, image in self.qr_images:
+            QRCodePopup.preload(payload)
+            texture = QRCodePopup._qr_texture_cache.get(payload)
+            if texture is not None:
+                image.texture = texture
+                Logger.info('QRCodePopup: Using cached QR code')
     
     def _close(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return

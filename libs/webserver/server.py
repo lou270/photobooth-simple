@@ -11,7 +11,6 @@ from flask import Flask, jsonify, request, render_template, redirect, session
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
-from libs.captive_portal import CaptivePortalClients
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
@@ -19,7 +18,7 @@ from libs.template_schema import TemplateValidationError, validate_template
 
 
 class WebServer:
-    """Flask web server for photo gallery with captive portal."""
+    """Flask web server for the gallery, the admin area and the phone camera."""
 
     # The admin password is the only application-level gate on a booth that is
     # reachable from whatever network it sits on, so refuse the obvious ones
@@ -40,10 +39,6 @@ class WebServer:
         self.port = port
         self.admin_password = self._accept_admin_password(admin_password)
         self.login_throttle = LoginThrottle()
-        # Which phones have been through the portal. Held by the server rather
-        # than the portal blueprint: the remote camera releases a phone too, the
-        # moment it sends a photo, which is the clearest proof it is not stuck.
-        self.captive_clients = CaptivePortalClients()
         self.stats_store = stats_store
         self.restart_callback = restart_callback
         # The queue phones send photos to. Kept as a flag of its own rather than
@@ -451,9 +446,9 @@ class WebServer:
         server is constructed the package is fully loaded, so the cycle only
         exists at import time and this sidesteps it.
         """
-        from libs.webserver import admin, api, captive, gallery, remote
+        from libs.webserver import admin, api, gallery, remote
 
-        for area in (gallery, admin, api, remote, captive):
+        for area in (gallery, admin, api, remote):
             self.app.register_blueprint(area.create_blueprint(self))
 
     def start(self, force_restart=False):

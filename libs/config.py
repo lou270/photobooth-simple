@@ -86,6 +86,16 @@ class Config:
     def get_wifi_hidden(self):
         return self._get_boolean(('WiFi',), 'WIFI_HIDDEN', fallback=False)
 
+    def get_wifi_ap_address(self):
+        """The booth's own address on the access point it runs.
+
+        Guessing it does not work here: the access point deliberately carries no
+        default route, so the interface the system would pick to reach the
+        outside is the venue's network, not the one guests are standing on.
+        Empty falls back to that guess, for a booth on somebody else's WiFi.
+        """
+        return self._get_string(('WiFi',), 'WIFI_AP_ADDRESS', fallback='192.168.4.1').strip()
+
     def get_remote_capture(self):
         """Whether guests may send photos taken with their own phone."""
         return self._get_boolean(('Remote',), 'REMOTE_CAPTURE', fallback=False)

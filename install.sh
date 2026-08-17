@@ -354,40 +354,38 @@ EOF'
         # Configure dnsmasq (DHCP and DNS server)
         print_info "Configuring dnsmasq..."
         sudo bash -c 'cat > /etc/dnsmasq.conf << EOF
-# PhotoBooth WiFi AP - DHCP/DNS/Captive Portal Configuration
+# PhotoBooth WiFi AP - local-only network, deliberately not a captive portal.
+#
+# The booth has no uplink to share, and a network that claims to route to the
+# internet and then does not is a network phones fight: they flag it, offer to
+# leave it for mobile data, and reopen a sign-in sheet all evening.
+#
+# So this network never makes the claim. It hands out an address and no default
+# route, which iOS and Android both read as "local only": they keep the
+# cellular radio for the internet, and use WiFi for the booth alone. Guests
+# stay on Instagram while they send photos, and nothing nags them.
 interface=wlan0
 bind-interfaces
 dhcp-authoritative
 dhcp-range=192.168.4.10,192.168.4.100,255.255.255.0,24h
-domain=photobooth.local
 
-# Tell phones to use the PhotoBooth as gateway and DNS server.
-# Without this, some phones keep routing through 4G/5G instead of opening the local portal.
-dhcp-option=3,192.168.4.1
+# No default route. An empty value is how dnsmasq suppresses one of the options
+# it would otherwise send by default, and option 3 is one of those.
+# This single line is what makes the network local-only. Do not give it a value.
+dhcp-option=3
+
+# The booth resolves its own name for the devices that ask it. Phones mostly
+# will not: with no default route here, Android and iOS send their lookups to
+# the cellular resolver, which knows nothing of this network. That is why every
+# address the booth shows a guest is a literal IP, which needs no lookup at all.
 dhcp-option=6,192.168.4.1
+address=/photobooth.lan/192.168.4.1
 
-# RFC 8910 captive portal hint, read by iOS 14+ and Android 11+. The URI must
-# be the RFC 8908 API endpoint, which answers application/captive+json, and not
-# a web page: a phone that finds HTML here ignores the hint and falls back to
-# guessing from connectivity probes.
-dhcp-option=114,http://192.168.4.1/captive-portal/api
-
-# Captive Portal DNS - resolve every domain to the PhotoBooth.
-# Phones probe public domains to detect captive portals; this makes those probes hit Flask locally.
-address=/#/192.168.4.1
-
-# Explicit captive portal probe domains kept for readability/debugging.
-address=/captive.apple.com/192.168.4.1
-address=/www.apple.com/192.168.4.1
-address=/apple.com/192.168.4.1
-address=/connectivitycheck.gstatic.com/192.168.4.1
-address=/clients3.google.com/192.168.4.1
-address=/msftconnecttest.com/192.168.4.1
-address=/www.msftconnecttest.com/192.168.4.1
-address=/msftncsi.com/192.168.4.1
-address=/www.msftncsi.com/192.168.4.1
-address=/detectportal.firefox.com/192.168.4.1
-address=/nmcheck.gnome.org/192.168.4.1
+# No wildcard DNS, and no captive portal probe hijacking. Answering those probes
+# is what tells a phone this network carries the internet; letting them fail
+# over the cellular link is what keeps mobile data working for the guest.
+# Note for editors: this whole block is inside a single-quoted bash -c, so an
+# apostrophe anywhere in it closes the quote and breaks the installer.
 
 # Logging (optional, comment out for production)
 log-queries

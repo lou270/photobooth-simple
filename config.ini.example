@@ -40,6 +40,13 @@ WIFI_PASSWORD =
 # True only if hostapd is set to ignore_broadcast_ssid
 WIFI_HIDDEN = False
 
+# The booth's own address on that access point, and the one every QR code hands
+# to a phone. It cannot be guessed: the access point carries no default route on
+# purpose, so the interface the system would pick is the venue's network, not
+# the one guests are standing on. Must match the address install.sh gives wlan0.
+# Leave empty for a booth that sits on somebody else's WiFi instead.
+WIFI_AP_ADDRESS = 192.168.4.1
+
 [Remote]
 # Turn every guest phone into a camera for the booth: the welcome screen shows a
 # QR code, the phone opens a page, takes a photo and sends it here. The photos

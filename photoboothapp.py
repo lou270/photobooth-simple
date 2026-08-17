@@ -140,9 +140,13 @@ class PhotoboothApp(App):
         # Photos guests take with their own phone, kept beside the sessions
         # rather than inside them: nothing here is a session until someone at the
         # booth picks it and prints it.
+        # Guests reach the booth over the access point it runs, which is not the
+        # interface the system would pick to reach anything else: that one has
+        # the default route, and this one deliberately has none.
+        qr_host = config.get_wifi_ap_address() or self.WEB_HOST
         self.gallery_url = build_url(
             self.WEB_PORT, '',
-            host=self.WEB_HOST,
+            host=qr_host,
             override=config.get_remote_url(),
         )
 
@@ -159,7 +163,7 @@ class PhotoboothApp(App):
             )
             self.remote_url = build_url(
                 self.WEB_PORT, '/remote',
-                host=self.WEB_HOST,
+                host=qr_host,
                 override=config.get_remote_url(),
             )
             Logger.info('PhotoboothApp: remote camera enabled, phones send photos to %s', self.remote_url)
@@ -295,20 +299,27 @@ class PhotoboothApp(App):
         return 0
 
     def get_qr_invitation(self, url):
-        """What a QR code must carry so a phone ends up at `url`.
+        """What the QR codes must carry so a phone ends up at `url`.
 
-        Joining the network comes first, and no phone reads a code that both
-        joins a network and opens a page. So where the booth runs its own access
-        point the code joins it, and the address goes underneath in text: the
-        captive portal opens it by itself on most phones, and the ones it fails
-        on can be typed in. With no access point configured, the guest is
-        already on some network of their own and the code carries the address.
+        It takes two codes, because no phone reads one that both joins a network
+        and opens a page, and because the booth's access point deliberately
+        offers no route to the internet: nothing pops a page open by itself the
+        way a captive portal would. Two scans and no typing is the price of
+        letting guests keep their own mobile data while they send photos.
 
-        Returns (payload, title, hint) for QRCodePopup.
+        The second code carries a literal address, never a name. With no default
+        route on this network, phones send their lookups to the cellular
+        resolver, which has never heard of the booth.
+
+        Returns (steps, title, hint) for QRCodePopup.
         """
         if self.wifi_payload:
-            return self.wifi_payload, 'SCAN TO JOIN THE WIFI', f'Then open {url}'
-        return url, 'SCAN ME', url
+            steps = [
+                (self.wifi_payload, '1. JOIN THE WIFI'),
+                (url, '2. OPEN THE PAGE'),
+            ]
+            return steps, 'SEND PHOTOS FROM YOUR PHONE', url
+        return [(url, '')], 'SCAN ME', url
 
     # --- photos sent from phones -----------------------------------------
 

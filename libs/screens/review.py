@@ -153,7 +153,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._load_preview_async(FileUtils.get_small_path(self.app.get_collage()))
         self.app.start_photo_task(self.app.save_collage)
         if self.app.SHARE:
-            QRCodePopup.preload_async(self.app.get_qr_invitation(self.app.gallery_url)[0])
+            QRCodePopup.preload_steps(self.app.get_qr_invitation(self.app.gallery_url)[0])
 
     def _load_preview_async(self, path):
         def load_image():
@@ -202,8 +202,8 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._reset_timeout()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:
             return
-        payload, title, hint = self.app.get_qr_invitation(self.app.gallery_url)
-        self.qr_popup = QRCodePopup(payload, on_dismiss=self._dismiss_qr_popup, title=title, hint=hint)
+        steps, title, hint = self.app.get_qr_invitation(self.app.gallery_url)
+        self.qr_popup = QRCodePopup(steps, on_dismiss=self._dismiss_qr_popup, title=title, hint=hint)
         self.layout.add_widget(self.qr_popup)
 
     def _dismiss_print_popup(self):

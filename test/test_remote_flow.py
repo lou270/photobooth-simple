@@ -6,6 +6,7 @@ assembled, printed and saved like any other. These tests cover that handover,
 which is the only place the two halves of the feature touch.
 """
 
+import ipaddress
 import os
 import sys
 from pathlib import Path
@@ -136,24 +137,38 @@ def test_a_card_is_labelled_with_the_time_the_photo_arrived(received_at, expecte
     assert RemoteGalleryScreen._format_time(received_at) == expected
 
 
-def test_the_qr_code_joins_the_wifi_and_the_address_goes_underneath(tmp_path):
-    """Scanning has to connect the phone first; no code can do both at once."""
+def test_the_guest_is_given_two_codes_in_order(tmp_path):
+    """Joining and opening cannot be one code, and the network opens nothing itself."""
     app = make_app(tmp_path)
     app.wifi_payload = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
 
-    payload, title, hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
+    steps, _title, hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
 
-    assert payload == app.wifi_payload
-    assert 'WIFI' in title
-    assert hint == 'Then open http://192.168.4.1:5000/remote'
+    assert [payload for payload, _caption in steps] == [
+        app.wifi_payload,
+        'http://192.168.4.1:5000/remote',
+    ]
+    assert steps[0][1].startswith('1.') and steps[1][1].startswith('2.')
+    assert hint == 'http://192.168.4.1:5000/remote'
 
 
-def test_without_an_access_point_the_qr_code_carries_the_address(tmp_path):
+def test_the_second_code_never_carries_a_name_to_resolve(tmp_path):
+    """With no default route here, a phone asks its cellular resolver instead."""
+    app = make_app(tmp_path)
+    app.wifi_payload = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
+
+    steps, _title, _hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
+
+    host = steps[1][0].split('//', 1)[1].split(':', 1)[0]
+    ipaddress.ip_address(host)  # raises if the booth ever hands out a hostname
+
+
+def test_without_an_access_point_a_single_code_carries_the_address(tmp_path):
     """Nothing to join means the guest is already on a network of their own."""
     app = make_app(tmp_path)
     app.wifi_payload = None
 
-    payload, _title, hint = app.get_qr_invitation('http://192.168.1.20:5000/remote')
+    steps, _title, hint = app.get_qr_invitation('http://192.168.1.20:5000/remote')
 
-    assert payload == 'http://192.168.1.20:5000/remote'
+    assert steps == [('http://192.168.1.20:5000/remote', '')]
     assert hint == 'http://192.168.1.20:5000/remote'

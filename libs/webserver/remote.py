@@ -106,11 +106,6 @@ def create_blueprint(server):
         if server.stats_store is not None:
             server.stats_store.track_event('remote_upload')
 
-        # A phone that just uploaded is plainly not stuck behind the portal, so
-        # its connectivity probes can start answering success and the operating
-        # system can stop offering to leave this network for mobile data.
-        server.captive_clients.release(server._client_key())
-
         return jsonify({'photo': public_entry(entry)}), 201
 
     @blueprint.app_errorhandler(413)

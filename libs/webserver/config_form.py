@@ -62,6 +62,7 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'WiFi', 'option': 'WIFI_SSID', 'label': 'Network name', 'control': 'text', 'placeholder': 'PhotoBooth', 'help': 'Must match ssid= in /etc/hostapd/hostapd.conf.'},
             {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'label': 'Network password', 'control': 'text', 'placeholder': 'Open network', 'help': 'Leave empty for an open network, as install.sh configures it.'},
             {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'label': 'Hidden network', 'control': 'checkbox'},
+            {'section': 'WiFi', 'option': 'WIFI_AP_ADDRESS', 'label': 'Booth address on that network', 'control': 'text', 'placeholder': '192.168.4.1', 'help': 'What the QR code sends phones to. Empty to guess it from the system routes.'},
         ),
     },
     {
