@@ -310,9 +310,10 @@ the sharing one included:
 | `WIFI_AP_ADDRESS` | `192.168.4.1` | The booth's address on that network, which the second code carries. |
 
 `WIFI_AP_ADDRESS` cannot be guessed and is not optional on a booth running its own access point:
-that network has no default route, so the address the system would pick for itself belongs to
-whatever else the Pi is plugged into. Leave it empty only for a booth sitting on somebody else's
-WiFi, where guessing is the right answer.
+the guess follows the booth's own routing table, which sends the Pi out through its uplink, so the
+address it picks belongs to whatever else the Pi is plugged into rather than to the network guests
+are standing on. Leave it empty only for a booth sitting on somebody else's WiFi, where guessing is
+the right answer.
 
 Nothing here configures hostapd; these values only describe it. Renaming the network on the Pi means
 renaming it here too, otherwise the QR code invites guests onto a network that no longer exists.
