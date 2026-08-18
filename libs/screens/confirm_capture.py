@@ -18,7 +18,7 @@ from libs.kivywidgets import BlurredImage, FeedbackButtonBehavior, ResizeLabel, 
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
+from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_AUTO_KEEP_SECONDS, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
@@ -39,8 +39,11 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self.app = app
         self._current_shot = 0
         self._current_format = 1
-        self._selected_filter = DEFAULT_FILTER  # Default filter
+        self._selected_filter = DEFAULT_FILTER  # Kept for the whole session
         self._original_image = None  # Store original image
+        self._auto_keep_clock = None
+        self._auto_keep_progress_clock = None
+        self._auto_keep_started_at = 0.0
         self._init_home_timeout()
 
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
@@ -125,15 +128,14 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
                 self.filter_cards.append(card)
 
         # Home button - top left
+        # No ring on this one: the walk-away timeout is only a safety net here,
+        # and the countdown a guest has to read is the one on the confirm button.
         self.btn_home = make_icon_button(ICON_HOME,
                              size=0.14,
                              pos_hint={'x': 0.05, 'top': 0.95},
                              font=ICON_TTF,
                              font_size_fraction=0.07,
                              bgcolor=HOME_COLOR,
-                             progress=True,
-                             progress_color=HOME_PROGRESS_COLOR,
-                             progress_line_width_fraction=0.028,
                              on_release=self.home_event
                              )
         self.overlay_layout.add_widget(self.btn_home)
@@ -149,16 +151,21 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
                              )
         self.overlay_layout.add_widget(btn_cancel)
 
-        # Confirm button - bottom right (always at same position)
-        btn_confirm = make_icon_button(ICON_CONFIRM,
+        # Confirm button - bottom right (always at same position). Its ring is
+        # the auto-keep countdown, drawn only while that countdown runs.
+        self.btn_confirm = make_icon_button(ICON_CONFIRM,
                              size=0.14,
                              pos_hint={'right': 0.95, 'y': 0.05},
                              font=ICON_TTF,
                              font_size_fraction=0.07,
                              bgcolor=CONFIRM_COLOR,
+                             progress=True,
+                             progress_color=CONFIRM_PROGRESS_COLOR,
+                             progress_line_width_fraction=0.028,
                              on_release=self.keep_event,
                              )
-        self.overlay_layout.add_widget(btn_confirm)
+        self.btn_confirm.show_progress = False
+        self.overlay_layout.add_widget(self.btn_confirm)
 
         self.add_widget(self.layout)
 
@@ -282,6 +289,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         
         self._selected_filter = obj.filter_key
         self._update_selection_indicator()
+        self._start_auto_keep()
         
         # Apply filter to preview
         if self._original_image is not None:
@@ -290,12 +298,57 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
             # Update preview directly in memory to avoid temp files.
             self.preview.set_image(filtered_image)
 
+    # --- keeping the shot without being asked ----------------------------
+
+    def _start_auto_keep(self):
+        """Keep the shot on its own unless the guest says otherwise.
+
+        Retaking is the rare case, so it is the one that gets a button. The ring
+        around the confirm button is what tells the guest this is about to
+        happen, and any touch on the screen gives them the whole delay back.
+        """
+        self._stop_auto_keep()
+        self._auto_keep_started_at = Clock.get_boottime()
+        self.btn_confirm.progress = 1.0
+        self.btn_confirm.show_progress = True
+        self._auto_keep_clock = Clock.schedule_once(self._auto_keep_event, CONFIRM_AUTO_KEEP_SECONDS)
+        self._auto_keep_progress_clock = Clock.schedule_interval(self._update_auto_keep_progress, 1 / 30.0)
+
+    def _stop_auto_keep(self):
+        if self._auto_keep_clock:
+            Clock.unschedule(self._auto_keep_clock)
+            self._auto_keep_clock = None
+        if self._auto_keep_progress_clock:
+            Clock.unschedule(self._auto_keep_progress_clock)
+            self._auto_keep_progress_clock = None
+        self.btn_confirm.progress = 1.0
+        self.btn_confirm.show_progress = False
+
+    def _update_auto_keep_progress(self, dt):
+        elapsed = Clock.get_boottime() - self._auto_keep_started_at
+        self.btn_confirm.progress = max(0, 1.0 - (elapsed / CONFIRM_AUTO_KEEP_SECONDS))
+
+    def _auto_keep_event(self, dt):
+        Logger.info('ConfirmCaptureScreen: keeping shot %s on its own.', self._current_shot)
+        self.keep_event(None)
+
+    def on_touch_down(self, touch):
+        # Someone still looking at their photo is not someone who walked away.
+        if self._auto_keep_clock and self.collide_point(*touch.pos):
+            self._start_auto_keep()
+        return super(ConfirmCaptureScreen, self).on_touch_down(touch)
+
     def on_entry(self, kwargs={}):
         Logger.info('ConfirmCaptureScreen: on_entry().')
         self._current_shot = kwargs.get('shot') if 'shot' in kwargs else 0
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
-        self._selected_filter = DEFAULT_FILTER  # Reset to default filter
+        # The filter follows the guest through the session: picking black and
+        # white four times in a row was a chore, and forgetting once produced a
+        # collage with one photo out of step.
+        if self._current_shot == 0:
+            self._selected_filter = DEFAULT_FILTER
         self._original_image = None
+        self._stop_auto_keep()
 
         # Hide counter layout when only one photo is needed
         total_shots = self.app.get_shots_to_take(self._current_format)
@@ -325,13 +378,19 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
                     return
                 self._original_image = full_im
                 if small_im is not None:
-                    self.preview.set_image(small_im)
+                    preview_im = small_im
+                    if self.app.FILTERS_ENABLED and self._selected_filter != DEFAULT_FILTER:
+                        preview_im = apply_filter(small_im.copy(), self._selected_filter)
+                    self.preview.set_image(preview_im)
                 else:
                     self.preview.filepath = small_path
                     self.preview.reload()
                 if thumbnails:
                     self._set_filter_thumbnails(thumbnails)
                     self._update_selection_indicator()
+                # Counted from the moment the guest can actually see the photo,
+                # not from a screen that is still loading it.
+                self._start_auto_keep()
 
             Clock.schedule_once(apply_on_main, 0)
 
@@ -348,10 +407,12 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
 
     def on_exit(self, kwargs={}):
         Logger.info('ConfirmCaptureScreen: on_exit().')
+        self._stop_auto_keep()
         self._stop_home_timeout()
 
     def keep_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
+        self._stop_auto_keep()
         self._stop_home_timeout()
         
         # Apply selected filter off the UI thread; Processing waits before building the collage.
@@ -365,6 +426,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
 
     def no_event(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
+        self._stop_auto_keep()
         self._stop_home_timeout()
         self.app.transition_to(ScreenNames.COUNTDOWN, shot=self._current_shot, format=self._current_format)
 

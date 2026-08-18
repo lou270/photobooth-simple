@@ -196,9 +196,9 @@ class StartScreen(BackgroundScreen):
     def on_click(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('StartScreen: on_click().')
-        self.app.transition_to(ScreenNames.SELECT_FORMAT)
+        self.app.start_session()
 
     def on_keyboard_action(self):
         Logger.info('StartScreen: on_keyboard_action().')
-        self.app.transition_to(ScreenNames.SELECT_FORMAT)
+        self.app.start_session()
         return True

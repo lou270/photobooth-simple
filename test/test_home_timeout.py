@@ -1,4 +1,4 @@
-"""Sending an abandoned session home, shared by the three screens that wait."""
+"""Sending an abandoned session home, shared by every screen that waits."""
 
 import os
 import sys
@@ -14,12 +14,14 @@ os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kivy.clock import Clock
 
+from libs.screens import confirm_capture
 from libs.screens import (
     ConfirmCaptureScreen,
     CountdownScreen,
     HomeTimeoutMixin,
     ReviewScreen,
     ScreenMgr,
+    SelectFormatScreen,
 )
 
 
@@ -122,7 +124,10 @@ def test_the_home_button_goes_home(app):
 
 # --- the real screens ------------------------------------------------------
 
-@pytest.mark.parametrize('screen', [CountdownScreen, ConfirmCaptureScreen, ReviewScreen])
+@pytest.mark.parametrize(
+    'screen',
+    [CountdownScreen, ConfirmCaptureScreen, ReviewScreen, SelectFormatScreen],
+)
 def test_every_waiting_screen_shares_the_behaviour(screen):
     assert issubclass(screen, HomeTimeoutMixin)
     assert screen.HOME_TIMEOUT_SECONDS > 0
@@ -134,6 +139,142 @@ def test_only_the_countdown_owns_the_ring():
     assert ReviewScreen.HOME_TIMEOUT_HIDES_RING is False
 
 
-def test_the_review_home_button_offers_the_success_screen_instead():
-    """Its timeout goes home, but pressing home celebrates first."""
-    assert ReviewScreen.home_event is not HomeTimeoutMixin.home_event
+# --- leaving the review ----------------------------------------------------
+
+class Leaving:
+    """Just enough of a review screen to ask it where the guest goes next."""
+
+    _leave = ReviewScreen._leave
+    _home_timeout_event = ReviewScreen._home_timeout_event
+
+    def __init__(self, app, printed):
+        self.app = app
+        self._printed = printed
+
+    def _stop_home_timeout(self):
+        pass
+
+
+def test_a_guest_who_printed_is_told_where_the_photo_comes_out(app):
+    Leaving(app, printed=True)._leave()
+
+    assert app.transitions == [ScreenMgr.COLLECT]
+
+
+def test_a_guest_who_printed_nothing_is_not_sent_to_wait_for_a_print(app):
+    Leaving(app, printed=False)._leave()
+
+    assert app.transitions == [ScreenMgr.START]
+
+
+def test_the_timeout_and_the_home_button_leave_the_same_way(app):
+    """They used to disagree: one celebrated, the other went straight home."""
+    Leaving(app, printed=True)._home_timeout_event(0)
+
+    assert app.transitions == [ScreenMgr.COLLECT]
+
+
+# --- keeping a shot without being asked ------------------------------------
+
+class Deciding:
+    """Just enough of the confirm screen to run its auto-keep countdown."""
+
+    _start_auto_keep = ConfirmCaptureScreen._start_auto_keep
+    _stop_auto_keep = ConfirmCaptureScreen._stop_auto_keep
+    _update_auto_keep_progress = ConfirmCaptureScreen._update_auto_keep_progress
+    _auto_keep_event = ConfirmCaptureScreen._auto_keep_event
+
+    def __init__(self):
+        self.btn_confirm = SimpleNamespace(progress=1.0, show_progress=False)
+        self._current_shot = 0
+        self._auto_keep_clock = None
+        self._auto_keep_progress_clock = None
+        self._auto_keep_started_at = 0.0
+        self.kept = 0
+
+    def keep_event(self, obj):
+        self.kept += 1
+
+
+@pytest.fixture
+def quick_auto_keep(monkeypatch):
+    monkeypatch.setattr(confirm_capture, 'CONFIRM_AUTO_KEEP_SECONDS', 0.05)
+
+
+def test_a_shot_nobody_answers_is_kept(quick_auto_keep):
+    screen = Deciding()
+
+    screen._start_auto_keep()
+    settle(0.08)
+
+    assert screen.kept == 1
+
+
+def test_touching_the_photo_gives_the_guest_the_delay_back(quick_auto_keep):
+    screen = Deciding()
+    screen._start_auto_keep()
+
+    settle(0.03)
+    screen._start_auto_keep()
+    settle(0.03)
+
+    assert screen.kept == 0
+    settle(0.05)
+    assert screen.kept == 1
+
+
+def test_the_confirm_ring_shows_the_delay_running_out(quick_auto_keep):
+    screen = Deciding()
+
+    screen._start_auto_keep()
+    assert screen.btn_confirm.show_progress is True
+    assert screen.btn_confirm.progress == 1.0
+    settle(0.03)
+
+    assert 0 <= screen.btn_confirm.progress < 1.0
+
+
+def test_leaving_the_screen_keeps_nothing_and_hides_the_ring(quick_auto_keep):
+    screen = Deciding()
+    screen._start_auto_keep()
+
+    screen._stop_auto_keep()
+    settle(0.08)
+
+    assert screen.kept == 0
+    assert screen.btn_confirm.show_progress is False
+
+
+# --- starting the next countdown without being asked -----------------------
+
+class Posing:
+    """Just enough of the countdown screen to run its autostart."""
+
+    _cancel_autostart = CountdownScreen._cancel_autostart
+    _autostart_event = CountdownScreen._autostart_event
+
+    def __init__(self, timer_active=False):
+        self._current_shot = 1
+        self._timer_active = timer_active
+        self._clock_autostart = None
+        self.triggered = 0
+
+    def trigger_event(self, obj):
+        self.triggered += 1
+
+
+def test_the_next_shot_starts_its_countdown_on_its_own():
+    screen = Posing()
+
+    screen._autostart_event(0)
+
+    assert screen.triggered == 1
+
+
+def test_a_guest_quicker_than_the_autostart_is_not_cancelled():
+    """trigger_event toggles: firing it on a running countdown would stop it."""
+    screen = Posing(timer_active=True)
+
+    screen._autostart_event(0)
+
+    assert screen.triggered == 0

@@ -21,8 +21,10 @@
     "progress": "Copie de {label}",
     "initial": "-"
   },
-  "success": {
-    "title": "Parfait !"
+  "collect": {
+    "title": "VOTRE PHOTO ARRIVE",
+    "message": "Récupérez-la à la sortie de l'imprimante.",
+    "hint": "Touchez l'écran pour continuer"
   },
   "error": {
     "title": "Erreur",

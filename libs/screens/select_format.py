@@ -1,5 +1,7 @@
 """Choosing a print format before the first shot."""
 
+import math
+
 from kivy.core.window import Window
 from kivy.graphics import Color
 from kivy.input.providers.mouse import MouseMotionEvent
@@ -10,21 +12,31 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 
 from libs.i18n import t
-from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba
+from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba, make_icon_button
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_THINKNESS, SMALL_FONT, wh_bind
-from libs.screens.base import ColorScreen
+from libs.screens.theme import (
+    BORDER_THINKNESS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_TTF,
+    SELECT_FORMAT_HOME_TIMEOUT_SECONDS, SMALL_FONT, wh_bind,
+)
+from libs.screens.base import ColorScreen, HomeTimeoutMixin
 
 
-class SelectFormatScreen(ColorScreen):
+class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
     """
     +-----------------+
-    |  Select format  |
-    | Choose your fmt |
+    | [home]          |
     |  [card] [card]  |
     |  [card] [card]  |
     +-----------------+
     """
+
+    HOME_TIMEOUT_SECONDS = SELECT_FORMAT_HOME_TIMEOUT_SECONDS
+
+    # The band the home button lives in. Kept out of the cards' reach: a guest
+    # who touched the booth by mistake used to have no way out of this screen,
+    # and a way out that overlaps the first card is not one.
+    HOME_BAR_FRACTION = 0.16
+
     # Minimum and maximum card dimensions as window fractions (evaluated at layout time)
     @property
     def MIN_CARD_WIDTH(self):  return Window.width * 0.10
@@ -39,13 +51,15 @@ class SelectFormatScreen(ColorScreen):
         Logger.info('SelectFormatScreen: __init__().')
         super(SelectFormatScreen, self).__init__(**kwargs)
         self.app = app
+        self._init_home_timeout()
 
         # Format cards container (scrollable if needed)
         from kivy.uix.gridlayout import GridLayout
         from kivy.uix.scrollview import ScrollView
         
         scroll_view = ScrollView(
-            size_hint=(1, 1),
+            size_hint=(1, 1 - self.HOME_BAR_FRACTION),
+            pos_hint={'x': 0, 'y': 0},
             do_scroll_x=False,
             do_scroll_y=True,
         )
@@ -68,16 +82,31 @@ class SelectFormatScreen(ColorScreen):
         grid_container.add_widget(self.cards_grid)
         scroll_view.add_widget(grid_container)
 
-        # Build format cards
+        # Build format cards: all of them. The grid wraps and the scroll view
+        # takes over past what fits, so a fourth template is reachable rather
+        # than silently missing.
         self.format_cards = []
-        max_cards = min(3, len(self.app.print_formats))
-        for format_idx in range(max_cards):
+        for format_idx in range(len(self.app.print_formats)):
             card = self._create_format_card(format_idx)
             self.cards_grid.add_widget(card)
             self.format_cards.append(card)
 
         self.add_widget(scroll_view)
-        
+
+        self.btn_home = make_icon_button(
+            ICON_HOME,
+            size=0.12,
+            pos_hint={'x': 0.03, 'top': 0.97},
+            font=ICON_TTF,
+            font_size_fraction=0.06,
+            bgcolor=HOME_COLOR,
+            progress=True,
+            progress_color=HOME_PROGRESS_COLOR,
+            progress_line_width_fraction=0.028,
+            on_release=self.home_event,
+        )
+        self.add_widget(self.btn_home)
+
         # Bind to window resize events
         Window.bind(on_resize=self._on_window_resize)
         
@@ -106,8 +135,13 @@ class SelectFormatScreen(ColorScreen):
         available_width = Window.width - (2 * padding) - (n_spacings * spacing) - border
         width_from_w = available_width / cols
 
-        # Width derived from vertical space (aspect ratio 1:1.5)
-        available_height = Window.height - (2 * padding) - border
+        # Width derived from vertical space (aspect ratio 1:1.5), minus the band
+        # the home button occupies and shared between rows: past three templates
+        # the grid wraps, and cards sized for a single row would push the second
+        # one out of sight.
+        rows = math.ceil(n_cards / cols) if cols else 1
+        vertical_space = Window.height * (1 - self.HOME_BAR_FRACTION) - (2 * padding) - border
+        available_height = (vertical_space - spacing * (rows - 1)) / rows
         width_from_h = available_height / 1.5
 
         card_width = max(self.MIN_CARD_WIDTH, min(self.MAX_CARD_WIDTH, min(width_from_w, width_from_h)))
@@ -246,13 +280,24 @@ class SelectFormatScreen(ColorScreen):
         # Previously: reloaded all previews on every entry (slow)
         # Now: previews are generated once and cached in TemplateCollage
         self.app.ringled.start_rainbow()
+        self._start_home_timeout()
 
     def on_exit(self, kwargs={}):
         Logger.info('SelectFormatScreen: on_exit().')
+        self._stop_home_timeout()
         self.app.ringled.clear()
 
     def on_format_selected(self, obj):
         if not isinstance(obj.last_touch, MouseMotionEvent): return
         format_idx = obj.format_idx
         Logger.info(f'SelectFormatScreen: on_format_selected({format_idx}).')
+        self._start_format(format_idx)
+
+    def _start_format(self, format_idx):
+        self._stop_home_timeout()
         self.app.transition_to(ScreenNames.COUNTDOWN, shot=0, format=format_idx)
+
+    def on_keyboard_action(self):
+        Logger.info('SelectFormatScreen: on_keyboard_action().')
+        self._start_format(0)
+        return True

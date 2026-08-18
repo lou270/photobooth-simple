@@ -14,6 +14,6 @@ class ScreenNames:
     CONFIRM_CAPTURE = 'confirm_capture'
     PROCESSING = 'processing'
     REVIEW = 'review'
-    SUCCESS = 'success'
+    COLLECT = 'collect'
     COPYING = 'copying'
     REMOTE_GALLERY = 'remote_gallery'

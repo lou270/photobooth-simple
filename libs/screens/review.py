@@ -32,6 +32,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._current_format = 0
         self._init_home_timeout()
         self._print_state = None
+        self._printed = False
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
         self.layout.add_widget(self.overlay_layout)
@@ -148,6 +149,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     def on_entry(self, kwargs={}):
         Logger.info('ReviewScreen: on_entry().')
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
+        self._printed = False
         self._start_home_timeout()
         self.app.ringled.start_rainbow()
         self._sync_print_button()
@@ -182,11 +184,25 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     def _reset_timeout(self):
         self._start_home_timeout()
 
+    def _leave(self):
+        """Where the guest goes when they are done with this collage.
+
+        Only a print earns the collect screen: it exists to say the photo is on
+        its way out of the printer, which is a lie when nothing was printed, and
+        an extra screen between a guest who shared (or changed their mind) and
+        the next guest waiting behind them.
+        """
+        self._stop_home_timeout()
+        self.app.transition_to(ScreenNames.COLLECT if self._printed else ScreenNames.START)
+
+    def _home_timeout_event(self, dt):
+        Logger.info('ReviewScreen: home timeout, leaving review.')
+        self._leave()
+
     def home_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: home_event().')
-        self._stop_home_timeout()
-        self.app.transition_to(ScreenNames.SUCCESS)
+        self._leave()
 
     def print_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
@@ -194,7 +210,12 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._reset_timeout()
         if hasattr(self, 'print_popup') and self.print_popup.parent:
             return
-        self.print_popup = PrintStatusPopup(self.app, self._current_format, on_dismiss=self._dismiss_print_popup)
+        self.print_popup = PrintStatusPopup(
+            self.app,
+            self._current_format,
+            on_dismiss=self._dismiss_print_popup,
+            on_printed=self._on_printed,
+        )
         self.layout.add_widget(self.print_popup)
 
     def share_event(self, obj):
@@ -206,6 +227,10 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         steps, title, hint = self.app.get_qr_invitation(self.app.gallery_url)
         self.qr_popup = QRCodePopup(steps, on_dismiss=self._dismiss_qr_popup, title=title, hint=hint)
         self.layout.add_widget(self.qr_popup)
+
+    def _on_printed(self):
+        Logger.info('ReviewScreen: a print was sent to the printer.')
+        self._printed = True
 
     def _dismiss_print_popup(self):
         if hasattr(self, 'print_popup') and self.print_popup.parent:

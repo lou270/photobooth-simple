@@ -24,11 +24,12 @@ from libs.screens.theme import CANCEL_COLOR, CONFIRM_COLOR, ICON_CANCEL, ICON_CO
 class PrintStatusPopup(FloatLayout):
     """Non-blocking print overlay; the underlying confirm screen keeps all actions available after closing."""
 
-    def __init__(self, app, format_idx, on_dismiss=None, **kwargs):
+    def __init__(self, app, format_idx, on_dismiss=None, on_printed=None, **kwargs):
         super(PrintStatusPopup, self).__init__(**kwargs)
         self.app = app
         self.format_idx = format_idx
         self.on_dismiss = on_dismiss
+        self.on_printed = on_printed
         self._clock = None
         self._close_scheduled = False
         self._started_at = time.monotonic()
@@ -199,6 +200,8 @@ class PrintStatusPopup(FloatLayout):
             if not self._print_counted:
                 self.app.track_print_sent()
                 self._print_counted = True
+                if self.on_printed:
+                    self.on_printed()
             self._set_done(t('popups.print_status.sent_title'), t('popups.print_status.sent_message'))
             Clock.schedule_once(lambda dt: self._close(None), 2)
         else:

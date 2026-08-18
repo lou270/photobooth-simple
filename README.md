@@ -34,20 +34,20 @@ The photobooth application follows this screen navigation flow:
                                │ Touch                  │
                                ▼                        │
                         ┌─────────────┐                 │
-                        │   Select    │                 │
-                        │   Format    │                 │
+                        │   Select    │ (skipped when   │
+                        │   Format    │  one template)  │
                         └──────┬──────┘                 │
                                │ Choose                 │
                                ▼                        │
                         ┌─────────────┐                 │
-           ┌───────────►│  Countdown  │                 │
-           │            │   Screen    │                 │
+           ┌───────────►│  Countdown  │◄── auto-starts  │
+           │            │   Screen    │    from shot 2  │
            │            └──────┬──────┘                 │
            │ Retake            │ Capture                │
            │                   ▼                        │
            │            ┌─────────────┐                 │
-           └────────────┤   Confirm   │                 │
-                        │   Capture   │                 │
+           └────────────┤   Confirm   │ auto-validates  │
+                        │   Capture   │ after a few s   │
                         └──────┬──────┘                 │
                                │ Validate               │
                                ▼                        │
@@ -73,8 +73,11 @@ The photobooth application follows this screen navigation flow:
                                 │ Home                  │
                                 ▼                       │
                          ┌─────────────┐                │
-                         │   Success   │────────────────┘
-                         └─────────────┘
+                         │   Collect   │────────────────┘
+                         │ (if printed)│                │
+                         └─────────────┘                │
+                                                        │
+                          Home without printing ────────┘
                                                         │
                                                         │
            ┌─────────────┐                              │
@@ -91,15 +94,15 @@ picking one there joins the flow at the Processing Screen.
 ### Screen Descriptions
 
 - **Start Screen:** Initial screen with "Press to begin" prompt
-- **Select Format Screen:** Choose between different photo layouts/formats
-- **Countdown Screen:** Live camera preview with countdown timer before capture
-- **Confirm Capture Screen:** Review and validate the captured photo
+- **Select Format Screen:** Choose between different photo layouts/formats. Skipped when a single template is installed, since there is nothing to choose
+- **Countdown Screen:** Live camera preview with countdown timer before capture. The first shot waits to be asked; the following ones start on their own, and the button under the preview cancels
+- **Confirm Capture Screen:** Review and validate the captured photo. Keeping it is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press. The chosen filter is kept for the rest of the session
 - **Processing Screen:** Collage generation in progress
 - **Review Screen:** Final saved-collage screen with available actions: print, share, or go home
 - **Print Popup:** Shows print progress and reports print errors while keeping the saved photo available
 - **QR Code Popup:** Shows the sharing QR code without leaving the review screen
 - **Remote Gallery Screen:** Photos guests sent from their phone, waiting to be printed (see [Phone as a remote camera](#phone-as-a-remote-camera))
-- **Success Screen:** Final confirmation before returning to start
+- **Collect Screen:** Shown only after a print was sent: tells the guest their photo is on its way out of the printer, and frees the booth on a touch or after a few seconds
 - **Error Screen:** Displayed when an error occurs during the process
 - **Maintenance Screen:** Displayed for operator intervention, such as storage, camera, web server, printer, or USB export issues
 

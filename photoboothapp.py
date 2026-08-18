@@ -268,6 +268,18 @@ class PhotoboothApp(App):
             show_restart=show_restart,
         )
 
+    def start_session(self):
+        """Where a guest goes when they ask to begin.
+
+        A choice between one option is not a choice: with a single template
+        installed, the format screen would be one tap asking nothing, so the
+        booth goes straight to the camera.
+        """
+        if len(self.print_formats) == 1:
+            self.transition_to(ScreenMgr.COUNTDOWN, shot=0, format=0)
+        else:
+            self.transition_to(ScreenMgr.SELECT_FORMAT)
+
     def get_current_screen_name(self):
         if self.sm is None:
             return None

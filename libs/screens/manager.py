@@ -4,6 +4,7 @@ from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.uix.screenmanager import ScreenManager
 
+from libs.screens.collect import CollectScreen
 from libs.screens.confirm_capture import ConfirmCaptureScreen
 from libs.screens.copying import CopyingScreen
 from libs.screens.countdown import CountdownScreen
@@ -14,7 +15,6 @@ from libs.screens.remote_gallery import RemoteGalleryScreen
 from libs.screens.review import ReviewScreen
 from libs.screens.select_format import SelectFormatScreen
 from libs.screens.start import StartScreen
-from libs.screens.success import SuccessScreen
 
 
 class ScreenMgr(ScreenNames, ScreenManager):
@@ -38,7 +38,7 @@ class ScreenMgr(ScreenNames, ScreenManager):
             self.CONFIRM_CAPTURE    : ConfirmCaptureScreen(app, name=self.CONFIRM_CAPTURE),
             self.PROCESSING         : ProcessingScreen(app, name=self.PROCESSING),
             self.REVIEW             : ReviewScreen(app, name=self.REVIEW),
-            self.SUCCESS            : SuccessScreen(app, name=self.SUCCESS),
+            self.COLLECT            : CollectScreen(app, name=self.COLLECT),
             self.COPYING            : CopyingScreen(app, name=self.COPYING),
         }
         # Only built where it can be reached: the welcome screen offers the way

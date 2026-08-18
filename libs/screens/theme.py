@@ -41,7 +41,21 @@ Window.bind(size=_on_window_resize)
 SHOT_TIMEOUT_SECONDS = 10
 REVIEW_HOME_TIMEOUT_SECONDS = 60
 COUNTDOWN_HOME_TIMEOUT_SECONDS = 30
+SELECT_FORMAT_HOME_TIMEOUT_SECONDS = 30
+# A safety net rather than a visible countdown here: the auto-keep timer below
+# always fires first, so this only catches a guest who left mid-choice with the
+# screen somehow still waiting.
 CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS = 30
+
+# Fewer taps between shots. A guest who kept the first photo has already said
+# yes to the session, so the following countdowns start on their own — late
+# enough to see the preview and reach the cancel button.
+SHOT_AUTOSTART_SECONDS = 1.5
+# Keeping the shot is what nearly everyone does; retaking is the exception, so
+# it is the one that needs a button press. Any touch on the screen restarts it.
+CONFIRM_AUTO_KEEP_SECONDS = 6
+# Long enough for a dye-sub printer to actually hand the print over.
+COLLECT_SECONDS = 10
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
@@ -71,6 +85,7 @@ CONFIRM_COLOR = hex_to_rgba('#538a64')
 CANCEL_COLOR = hex_to_rgba('#8b4846')
 HOME_COLOR = hex_to_rgba('#534969')
 HOME_PROGRESS_COLOR = darken_rgba(HOME_COLOR) #lighten_rgba(HOME_COLOR)
+CONFIRM_PROGRESS_COLOR = darken_rgba(CONFIRM_COLOR)
 BADGE_COLOR = hex_to_rgba('#8b4846')
 SHARE_COLOR = hex_to_rgba('#667eea')
 REMOTE_COLOR = hex_to_rgba('#4a7c8c')

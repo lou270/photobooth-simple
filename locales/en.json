@@ -21,8 +21,10 @@
     "progress": "Copying {label}",
     "initial": "-"
   },
-  "success": {
-    "title": "Awesome !"
+  "collect": {
+    "title": "YOUR PHOTO IS ON ITS WAY",
+    "message": "Pick it up at the printer.",
+    "hint": "Touch the screen to continue"
   },
   "error": {
     "title": "Error",
