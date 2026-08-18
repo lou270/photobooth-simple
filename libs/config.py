@@ -82,9 +82,11 @@ class Config:
     def get_wifi_ssid(self):
         """Network name put in the QR code that joins the booth's access point.
 
-        Defaults to what install.sh writes into hostapd.conf. A booth whose
-        operator renamed the network there must say so here too: nothing in this
-        process can read the access point's own configuration.
+        This setting is the source of truth for the network's identity:
+        setup/apply-wifi.sh generates hostapd.conf from it, rather than the
+        booth trying to read the access point's own configuration. Renaming the
+        network here and re-running that script keeps the QR code and the
+        broadcast network in step.
         """
         return self._get_string(('WiFi',), 'WIFI_SSID', fallback='PhotoBooth').strip()
 

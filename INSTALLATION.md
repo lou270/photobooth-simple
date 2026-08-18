@@ -1,251 +1,213 @@
 # Installation Guide
 
-This guide will help you install and configure the Simple PhotoBooth application on your Raspberry Pi or other compatible systems.
+How to turn a bare machine into a working photo booth, and how to do it again
+for the next one without remembering any of this.
 
-## System Requirements
+## What this runs on
 
-- Raspberry Pi 5 (8GB recommended) or compatible system
-- Raspberry Pi OS (Debian-based)
-- Python 3.x
-- Internet connection for initial setup
+Any Debian-based Linux. A Raspberry Pi 5 (8 GB) on Raspberry Pi OS is the
+reference build, but a Pi 4 or a small x86 machine with an SSD works too: the
+installer decides what to do from what the host can actually do, not from which
+board it is. On a machine with no firmware config file, the device-tree steps
+(Pi camera, SPI, HDMI timings) are skipped and everything else - access point,
+printer, autostart - is installed normally.
 
-## Quick Installation
+What varies per booth is described in `setup/booth.conf`, so the same repository
+builds a DSLR booth with a printer and a webcam booth without one.
 
-For automated installation, you can use the installation script:
+## Building a booth
+
+Flash Raspberry Pi OS (or install Debian), get the machine on the network, then:
 
 ```bash
-chmod +x install.sh
+git clone https://github.com/IArchi/py-photobooth-simple.git
+cd py-photobooth-simple
 ./install.sh
 ```
 
-The script will guide you through the installation process and ask which components you want to install.
-
-## Manual Installation
-
-### 1. Global Packages
-
-Install system dependencies and Python packages:
+The installer asks what hardware this booth has, installs accordingly, and saves
+your answers to `setup/booth.conf`. Then check it:
 
 ```bash
-# Update system
-sudo apt update
-
-# Install build dependencies
-sudo apt-get install -y gcc make build-essential git scons swig
-sudo apt install -y ffmpeg libturbojpeg0 python3-pip libgl1 libgphoto2-dev
-
-# Install Python dependencies
-pip3 install -r requirements.txt --break-system-packages
+./setup/doctor.sh
 ```
 
-### 2. Kiosk Mode Configuration (Optional)
+### The second booth, and every one after
 
-To run the photobooth in kiosk mode on Raspberry Pi:
+`setup/booth.conf` is the whole interview, written down. Copy it to the next
+machine and there are no questions left to answer:
 
 ```bash
-# Hide mouse cursor and background panel
-sudo sed -i 's/\[autostart\]/\[autostart]\r\background = wf-background/g /etc/wayfire/defaults.ini
-
-# Hide taskbar
-sudo sed -i '/^[^#].*wfrespawn wf-panel-pi/ s/^/# /' /etc/wayfire/defaults.ini
-
-# Disable power warning
-echo "avoid_warnings=1" | sudo tee -a /boot/firmware/config.txt && sudo apt remove lxplug-ptbatt -y
-
-# Disable media mount dialog
-sudo sed -i -e 's/autorun=1/autorun=0/g' /etc/xdg/pcmanfm/LXDE-pi/pcmanfm.conf
-sudo sed -i -e 's/autorun=1/autorun=0/g' /etc/xdg/pcmanfm/default/pcmanfm.conf
-
-# Reboot to apply changes
-sudo reboot
+./install.sh --profile setup/booth.conf --yes
 ```
 
-### 3. Ingcool 7" Touchscreen Configuration (Optional)
+Start from `setup/booth.conf.example` to write one by hand; every value is
+documented there.
 
-If you're using the Ingcool 7" touchscreen:
+### Seeing what it would do first
 
 ```bash
-sudo sh -c "echo '# Ingcool 7in touch screen' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'max_usb_current=1' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'hdmi_group=2' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'hdmi_mode=87' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'hdmi_cvt 1024 600 60 6 0 0 0' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'hdmi_drive=1' >> /boot/firmware/config.txt"
-sudo sh -c "echo '' >> /boot/firmware/config.txt"
-
-# Reboot to apply changes
-sudo reboot
+./install.sh --profile setup/booth.conf --dry-run
 ```
 
-### 4. Raspberry Pi Camera Module V3 Setup (Recommended)
+Prints every command and the full content of every file it would write, and
+changes nothing.
 
-If you're using the Raspberry Pi Camera Module V3:
+### Re-running it
+
+The installer is idempotent. Host files are written either as a delimited block:
+
+```
+# >>> photobooth:screen-ingcool7 >>>
+hdmi_group=2
+...
+# <<< photobooth:screen-ingcool7 <<<
+```
+
+or as a whole file rendered from `setup/templates/`. Running it twice rewrites
+the same block instead of appending a second copy, so a re-run after changing
+one answer is safe.
+
+## What each step does
+
+| Step | Needs | Effect |
+| --- | --- | --- |
+| Base packages | - | Build tools, ffmpeg, libturbojpeg, `gettext-base` for templating |
+| Python | - | Creates `.venv` and installs `requirements.txt` into it |
+| Configuration | - | Creates `config.ini`, generates an admin password if none is set |
+| Kiosk | Wayfire | Hides the panel and the cursor, stops the media-mount dialog |
+| Screen | firmware config | 1024x600 timings for the Ingcool 7" panel |
+| Pi camera | firmware config | `imx708` overlay and the CMA bump libcamera needs |
+| DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
+| Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
+| LED ring | firmware config | Enables SPI, installs `spidev` |
+| Access point | a wireless interface | `hostapd` + `dnsmasq` + captive portal, generated from `config.ini` |
+| Autostart | systemd | `photobooth.service`, restarts on crash, starts at boot |
+
+### The virtual environment
+
+Dependencies go into `.venv` rather than into the system Python. The environment
+is created with `--system-site-packages`, which is required rather than
+cosmetic: `picamera2`, `libcamera` and `python3-cups` are apt packages with no
+usable pip equivalent, and `libs/device_utils.py` imports them by name.
+
+Run the booth by hand with:
 
 ```bash
-# Allocate more memory for camera
-sudo sed -i 's/^dtoverlay=vc4-kms-v3d/dtoverlay=vc4-kms-v3d,cma-512/' /boot/firmware/config.txt
-
-# Enable camera overlay
-sudo sh -c "echo '# Camera module 3' >> /boot/firmware/config.txt"
-sudo sh -c "echo 'dtoverlay=imx708,cam0' >> /boot/firmware/config.txt"
-sudo sh -c "echo '' >> /boot/firmware/config.txt"
-
-# Reboot to apply changes
-sudo reboot
-
-# Test camera after reboot
-libcamera-still --list-camera
-libcamera-still --autofocus-mode=auto -f -o test.jpg
+.venv/bin/python photoboothapp.py
 ```
 
-### 5. DSLR Camera Support with GPhoto2 (Optional)
+### The admin password
 
-If you plan to use a DSLR camera:
+`config.ini` ships with `ADMIN_PASSWORD = None`, which leaves the admin pages
+disabled. If it is still unset when the installer runs, a 16-character password
+is generated and printed once. It is stored only in `config.ini` - write it
+down. To choose your own, set it before running the installer, or edit
+`config.ini` afterwards; it must be at least 10 characters and not a well-known
+value.
+
+### The WiFi access point
+
+The booth shows guests a QR code built from the `[WiFi]` section of
+`config.ini`, and `hostapd` broadcasts a network of its own. Those used to be
+two independent copies of the same name, with nothing keeping them in step.
+
+Now `config.ini` is the source of truth and the access point is generated from
+it:
 
 ```bash
-# Download and install gPhoto2 updater
-wget https://raw.githubusercontent.com/gonzalo/gphoto2-updater/master/gphoto2-updater.sh
-wget https://raw.githubusercontent.com/gonzalo/gphoto2-updater/master/.env
-chmod +x gphoto2-updater.sh
-sudo ./gphoto2-updater.sh -s
-rm gphoto2-updater.sh .env
-
-# Fix USB access issues
-sudo chmod -x /usr/lib/gvfs/gvfs-gphoto2-volume-monitor
-sudo chmod -x /usr/lib/gvfs/gvfsd-gphoto2
-
-# Test camera connection
-gphoto2 --capture-image
+./setup/apply-wifi.sh
 ```
 
-### 6. Printer Setup with CUPS (Optional)
+Run that after changing the network name or passphrase, including when the
+change was made from the admin page. `./setup/doctor.sh` compares the two and
+reports a mismatch, because it is otherwise invisible until a guest scans the
+code and joins a network that is not there.
 
-If you want to print photos directly from the photobooth:
+For a passphrase-protected network, set `WIFI_PASSWORD` in `config.ini` to 8-63
+characters and re-run `apply-wifi.sh`; leave it empty for an open network.
+
+### The printer
+
+The installer registers the queue for you, using the name from `PRINTER` in
+`config.ini` (default `DS620`) and the PPD at `doc/DS620.ppd`, on the first USB
+printer CUPS reports. If the printer was not plugged in at the time, plug it in
+and run the installer again, or pin the device explicitly:
 
 ```bash
-# Install CUPS and drivers
-sudo apt-get install -y cups libcups2-dev python3-cups
-sudo usermod -a -G lpadmin $USER
-sudo cupsctl --remote-admin --remote-any
-
-# Install driverless printer support
-sudo apt install -y printer-driver-gutenprint
-
-# Restart CUPS service
-sudo /etc/init.d/cups restart
+lpinfo -v                      # find the URI
+# then set PRINTER_URI in setup/booth.conf
 ```
 
-**Printer Configuration:**
-1. Connect your printer via USB
-2. Open a web browser and navigate to `https://<raspberry-ip>:631/admin/`
-3. Click "Add Printer" (you'll need to enter your SSH credentials)
-4. Select your printer from the list
-5. Name it `DS620` (or update the name in `config.ini` to match)
-6. Select the appropriate brand and model (e.g., DNP DS620)
+CUPS's own web interface stays available at `https://<booth-ip>:631/admin/` for
+anything unusual.
 
-### 7. LED Ring Configuration (Optional)
+### DSLR support
 
-If you're using a WS2812 LED ring:
+The distribution's `libgphoto2` is used by default. A camera too recent for it
+needs a build from source, which is available but opt-in, because it means
+running a third-party script as root:
+
+```ini
+GPHOTO2_UPDATER=yes
+GPHOTO2_UPDATER_REF=<a commit SHA from gonzalo/gphoto2-updater>
+```
+
+The commit is required rather than optional: the installer will not fetch a
+moving branch and run it as root unattended.
+
+### LED ring wiring
+
+| WS2812 pin | Raspberry Pi pin |
+| --- | --- |
+| GND | 6, 9, 14, 20 or 25 |
+| DIN | 19 (GPIO 10, MOSI) |
+| VCC | 2 or 4 (5V) |
+
+## Checking a booth
 
 ```bash
-# Enable SPI interface
-sudo sed -i 's/^#dtparam=spi=on/dtparam=spi=on/' /boot/firmware/config.txt
-
-# Install Python SPI library
-pip3 install spidev --break-system-packages
-
-# Reboot to apply changes
-sudo reboot
+./setup/doctor.sh            # everything
+./setup/doctor.sh --quiet    # only what is wrong
 ```
 
-**LED Ring Wiring:**
+It reports on the Python environment and imports, `config.ini` and the admin
+password, which camera backends are actually available, whether CUPS knows the
+printer named in the configuration, the SPI device, free disk space, the systemd
+units, the access point's address and NAT rule, and the SSID match described
+above. Exit code is 1 if anything required is missing.
 
-Connect your WS2812 LED ring to the Raspberry Pi GPIO pins:
+What counts as required comes from `config.ini`: a booth with `PRINTER = None`
+is not missing a printer, and one with `RINGLED = False` is not missing an LED
+ring.
 
-| WS2812 Pin | Raspberry Pi Pin           |
-|------------|----------------------------|
-| GND        | Pin 6, 9, 14, 20, or 25    |
-| DIN        | Pin 19 (MOSI, GPIO 10)     |
-| VCC        | Pin 2 or 4 (5V)            |
-
-### 8. Autostart on Boot (Optional)
-
-To automatically start the photobooth when the Raspberry Pi boots:
-
-```bash
-# Create autostart configuration
-echo '[autostart]' >> ~/.config/wayfire.ini
-echo 'photobooth = /home/pi/photobooth.sh' >> ~/.config/wayfire.ini
-
-# Create startup script
-echo '#!/bin/bash' > /home/pi/photobooth.sh
-echo 'cd /home/pi/photobooth/' >> /home/pi/photobooth.sh
-echo 'python3 photoboothapp.py' >> /home/pi/photobooth.sh
-chmod +x /home/pi/photobooth.sh
-```
-
-**Note:** Adjust the path in the script if you've installed the photobooth in a different location.
-
-## Running the Application
-
-To start the photobooth manually:
-
-```bash
-cd /path/to/photobooth
-python3 photoboothapp.py
-```
-
-## Configuration
-
-You can customize the photobooth behavior by editing `config.ini`:
-
-- **Autorestart on failure:** Automatically restart if the app crashes
-- **Full screen mode:** Run in fullscreen or windowed mode
-- **Countdown duration:** Time before capturing the photo
-- **Storage directories:** Where photos and collages are saved
-- **Printer name:** CUPS printer name for printing
-- **Calibration matrix:** For hybrid camera setups (DSLR + piCamera)
-- **Overlays:** Custom overlay images for photos
+`tools/doctor.py` can be run on its own for the application-level checks only.
 
 ## Troubleshooting
 
-### Camera Not Detected
+**Camera not detected.** Run `./setup/doctor.sh` first: it says which backends
+are present. For a Pi camera, `libcamera-still --list-cameras` after a reboot.
+For a DSLR, `gphoto2 --capture-image`; if it reports the device is busy, the
+gvfs handlers are back - the installer disables them.
 
-- **Pi Camera:** Check cable connection and ensure camera is enabled in `raspi-config`
-- **DSLR:** Ensure gPhoto2 is properly installed and camera is compatible
-- **Webcam:** Check USB connection and camera permissions
+**Printer not working.** `./setup/doctor.sh` reports whether CUPS has a queue
+under the configured name and lists the ones it does have. A registered but
+paused queue: `cupsenable <name>`.
 
-### Printer Not Working
+**Access point does not come up.** `journalctl -xeu hostapd`. The usual cause is
+a wrong `WIFI_COUNTRY` in `setup/booth.conf`, which leaves the radio with no
+legal channel.
 
-- Verify printer is connected via USB
-- Check CUPS web interface (`https://<raspberry-ip>:631/`)
-- Ensure printer is set as default and named correctly in `config.ini`
-- Check printer driver installation
+**Guests join but nothing loads.** Check the NAT rule and the interface address,
+both reported by the doctor. Phones hold their old DHCP lease after a
+reconfiguration: ask them to forget the network and rejoin.
 
-### LED Ring Not Lighting
+**Screen resolution wrong.** For the Ingcool panel, confirm the
+`photobooth:screen-ingcool7` block is present in the firmware config. Other
+panels usually negotiate their own mode; set `SCREEN=none`.
 
-- Verify SPI is enabled in `/boot/firmware/config.txt`
-- Check wiring connections
-- Ensure LED ring is powered with 5V
-- Test with a simple SPI test script
+## USB photo dump
 
-### Screen Resolution Issues
-
-- For Ingcool screen, verify HDMI configuration in `/boot/firmware/config.txt`
-- For other screens, adjust `hdmi_mode` and `hdmi_cvt` settings accordingly
-- Check screen documentation for recommended settings
-
-## USB Photo Dump
-
-The photobooth automatically detects USB drives and copies all photos:
-
-- Insert a FAT32-formatted USB drive
-- The application will automatically copy photos to the drive
-- Wait for the copy process to complete (screen will show progress)
-- Safely remove the USB drive when prompted
-
-**Important:** USB drives must be formatted as FAT32 for compatibility.
-
-## Support and Updates
-
-For updates, bug reports, or feature requests, please visit the project repository.
+Insert a FAT32-formatted USB drive and the booth copies every saved session onto
+it, showing progress on screen. Wait for it to finish before removing the drive.
+Controlled by `USB_EXPORT` in `config.ini`.

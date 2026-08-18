@@ -1,0 +1,16 @@
+[Unit]
+Description=Static IP for PhotoBooth AP
+Before=hostapd.service dnsmasq.service photobooth-http-redirect.service
+Wants=hostapd.service dnsmasq.service photobooth-http-redirect.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/usr/sbin/rfkill unblock wifi
+ExecStartPre=/bin/sh -c "systemctl stop wpa_supplicant@${WIFI_INTERFACE}.service 2>/dev/null || true"
+ExecStart=/sbin/ip link set ${WIFI_INTERFACE} up
+ExecStart=/sbin/ip addr flush dev ${WIFI_INTERFACE}
+ExecStart=/sbin/ip addr add ${WIFI_AP_ADDRESS}/24 dev ${WIFI_INTERFACE}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

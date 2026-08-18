@@ -32,14 +32,15 @@ WEB_PORT = 5000
 WEB_HOST = 0.0.0.0
 
 [WiFi]
-# The access point install.sh sets up on the Pi, as it must appear in the QR
-# code guests scan to join it. Nothing here configures hostapd: these values
-# only describe it, so renaming the network in /etc/hostapd/hostapd.conf means
-# renaming it here as well, otherwise the QR code joins a network that is gone.
+# The access point the booth runs, as it must appear in the QR code guests scan
+# to join it. This section is the source of truth: setup/apply-wifi.sh generates
+# /etc/hostapd/hostapd.conf from these values, so the network guests are told to
+# join and the one actually broadcast cannot drift apart. After changing
+# anything here, run ./setup/apply-wifi.sh to apply it.
 WIFI_SSID = PhotoBooth
 
-# Empty for an open network, which is what install.sh configures. Fill it in
-# after uncommenting wpa_passphrase in hostapd.conf.
+# Empty for an open network, which is how the booth ships. Fill it in for WPA2
+# (8 to 63 characters) and re-run ./setup/apply-wifi.sh.
 WIFI_PASSWORD =
 
 # True only if hostapd is set to ignore_broadcast_ssid

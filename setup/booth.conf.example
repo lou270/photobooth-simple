@@ -1,0 +1,87 @@
+# PhotoBooth machine profile - the answers install.sh used to ask one by one.
+#
+# Copy to setup/booth.conf, adjust, then build the booth without touching a
+# keyboard:
+#
+#     ./install.sh --profile setup/booth.conf --yes
+#
+# An interactive run (./install.sh with no profile) writes its answers here at
+# the end, so the second booth costs one command instead of nine questions.
+#
+# This file describes the HARDWARE and what to install. It deliberately holds no
+# network name, no password and no printer name: those live in config.ini, which
+# the application reads and the admin page rewrites, and the installer derives
+# hostapd.conf from it. One value, one place.
+
+# --- Screen and kiosk -------------------------------------------------------
+
+# Hide the cursor, the taskbar and the removable-media dialog, so the booth
+# shows the application and nothing else. Needs Wayfire (Raspberry Pi OS
+# desktop); the pieces that need it are skipped elsewhere.
+KIOSK=yes
+
+# Panel wired to HDMI. ingcool7 writes the 1024x600 timings the Ingcool 7"
+# touchscreen needs; none leaves the display alone, which is what a mini PC or
+# any monitor that negotiates its own mode wants.
+#   ingcool7 | none
+SCREEN=ingcool7
+
+# --- Cameras (both may be enabled: preview on one, capture on the other) -----
+
+# Raspberry Pi Camera Module V3: imx708 overlay plus the CMA bump libcamera
+# needs. Requires a Pi; skipped when there is no firmware config file.
+CAMERA_PICAMERA=no
+
+# DSLR over USB through libgphoto2.
+CAMERA_DSLR=yes
+
+# Build libgphoto2 from source instead of using the distribution packages.
+# Only worth it for a camera too recent for the packaged version - it pulls a
+# third-party script off the internet and runs it as root, so it stays opt-in.
+GPHOTO2_UPDATER=no
+
+# A plain USB webcam needs nothing here: OpenCV is already in requirements.txt.
+
+# --- Printer ----------------------------------------------------------------
+
+# Install CUPS and register the printer named by PRINTER in config.ini, using
+# the PPD in doc/. Leave PRINTER_URI empty to detect the USB printer, or pin it
+# to a specific device URI (see `lpinfo -v`).
+PRINTER_SETUP=yes
+PRINTER_URI=
+
+# PPD used when registering the printer, relative to the project root.
+PRINTER_PPD=doc/DS620.ppd
+
+# --- Ring light -------------------------------------------------------------
+
+# WS2812 ring on SPI0 (DIN to GPIO 10 / pin 19). Enables the SPI overlay and
+# installs spidev.
+LED_RING=yes
+
+# --- WiFi access point ------------------------------------------------------
+
+# Run hostapd + dnsmasq so guests join the booth's own network to see the
+# gallery. Works anywhere there is an AP-capable wireless interface, Pi or not.
+WIFI_AP=yes
+
+# Regulatory domain. Getting this wrong is how an access point comes up with no
+# usable channel, so set it to where the booth actually runs.
+WIFI_COUNTRY=FR
+
+# 2.4 GHz channel, 1-13.
+WIFI_CHANNEL=6
+
+# Interface to run the AP on. Empty auto-detects: wlan0 if present, otherwise
+# the first wireless interface the kernel reports.
+WIFI_INTERFACE=
+
+# dnsmasq logs every DNS query and DHCP exchange. Priceless while a phone
+# refuses to open the portal, noise on a booth that works.
+WIFI_LOG_QUERIES=yes
+
+# --- Autostart --------------------------------------------------------------
+
+# Install the systemd unit that starts the booth at boot and restarts it on
+# crash. Needs systemd; works on any Linux, not just a Pi.
+AUTOSTART=yes

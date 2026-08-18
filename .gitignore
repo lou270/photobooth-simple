@@ -7,3 +7,8 @@ logs/
 # Local configuration: holds the admin password, never commit it.
 # Start from config.ini.example.
 config.ini
+# Virtual environment created by install.sh
+.venv/
+# Machine profile: which hardware this particular booth has.
+# Start from setup/booth.conf.example.
+setup/booth.conf

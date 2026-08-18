@@ -1,605 +1,516 @@
 #!/bin/bash
+# Simple PhotoBooth - installation
+#
+#     ./install.sh                                   interactive, then saves the answers
+#     ./install.sh --profile setup/booth.conf --yes  unattended, from a saved profile
+#     ./install.sh --profile setup/booth.conf --dry-run
+#
+# Safe to re-run: every host file is written through a delimited managed block
+# or a rendered template, so a second pass changes nothing rather than
+# appending a second copy of the same overlay.
+#
+# What gets installed is decided by setup/booth.conf, not by which board this
+# is. A step is skipped only when the host genuinely cannot do it - no firmware
+# config to edit, no wireless interface, no SPI bus - which is why a mini PC
+# gets its access point and its autostart just like a Pi does.
 
-# Simple PhotoBooth - Automated Installation Script
-# This script will guide you through the installation process
+set -euo pipefail
 
-set -e  # Exit on error
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PHOTOBOOTH_DIR="$SCRIPT_DIR"
+SETUP_DIR="$SCRIPT_DIR/setup"
+TEMPLATES="$SETUP_DIR/templates"
+VENV_DIR="$PHOTOBOOTH_DIR/.venv"
 
-# Colors for output
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+# shellcheck source=setup/lib.sh
+source "$SETUP_DIR/lib.sh"
 
-# Print colored output
-print_info() {
-    echo -e "${BLUE}[INFO]${NC} $1"
+# ---------------------------------------------------------------------------
+# Profile: 'ask' means the question has not been answered yet
+# ---------------------------------------------------------------------------
+
+KIOSK=ask
+SCREEN=ask
+CAMERA_PICAMERA=ask
+CAMERA_DSLR=ask
+GPHOTO2_UPDATER=no
+GPHOTO2_UPDATER_REF=""
+PRINTER_SETUP=ask
+PRINTER_URI=""
+PRINTER_PPD="doc/DS620.ppd"
+LED_RING=ask
+WIFI_AP=ask
+WIFI_COUNTRY=FR
+WIFI_CHANNEL=6
+WIFI_INTERFACE=""
+WIFI_LOG_QUERIES=yes
+AUTOSTART=ask
+
+PROFILE=""
+ASSUME_YES=false
+NEED_REBOOT=false
+
+usage() {
+    sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --profile)
+            PROFILE="${2:?--profile needs a file}"
+            shift
+            ;;
+        --profile=*) PROFILE="${1#*=}" ;;
+        -y|--yes)    ASSUME_YES=true ;;
+        --dry-run)   DRY_RUN=true ;;
+        -h|--help)   usage; exit 0 ;;
+        *) print_error "Unknown option: $1"; usage; exit 2 ;;
+    esac
+    shift
+done
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
+echo ""
+echo "  Simple PhotoBooth - installation"
+echo ""
 
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
+if [ "$(id -u)" -eq 0 ]; then
+    print_error "Do not run this script as root."
+    print_info "It calls sudo for the few steps that need it, and the application must not end up owned by root."
+    exit 1
+fi
 
-# Ask yes/no question
-ask_yes_no() {
-    while true; do
-        read -p "$1 (y/n): " yn
-        case $yn in
-            [Yy]* ) return 0;;
-            [Nn]* ) return 1;;
-            * ) echo "Please answer yes (y) or no (n).";;
-        esac
+if [ -n "$PROFILE" ]; then
+    if [ ! -f "$PROFILE" ]; then
+        print_error "Profile not found: $PROFILE"
+        exit 1
+    fi
+    # shellcheck source=/dev/null
+    source "$PROFILE"
+    print_info "Profile: $PROFILE"
+elif [ -f "$SETUP_DIR/booth.conf" ]; then
+    # shellcheck source=/dev/null
+    source "$SETUP_DIR/booth.conf"
+    print_info "Profile: setup/booth.conf (found automatically)"
+fi
+
+is_dry_run && print_warning "Dry run: nothing will be modified."
+
+# ---------------------------------------------------------------------------
+# Questions - only the ones the profile left unanswered
+# ---------------------------------------------------------------------------
+
+resolve_unanswered() {
+    local var
+    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING WIFI_AP AUTOSTART; do
+        if [ "${!var}" = "ask" ]; then
+            printf -v "$var" 'no'
+        fi
     done
 }
 
-# Check if running on Raspberry Pi
-is_raspberry_pi() {
-    if [ -f /proc/device-tree/model ]; then
-        grep -q "Raspberry Pi" /proc/device-tree/model
-        return $?
+if [ "$ASSUME_YES" = "true" ]; then
+    # Unanswered means "not on this booth". Anything else would install
+    # hardware support nobody asked for on an unattended run.
+    resolve_unanswered
+else
+    ask_yes_no_var KIOSK "Enable kiosk mode (hide cursor, taskbar, media dialog)?"
+    if [ "$SCREEN" = "ask" ]; then
+        if ask_yes_no "Are you using the Ingcool 7\" (1024x600) touchscreen?"; then
+            SCREEN=ingcool7
+        else
+            SCREEN=none
+        fi
     fi
-    return 1
-}
+    ask_yes_no_var CAMERA_PICAMERA "Use the Raspberry Pi Camera Module V3?"
+    ask_yes_no_var CAMERA_DSLR "Use a DSLR over USB (gPhoto2)?"
+    ask_yes_no_var PRINTER_SETUP "Install printer support (CUPS)?"
+    ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
+    ask_yes_no_var WIFI_AP "Run the WiFi access point for guest phones?"
+    ask_yes_no_var AUTOSTART "Start the booth automatically on boot?"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 1 - base packages
+# ---------------------------------------------------------------------------
+
+print_info "Step 1/9: base system packages"
+
+# gettext-base carries envsubst, which renders every template below.
+apt_ensure gcc make build-essential git scons swig \
+    ffmpeg libturbojpeg0 libgl1 \
+    python3-pip python3-venv gettext-base
+
+# ---------------------------------------------------------------------------
+# Step 2 - Python environment
+# ---------------------------------------------------------------------------
+
+print_info "Step 2/9: Python environment"
+
+# A virtual environment rather than pip --break-system-packages: the booth gets
+# its own dependency set instead of overwriting Debian's, which is what makes
+# the install repeatable and reversible. --system-site-packages is required,
+# not cosmetic: picamera2, libcamera and python3-cups are apt packages with no
+# working pip equivalent, and libs/device_utils.py imports them by name.
+if [ ! -d "$VENV_DIR" ]; then
+    run python3 -m venv --system-site-packages "$VENV_DIR"
+    is_dry_run || print_success "Created .venv"
+else
+    print_skip ".venv already exists"
+fi
+
+VENV_PYTHON="$VENV_DIR/bin/python"
+if [ -x "$VENV_PYTHON" ]; then
+    PHOTOBOOTH_PYTHON="$VENV_PYTHON"
+else
+    # Dry run, or a venv that has not been created yet.
+    PHOTOBOOTH_PYTHON="python3"
+fi
+export PHOTOBOOTH_PYTHON PHOTOBOOTH_DIR
+
+run "$PHOTOBOOTH_PYTHON" -m pip install --upgrade pip
+run "$PHOTOBOOTH_PYTHON" -m pip install -r "$PHOTOBOOTH_DIR/requirements.txt"
+
+# ---------------------------------------------------------------------------
+# Step 3 - config.ini
+# ---------------------------------------------------------------------------
+
+print_info "Step 3/9: application configuration"
+
+# config.ini holds the admin password and is deliberately not in the repository.
+# Without it the application refuses to start.
+if [ ! -f "$PHOTOBOOTH_DIR/config.ini" ]; then
+    run cp "$PHOTOBOOTH_DIR/config.ini.example" "$PHOTOBOOTH_DIR/config.ini"
+    is_dry_run || print_success "Created config.ini from config.ini.example"
+else
+    print_skip "Keeping the existing config.ini"
+fi
+
+# An unset admin password leaves the admin pages disabled, and a booth built
+# unattended would never be told. Generate one and say so, once.
+if ! is_dry_run && [ -f "$PHOTOBOOTH_DIR/config.ini" ]; then
+    if [ -z "$(booth_config ADMIN_PASSWORD)" ]; then
+        GENERATED_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)"
+        sed -i "s/^ADMIN_PASSWORD *=.*/ADMIN_PASSWORD = ${GENERATED_PASSWORD}/" "$PHOTOBOOTH_DIR/config.ini"
+        print_success "Generated an admin password: ${GENERATED_PASSWORD}"
+        print_warning "Write it down now - it is stored only in config.ini."
+    else
+        print_skip "Admin password already set"
+    fi
+fi
+
+# ---------------------------------------------------------------------------
+# Step 4 - kiosk mode
+# ---------------------------------------------------------------------------
+
+print_info "Step 4/9: kiosk mode"
+
+if enabled "$KIOSK"; then
+    if has_wayfire; then
+        # Already commented out on a second run, so the match no longer fires.
+        run sudo sed -i '/^[^#].*wfrespawn wf-panel-pi/ s/^/# /' /etc/wayfire/defaults.ini
+        if ! sudo grep -q '^background *= *wf-background' /etc/wayfire/defaults.ini; then
+            run sudo sed -i '/^\[autostart\]/a background = wf-background' /etc/wayfire/defaults.ini
+        else
+            print_skip "Wayfire background already configured"
+        fi
+        print_success "Wayfire panel hidden"
+    else
+        print_skip "Wayfire not installed; leaving the desktop alone"
+    fi
+
+    if has_boot_config; then
+        managed_block "$(boot_config_path)" "kiosk" <<'KIOSK_BLOCK'
+# Suppress the low-voltage warning overlay, which would otherwise draw over the
+# booth's own fullscreen interface during an event.
+avoid_warnings=1
+KIOSK_BLOCK
+        NEED_REBOOT=true
+    fi
+
+    if dpkg-query -W -f='${Status}' lxplug-ptbatt 2>/dev/null | grep -q '^install ok installed$'; then
+        run sudo apt-get remove -y lxplug-ptbatt
+    fi
+
+    # Stop the file manager offering to open every USB stick guests plug in:
+    # libs/usb_transfer.py copies to them on its own.
+    for pcmanfm in /etc/xdg/pcmanfm/LXDE-pi/pcmanfm.conf /etc/xdg/pcmanfm/default/pcmanfm.conf; do
+        if [ -f "$pcmanfm" ]; then
+            run sudo sed -i 's/autorun=1/autorun=0/g' "$pcmanfm"
+        fi
+    done
+else
+    print_skip "Kiosk mode not requested"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 5 - screen
+# ---------------------------------------------------------------------------
+
+print_info "Step 5/9: screen"
+
+if [ "$SCREEN" = "ingcool7" ]; then
+    if has_boot_config; then
+        managed_block "$(boot_config_path)" "screen-ingcool7" <<'SCREEN_BLOCK'
+# Ingcool 7in 1024x600 touchscreen: it reports no usable EDID, so the mode has
+# to be stated rather than negotiated.
+max_usb_current=1
+hdmi_group=2
+hdmi_mode=87
+hdmi_cvt 1024 600 60 6 0 0 0
+hdmi_drive=1
+SCREEN_BLOCK
+        NEED_REBOOT=true
+    else
+        print_warning "No firmware config on this host; set the 1024x600 mode through the display settings instead."
+    fi
+else
+    print_skip "No screen-specific configuration (SCREEN=$SCREEN)"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 6 - cameras
+# ---------------------------------------------------------------------------
+
+print_info "Step 6/9: cameras"
+
+if enabled "$CAMERA_PICAMERA"; then
+    if has_boot_config; then
+        BOOT_CONFIG="$(boot_config_path)"
+        # Anchored at end of line on purpose: the unanchored version appended
+        # ',cma-512' again on every run, ending up with cma-512,cma-512.
+        run sudo sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,cma-512/' "$BOOT_CONFIG"
+        managed_block "$BOOT_CONFIG" "camera-imx708" <<'CAMERA_BLOCK'
+# Raspberry Pi Camera Module V3
+dtoverlay=imx708,cam0
+CAMERA_BLOCK
+        NEED_REBOOT=true
+        print_info "After reboot: libcamera-still --list-cameras"
+    else
+        print_warning "No firmware config on this host; the Pi camera cannot be enabled here."
+    fi
+else
+    print_skip "Pi Camera not requested"
+fi
+
+if enabled "$CAMERA_DSLR"; then
+    # libs/gphoto2.py binds libgphoto2.so directly through ctypes, so the shared
+    # library and its udev rules are what matter here, not a Python package.
+    apt_ensure gphoto2 libgphoto2-6 libgphoto2-dev
+
+    if enabled "$GPHOTO2_UPDATER"; then
+        if [ -z "$GPHOTO2_UPDATER_REF" ]; then
+            print_error "GPHOTO2_UPDATER=yes needs GPHOTO2_UPDATER_REF set to a commit SHA."
+            print_info "Running a third-party installer from a moving branch as root is not something this script will do unattended."
+            exit 1
+        fi
+        UPDATER_URL="https://raw.githubusercontent.com/gonzalo/gphoto2-updater/${GPHOTO2_UPDATER_REF}/gphoto2-updater.sh"
+        print_warning "Building libgphoto2 from source via ${UPDATER_URL}"
+        run bash -c "cd /tmp && curl -fsSL -o gphoto2-updater.sh '${UPDATER_URL}' && curl -fsSL -o .env 'https://raw.githubusercontent.com/gonzalo/gphoto2-updater/${GPHOTO2_UPDATER_REF}/.env' && chmod +x gphoto2-updater.sh && sudo ./gphoto2-updater.sh -s && rm -f gphoto2-updater.sh .env"
+    fi
+
+    # gvfs grabs the camera as a storage volume the moment it is plugged in, and
+    # then libgphoto2 cannot claim the USB device.
+    for gvfs_binary in /usr/lib/gvfs/gvfs-gphoto2-volume-monitor /usr/lib/gvfs/gvfsd-gphoto2; do
+        if [ -x "$gvfs_binary" ]; then
+            run sudo chmod -x "$gvfs_binary"
+            print_success "Disabled $(basename "$gvfs_binary")"
+        fi
+    done
+else
+    print_skip "DSLR support not requested"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 7 - printer
+# ---------------------------------------------------------------------------
+
+print_info "Step 7/9: printer"
+
+if enabled "$PRINTER_SETUP"; then
+    apt_ensure cups libcups2-dev python3-cups printer-driver-gutenprint
+
+    run sudo usermod -a -G lpadmin "$(id -un)"
+    run sudo cupsctl --remote-admin --remote-any
+
+    PRINTER_NAME="$(is_dry_run && echo "DS620" || booth_config PRINTER)"
+
+    if [ -z "$PRINTER_NAME" ]; then
+        print_info "PRINTER is None in config.ini; CUPS installed but no queue registered."
+    else
+        if [ -z "$PRINTER_URI" ]; then
+            # Pick the first USB device CUPS can see. Dye-sub booth printers are
+            # USB, and a booth normally has exactly one.
+            PRINTER_URI="$(lpinfo -v 2>/dev/null | awk '/^direct usb:/ {print $2; exit}' || true)"
+        fi
+
+        if [ -z "$PRINTER_URI" ]; then
+            print_warning "No USB printer detected. Plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
+            print_info "Available devices: lpinfo -v"
+        else
+            PPD_PATH="$PHOTOBOOTH_DIR/$PRINTER_PPD"
+            if [ -f "$PPD_PATH" ]; then
+                print_info "Registering '$PRINTER_NAME' on $PRINTER_URI using $PRINTER_PPD"
+                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -P "$PPD_PATH" -E
+            else
+                print_warning "PPD not found at $PPD_PATH; registering with the driverless default."
+                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m everywhere -E
+            fi
+            run sudo cupsaccept "$PRINTER_NAME"
+            run sudo cupsenable "$PRINTER_NAME"
+            print_success "Printer '$PRINTER_NAME' registered"
+        fi
+    fi
+else
+    print_skip "Printer support not requested"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 8 - LED ring
+# ---------------------------------------------------------------------------
+
+print_info "Step 8/9: LED ring"
+
+if enabled "$LED_RING"; then
+    if has_boot_config; then
+        managed_block "$(boot_config_path)" "led-spi" <<'SPI_BLOCK'
+# WS2812 ring light: libs/hardware/led.py bit-bangs the WS2812 timing over SPI0.
+# Wiring: GND to pin 6/9/14/20/25, DIN to pin 19 (GPIO 10 / MOSI), VCC to 5V.
+dtparam=spi=on
+SPI_BLOCK
+        NEED_REBOOT=true
+    elif has_spi_device; then
+        print_info "SPI device already present, no overlay needed"
+    else
+        print_warning "No SPI bus on this host; libs/hardware/led.py will fall back to NullLed."
+    fi
+    # A build failure here must not take the whole install down: libs/hardware/
+    # led.py already treats a missing spidev as "no ring light" and returns
+    # NullLed, so the booth still runs.
+    if ! run "$PHOTOBOOTH_PYTHON" -m pip install spidev; then
+        print_warning "spidev did not install; the ring light will fall back to NullLed."
+    fi
+else
+    print_skip "LED ring not requested"
+fi
+
+# ---------------------------------------------------------------------------
+# Step 9 - WiFi access point
+# ---------------------------------------------------------------------------
+
+print_info "Step 9/9: WiFi access point"
+
+if enabled "$WIFI_AP"; then
+    if has_wlan; then
+        apt_ensure hostapd dnsmasq iptables rfkill
+
+        # The access point configuration is generated from config.ini, so that
+        # the SSID the booth puts in its QR code and the one hostapd broadcasts
+        # can no longer drift apart. apply-wifi.sh is also runnable on its own,
+        # after the network is renamed through the admin page.
+        export WIFI_COUNTRY WIFI_CHANNEL WIFI_INTERFACE WIFI_LOG_QUERIES
+        APPLY_WIFI_ARGS=()
+        is_dry_run && APPLY_WIFI_ARGS+=(--dry-run)
+        bash "$SETUP_DIR/apply-wifi.sh" "${APPLY_WIFI_ARGS[@]+"${APPLY_WIFI_ARGS[@]}"}"
+        NEED_REBOOT=true
+    else
+        print_warning "No wireless interface found; skipping the access point."
+        print_info "Set WIFI_INTERFACE in setup/booth.conf if the adapter is named differently."
+    fi
+else
+    print_skip "Access point not requested"
+fi
+
+# ---------------------------------------------------------------------------
+# Autostart
+# ---------------------------------------------------------------------------
+
+print_info "Autostart"
 
 escape_systemd_value() {
     printf '%s' "$1" | sed 's/[[:space:]]/\\x20/g'
 }
 
-# Banner
-echo ""
-echo "╔═══════════════════════════════════════════════════════╗"
-echo "║                                                       ║"
-echo "║         Simple PhotoBooth Installation Script        ║"
-echo "║                                                       ║"
-echo "╚═══════════════════════════════════════════════════════╝"
-echo ""
-
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    print_error "Please do not run this script as root or with sudo"
-    print_info "The script will ask for sudo password when needed"
-    exit 1
-fi
-
-# Welcome message
-print_info "This script will help you install and configure the Simple PhotoBooth application"
-print_info "You will be asked which components you want to install"
-echo ""
-
-if ! ask_yes_no "Do you want to continue with the installation?"; then
-    print_info "Installation cancelled"
-    exit 0
-fi
-
-echo ""
-print_info "Starting installation..."
-echo ""
-
-# ============================================================================
-# STEP 1: Base System Dependencies
-# ============================================================================
-print_info "Step 1/9: Installing base system dependencies..."
-
-sudo apt update
-sudo apt-get install -y gcc make build-essential git scons swig
-sudo apt install -y ffmpeg libturbojpeg0 python3-pip libgl1 libgphoto2-dev
-
-print_success "Base dependencies installed"
-echo ""
-
-# ============================================================================
-# STEP 2: Python Dependencies
-# ============================================================================
-print_info "Step 2/9: Installing Python dependencies..."
-
-pip3 install -r requirements.txt --break-system-packages
-
-print_success "Python dependencies installed"
-echo ""
-
-# config.ini holds the admin password and is deliberately not in the repository.
-# Without this the application would refuse to start on a fresh install.
-if [ ! -f config.ini ]; then
-    cp config.ini.example config.ini
-    print_success "Created config.ini from config.ini.example"
-    print_warning "Set ADMIN_PASSWORD in config.ini (at least 10 characters), otherwise the web admin stays disabled"
-else
-    print_info "Keeping the existing config.ini"
-fi
-echo ""
-
-# ============================================================================
-# STEP 3: Kiosk Mode (Raspberry Pi only)
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Step 3/9: Do you want to enable Kiosk Mode (hide mouse, taskbar, etc.)?"; then
-        print_info "Configuring Kiosk Mode..."
-        
-        if [ -f /etc/wayfire/defaults.ini ]; then
-            # Hide mouse and panel
-            sudo sed -i 's/\[autostart\]/\[autostart\]\r\background = wf-background/g' /etc/wayfire/defaults.ini
-
-            # Hide taskbar
-            sudo sed -i '/^[^#].*wfrespawn wf-panel-pi/ s/^/# /' /etc/wayfire/defaults.ini
-        else
-            print_warning "/etc/wayfire/defaults.ini not found; skipping Wayfire kiosk tweaks"
-        fi
-        
-        # Disable power warning
-        echo "avoid_warnings=1" | sudo tee -a /boot/firmware/config.txt > /dev/null
-        sudo apt remove lxplug-ptbatt -y || true
-        
-        # Disable media mount dialog
-        sudo sed -i -e 's/autorun=1/autorun=0/g' /etc/xdg/pcmanfm/LXDE-pi/pcmanfm.conf || true
-        sudo sed -i -e 's/autorun=1/autorun=0/g' /etc/xdg/pcmanfm/default/pcmanfm.conf || true
-        
-        print_success "Kiosk Mode configured"
-        NEED_REBOOT=true
-    else
-        print_info "Skipping Kiosk Mode configuration"
-    fi
-else
-    print_info "Step 3/9: Kiosk Mode (Raspberry Pi only) - Skipped (not on Raspberry Pi)"
-fi
-echo ""
-
-# ============================================================================
-# STEP 4: Ingcool 7" Touchscreen (Raspberry Pi only)
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Step 4/9: Are you using the Ingcool 7\" touchscreen?"; then
-        print_info "Configuring Ingcool 7\" touchscreen..."
-        
-        sudo sh -c "echo '# Ingcool 7in touch screen' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'max_usb_current=1' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'hdmi_group=2' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'hdmi_mode=87' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'hdmi_cvt 1024 600 60 6 0 0 0' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'hdmi_drive=1' >> /boot/firmware/config.txt"
-        sudo sh -c "echo '' >> /boot/firmware/config.txt"
-        
-        print_success "Ingcool touchscreen configured"
-        NEED_REBOOT=true
-    else
-        print_info "Skipping Ingcool touchscreen configuration"
-    fi
-else
-    print_info "Step 4/9: Ingcool Touchscreen (Raspberry Pi only) - Skipped (not on Raspberry Pi)"
-fi
-echo ""
-
-# ============================================================================
-# STEP 5: Raspberry Pi Camera Module V3 (Raspberry Pi only)
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Step 5/9: Do you want to configure Raspberry Pi Camera Module V3?"; then
-        print_info "Configuring Pi Camera Module V3..."
-        
-        # Allocate more memory
-        sudo sed -i 's/^dtoverlay=vc4-kms-v3d/dtoverlay=vc4-kms-v3d,cma-512/' /boot/firmware/config.txt
-        
-        # Enable camera
-        sudo sh -c "echo '# Camera module 3' >> /boot/firmware/config.txt"
-        sudo sh -c "echo 'dtoverlay=imx708,cam0' >> /boot/firmware/config.txt"
-        sudo sh -c "echo '' >> /boot/firmware/config.txt"
-        
-        print_success "Pi Camera Module V3 configured"
-        print_warning "After reboot, you can test the camera with: libcamera-still --list-camera"
-        NEED_REBOOT=true
-    else
-        print_info "Skipping Pi Camera configuration"
-    fi
-else
-    print_info "Step 5/9: Pi Camera Module (Raspberry Pi only) - Skipped (not on Raspberry Pi)"
-fi
-echo ""
-
-# ============================================================================
-# STEP 6: DSLR Support with gPhoto2
-# ============================================================================
-echo ""
-if ask_yes_no "Step 6/9: Do you want to install DSLR support (gPhoto2)?"; then
-    print_info "Installing gPhoto2..."
-    
-    # Download and run gPhoto2 updater
-    cd /tmp
-    wget -q https://raw.githubusercontent.com/gonzalo/gphoto2-updater/master/gphoto2-updater.sh
-    wget -q https://raw.githubusercontent.com/gonzalo/gphoto2-updater/master/.env
-    chmod +x gphoto2-updater.sh
-    
-    print_info "Running gPhoto2 updater (this may take several minutes)..."
-    sudo ./gphoto2-updater.sh -s
-    
-    rm -f gphoto2-updater.sh .env
-    cd - > /dev/null
-    
-    # Fix USB access issues
-    sudo chmod -x /usr/lib/gvfs/gvfs-gphoto2-volume-monitor || true
-    sudo chmod -x /usr/lib/gvfs/gvfsd-gphoto2 || true
-    
-    print_success "gPhoto2 installed"
-    print_warning "After installation, test with: gphoto2 --capture-image"
-else
-    print_info "Skipping gPhoto2 installation"
-fi
-echo ""
-
-# ============================================================================
-# STEP 7: CUPS Printer Support
-# ============================================================================
-echo ""
-if ask_yes_no "Step 7/9: Do you want to install printer support (CUPS)?"; then
-    print_info "Installing CUPS..."
-    
-    sudo apt-get install -y cups libcups2-dev python3-cups
-    sudo usermod -a -G lpadmin $USER
-    sudo cupsctl --remote-admin --remote-any
-    
-    # Install printer drivers
-    sudo apt install -y printer-driver-gutenprint
-    
-    # Restart CUPS
-    sudo /etc/init.d/cups restart
-    
-    print_success "CUPS installed"
-    print_info "Configure your printer at: https://$(hostname -I | awk '{print $1}'):631/admin/"
-    print_warning "Remember to name your printer 'DS620' (or update config.ini accordingly)"
-else
-    print_info "Skipping CUPS installation"
-fi
-echo ""
-
-# ============================================================================
-# STEP 8: LED Ring Support (Raspberry Pi only)
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Step 8/9: Do you want to install WS2812 LED Ring support?"; then
-        print_info "Configuring LED Ring support..."
-        
-        # Enable SPI
-        sudo sed -i 's/^#dtparam=spi=on/dtparam=spi=on/' /boot/firmware/config.txt
-        
-        # Install Python dependency
-        pip3 install spidev --break-system-packages
-        
-        print_success "LED Ring support configured"
-        print_info "Connect LED Ring: GND to Pin 6/9/14/20/25, DIN to Pin 19 (GPIO 10), VCC to Pin 2/4 (5V)"
-        NEED_REBOOT=true
-    else
-        print_info "Skipping LED Ring configuration"
-    fi
-else
-    print_info "Step 8/9: LED Ring Support (Raspberry Pi only) - Skipped (not on Raspberry Pi)"
-fi
-echo ""
-
-# ============================================================================
-# STEP 9: WiFi Access Point Setup (Raspberry Pi only)
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Step 9/9: Do you want to configure WiFi Access Point for photo downloads?"; then
-        print_info "Configuring WiFi Access Point..."
-        
-        # Install required packages
-        print_info "Installing hostapd and dnsmasq..."
-        sudo apt-get install -y hostapd dnsmasq iptables
-        
-        # Stop services during configuration
-        print_info "Stopping services..."
-        sudo systemctl stop hostapd 2>/dev/null || true
-        sudo systemctl stop dnsmasq 2>/dev/null || true
-        
-        # Backup original configuration files
-        print_info "Backing up original configurations..."
-        sudo cp /etc/dhcpcd.conf /etc/dhcpcd.conf.backup 2>/dev/null || true
-        sudo cp /etc/dnsmasq.conf /etc/dnsmasq.conf.backup 2>/dev/null || true
-        sudo cp /etc/hostapd/hostapd.conf /etc/hostapd/hostapd.conf.backup 2>/dev/null || true
-        sudo cp /etc/NetworkManager/conf.d/unmanaged-wlan0.conf /etc/NetworkManager/conf.d/unmanaged-wlan0.conf.backup 2>/dev/null || true
-        sudo cp /etc/systemd/system/photobooth-ap-network.service /etc/systemd/system/photobooth-ap-network.service.backup 2>/dev/null || true
-        sudo cp /etc/systemd/system/photobooth-http-redirect.service /etc/systemd/system/photobooth-http-redirect.service.backup 2>/dev/null || true
-        
-        # Configure static IP for wlan0 using the active network manager
-        if systemctl list-unit-files | grep -q '^NetworkManager.service'; then
-            print_info "Configuring NetworkManager to ignore wlan0..."
-            sudo mkdir -p /etc/NetworkManager/conf.d
-            sudo bash -c 'cat > /etc/NetworkManager/conf.d/unmanaged-wlan0.conf << EOF
-[keyfile]
-unmanaged-devices=interface-name:wlan0
-EOF'
-
-            print_info "Creating static IP service for wlan0..."
-            sudo bash -c 'cat > /etc/systemd/system/photobooth-ap-network.service << EOF
-[Unit]
-Description=Static IP for PhotoBooth AP
-Before=hostapd.service dnsmasq.service photobooth-http-redirect.service
-Wants=hostapd.service dnsmasq.service photobooth-http-redirect.service
-
-[Service]
-Type=oneshot
-ExecStartPre=/usr/sbin/rfkill unblock wifi
-ExecStartPre=/bin/sh -c "systemctl stop wpa_supplicant@wlan0.service 2>/dev/null || true"
-ExecStart=/sbin/ip link set wlan0 up
-ExecStart=/sbin/ip addr flush dev wlan0
-ExecStart=/sbin/ip addr add 192.168.4.1/24 dev wlan0
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF'
-        else
-            print_info "Configuring static IP for wlan0 via dhcpcd..."
-            sudo bash -c 'cat >> /etc/dhcpcd.conf << EOF
-
-# PhotoBooth WiFi AP Configuration
-interface wlan0
-    static ip_address=192.168.4.1/24
-    nohook wpa_supplicant
-EOF'
-        fi
-        
-        # Configure dnsmasq (DHCP and DNS server)
-        print_info "Configuring dnsmasq..."
-        sudo bash -c 'cat > /etc/dnsmasq.conf << EOF
-# PhotoBooth WiFi AP - DHCP/DNS/Captive Portal Configuration
-interface=wlan0
-bind-interfaces
-dhcp-authoritative
-dhcp-range=192.168.4.10,192.168.4.100,255.255.255.0,24h
-domain=photobooth.local
-
-# Tell phones to use the PhotoBooth as gateway and DNS server.
-# Without this, some phones keep routing through 4G/5G instead of opening the local portal.
-dhcp-option=3,192.168.4.1
-dhcp-option=6,192.168.4.1
-
-# RFC 8910 captive portal hint, read by iOS 14+ and Android 11+. The URI must
-# be the RFC 8908 API endpoint, which answers application/captive+json, and not
-# a web page: a phone that finds HTML here ignores the hint and falls back to
-# guessing from connectivity probes.
-dhcp-option=114,http://192.168.4.1/captive-portal/api
-
-# Captive Portal DNS - resolve every domain to the PhotoBooth.
-# Phones probe public domains to detect captive portals; this makes those probes hit Flask locally.
-address=/#/192.168.4.1
-
-# Explicit captive portal probe domains kept for readability/debugging.
-address=/captive.apple.com/192.168.4.1
-address=/www.apple.com/192.168.4.1
-address=/apple.com/192.168.4.1
-address=/connectivitycheck.gstatic.com/192.168.4.1
-address=/clients3.google.com/192.168.4.1
-address=/msftconnecttest.com/192.168.4.1
-address=/www.msftconnecttest.com/192.168.4.1
-address=/msftncsi.com/192.168.4.1
-address=/www.msftncsi.com/192.168.4.1
-address=/detectportal.firefox.com/192.168.4.1
-address=/nmcheck.gnome.org/192.168.4.1
-
-# Logging (optional, comment out for production)
-log-queries
-log-dhcp
-EOF'
-
-        # Redirect HTTP traffic from port 80 to the application on port 5000
-        print_info "Creating HTTP redirect service (80 -> 5000)..."
-        sudo bash -c 'cat > /etc/systemd/system/photobooth-http-redirect.service << EOF
-[Unit]
-Description=Redirect HTTP traffic to PhotoBooth web app
-After=photobooth-ap-network.service hostapd.service
-Wants=photobooth-ap-network.service
-
-[Service]
-Type=oneshot
-ExecStart=/bin/sh -c "/usr/sbin/iptables -t nat -C PREROUTING -i wlan0 -p tcp --dport 80 -j REDIRECT --to-ports 5000 2>/dev/null || /usr/sbin/iptables -t nat -A PREROUTING -i wlan0 -p tcp --dport 80 -j REDIRECT --to-ports 5000"
-ExecStop=/bin/sh -c "/usr/sbin/iptables -t nat -D PREROUTING -i wlan0 -p tcp --dport 80 -j REDIRECT --to-ports 5000 2>/dev/null || true"
-RemainAfterExit=yes
-
-[Install]
-WantedBy=multi-user.target
-EOF'
-        
-        # Configure hostapd (WiFi Access Point)
-        print_info "Configuring hostapd..."
-        sudo bash -c 'cat > /etc/hostapd/hostapd.conf << EOF
-# PhotoBooth WiFi AP Configuration
-interface=wlan0
-driver=nl80211
-
-# Network name (SSID)
-ssid=PhotoBooth
-
-# WiFi channel (1-13)
-channel=6
-
-# WiFi mode (a=5GHz, g=2.4GHz)
-hw_mode=g
-
-# 802.11n support
-ieee80211n=1
-
-# No password (open network)
-# For password protection, uncomment and configure:
-# wpa=2
-# wpa_passphrase=YOUR_PASSWORD_HERE
-# wpa_key_mgmt=WPA-PSK
-# wpa_pairwise=TKIP
-# rsn_pairwise=CCMP
-
-# Country code (adjust for your location)
-country_code=FR
-
-# Beacon interval
-beacon_int=100
-
-# DTIM period
-dtim_period=2
-EOF'
-        
-        # Tell hostapd where to find the config file
-        print_info "Updating hostapd daemon configuration..."
-        sudo bash -c 'cat > /etc/default/hostapd << EOF
-# Defaults for hostapd initscript
-DAEMON_CONF="/etc/hostapd/hostapd.conf"
-EOF'
-
-        if systemctl list-unit-files | grep -q '^NetworkManager.service'; then
-            print_info "Making hostapd wait for wlan0 AP setup..."
-            sudo mkdir -p /etc/systemd/system/hostapd.service.d
-            sudo bash -c 'cat > /etc/systemd/system/hostapd.service.d/photobooth-ap.conf << EOF
-[Unit]
-After=photobooth-ap-network.service
-Requires=photobooth-ap-network.service
-
-[Service]
-ExecStartPre=/usr/sbin/rfkill unblock wifi
-EOF'
-        fi
-        
-        # Unmask and enable services
-        print_info "Enabling services..."
-        sudo systemctl unmask hostapd
-        sudo systemctl enable hostapd
-        sudo systemctl enable dnsmasq
-        sudo systemctl daemon-reload
-        sudo systemctl enable photobooth-http-redirect.service
-        if systemctl list-unit-files | grep -q '^NetworkManager.service'; then
-            sudo systemctl enable photobooth-ap-network.service
-        fi
-        
-        # Start services
-        print_info "Starting services..."
-        if systemctl list-unit-files | grep -q '^NetworkManager.service'; then
-            sudo systemctl restart NetworkManager
-            sudo nmcli device set wlan0 managed no 2>/dev/null || true
-            sudo systemctl start photobooth-ap-network.service
-        else
-            sudo systemctl restart dhcpcd 2>/dev/null || true
-        fi
-        sudo systemctl restart hostapd || { sudo journalctl -xeu hostapd.service --no-pager; exit 1; }
-        sudo systemctl restart dnsmasq
-        sudo systemctl restart photobooth-http-redirect.service
-        
-        print_success "WiFi Access Point configured"
-        print_info "SSID: PhotoBooth"
-        print_info "IP Address: 192.168.4.1"
-        print_info "Web Server: http://192.168.4.1 (redirected to port 5000)"
-        print_info "Captive Portal: DNS wildcard + DHCP option 114 configured"
-        NEED_REBOOT=true
-    else
-        print_info "Skipping WiFi Access Point configuration"
-    fi
-else
-    print_info "Step 9/9: WiFi Access Point (Raspberry Pi only) - Skipped (not on Raspberry Pi)"
-fi
-echo ""
-
-# ============================================================================
-# OPTIONAL: Autostart on Boot
-# ============================================================================
-if is_raspberry_pi; then
-    echo ""
-    if ask_yes_no "Do you want the photobooth to start automatically on boot?"; then
-        print_info "Configuring systemd photobooth service..."
-
-        PHOTOBOOTH_DIR=$(pwd)
-        PHOTOBOOTH_USER=$(id -un)
-        PHOTOBOOTH_GROUP=$(id -gn)
-        PHOTOBOOTH_DIR_ESCAPED=$(escape_systemd_value "$PHOTOBOOTH_DIR")
+if enabled "$AUTOSTART"; then
+    if has_systemd; then
+        PHOTOBOOTH_USER="$(id -un)"
+        PHOTOBOOTH_GROUP="$(id -gn)"
+        PHOTOBOOTH_DIR_ESCAPED="$(escape_systemd_value "$PHOTOBOOTH_DIR")"
+        PHOTOBOOTH_PYTHON_ESCAPED="$(escape_systemd_value "$VENV_PYTHON")"
         DISPLAY_TARGET="$(loginctl show-user "$PHOTOBOOTH_USER" -p Display --value 2>/dev/null || true)"
-        DISPLAY_TARGET=${DISPLAY_TARGET:-:0}
+        DISPLAY_TARGET="${DISPLAY_TARGET:-:0}"
 
-        sudo bash -c "cat > /etc/systemd/system/photobooth.service << EOF
-[Unit]
-Description=Simple PhotoBooth application
-After=network-online.target display-manager.service graphical.target
-Wants=network-online.target
+        export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_DIR_ESCAPED
+        export PHOTOBOOTH_PYTHON_ESCAPED DISPLAY_TARGET
 
-[Service]
-Type=simple
-User=$PHOTOBOOTH_USER
-Group=$PHOTOBOOTH_GROUP
-WorkingDirectory=$PHOTOBOOTH_DIR_ESCAPED
-Environment=PYTHONUNBUFFERED=1
-Environment=DISPLAY=$DISPLAY_TARGET
-ExecStart=/usr/bin/python3 $PHOTOBOOTH_DIR_ESCAPED/photoboothapp.py
-Restart=always
-RestartSec=5
-StartLimitIntervalSec=300
-StartLimitBurst=20
-KillMode=control-group
-TimeoutStopSec=15
-StandardOutput=append:/var/log/photobooth.log
-StandardError=append:/var/log/photobooth.log
+        render "$TEMPLATES/photobooth.service.tmpl" /etc/systemd/system/photobooth.service 0644
 
-[Install]
-WantedBy=graphical.target
-EOF"
+        run sudo touch /var/log/photobooth.log
+        run sudo chown "$PHOTOBOOTH_USER:$PHOTOBOOTH_GROUP" /var/log/photobooth.log
+        run sudo systemctl daemon-reload
+        run sudo systemctl enable photobooth.service
 
-        sudo touch /var/log/photobooth.log
-        sudo chown "$PHOTOBOOTH_USER:$PHOTOBOOTH_GROUP" /var/log/photobooth.log
-        sudo systemctl daemon-reload
-        sudo systemctl enable photobooth.service
-
-        print_success "systemd service configured"
-        print_info "Photobooth will start automatically on boot and restart on crash"
+        print_success "photobooth.service enabled"
     else
-        print_info "Skipping autostart configuration"
+        print_warning "No systemd here; cannot install the autostart unit."
     fi
+else
+    print_skip "Autostart not requested"
 fi
-echo ""
 
-# ============================================================================
-# Installation Complete
-# ============================================================================
-echo ""
-echo "╔═══════════════════════════════════════════════════════╗"
-echo "║                                                       ║"
-echo "║            Installation Complete!                     ║"
-echo "║                                                       ║"
-echo "╚═══════════════════════════════════════════════════════╝"
-echo ""
+# ---------------------------------------------------------------------------
+# Save the profile
+# ---------------------------------------------------------------------------
 
-print_success "Simple PhotoBooth has been installed successfully!"
+if [ -z "$PROFILE" ] && [ "$ASSUME_YES" != "true" ] && ! is_dry_run; then
+    cat > "$SETUP_DIR/booth.conf" <<PROFILE_OUT
+# Written by install.sh on $(date -Iseconds).
+# Build an identical booth with:
+#     ./install.sh --profile setup/booth.conf --yes
+# See setup/booth.conf.example for what each value means.
+
+KIOSK=$KIOSK
+SCREEN=$SCREEN
+CAMERA_PICAMERA=$CAMERA_PICAMERA
+CAMERA_DSLR=$CAMERA_DSLR
+GPHOTO2_UPDATER=$GPHOTO2_UPDATER
+GPHOTO2_UPDATER_REF=$GPHOTO2_UPDATER_REF
+PRINTER_SETUP=$PRINTER_SETUP
+PRINTER_URI=$PRINTER_URI
+PRINTER_PPD=$PRINTER_PPD
+LED_RING=$LED_RING
+WIFI_AP=$WIFI_AP
+WIFI_COUNTRY=$WIFI_COUNTRY
+WIFI_CHANNEL=$WIFI_CHANNEL
+WIFI_INTERFACE=$WIFI_INTERFACE
+WIFI_LOG_QUERIES=$WIFI_LOG_QUERIES
+AUTOSTART=$AUTOSTART
+PROFILE_OUT
+    print_success "Saved your answers to setup/booth.conf"
+fi
+
+# ---------------------------------------------------------------------------
+# Done
+# ---------------------------------------------------------------------------
+
 echo ""
+print_success "Installation complete"
+echo ""
+print_info "Check the booth with:  ./setup/doctor.sh"
 
-# Summary
-print_info "Installation Summary:"
-echo "  ✓ Base dependencies installed"
-echo "  ✓ Python packages installed"
-
-if [ "$NEED_REBOOT" = true ]; then
+if [ "$NEED_REBOOT" = "true" ]; then
     echo ""
-    print_warning "A system reboot is required to apply all changes"
-    echo ""
-    if ask_yes_no "Do you want to reboot now?"; then
-        print_info "Rebooting system..."
-        sudo reboot
+    print_warning "Firmware or network settings changed; a reboot is required."
+    if [ "$ASSUME_YES" != "true" ] && ! is_dry_run; then
+        if ask_yes_no "Reboot now?"; then
+            run sudo reboot
+        fi
     else
-        print_warning "Please reboot your system manually to apply all changes"
         print_info "Run: sudo reboot"
     fi
 fi
 
 echo ""
-print_info "To start the photobooth manually, run:"
-echo "  cd $(pwd)"
-echo "  python3 photoboothapp.py"
+print_info "To start the booth by hand:"
+echo "  cd $PHOTOBOOTH_DIR"
+echo "  .venv/bin/python photoboothapp.py"
 echo ""
-print_info "For more information, see INSTALLATION.md and README.md"
-echo ""
-
-exit 0
