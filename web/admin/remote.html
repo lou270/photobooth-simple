@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PhotoBooth - Phone photos</title>
+    <title>PhotoBooth - {{ t('web.admin.remote_page_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         .remote-grid {
@@ -70,45 +70,46 @@
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">Administration</span>
-                    <h1>Photos from phones</h1>
-                    <p>Everything guests sent from the remote capture page. Rejecting a photo takes it out of the booth queue; deleting also removes the file.</p>
+                    <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
+                    <h1>{{ t('web.admin.remote_title') }}</h1>
+                    <p>{{ t('web.admin.remote_intro') }}</p>
                 </div>
                 <div class="actions">
-                    <a href="/admin" class="btn btn-ghost">Back to admin</a>
-                    <a href="/admin/logout" class="btn btn-secondary">Log out</a>
+                    <a href="/admin" class="btn btn-ghost">{{ t('web.admin.back_to_admin') }}</a>
+                    <a href="/admin/logout" class="btn btn-secondary">{{ t('web.admin.log_out') }}</a>
                 </div>
             </section>
 
             {% if not remote_enabled %}
             <div class="warning-box" style="margin-bottom: 18px;">
-                Remote capture is disabled. Turn on <strong>REMOTE_CAPTURE</strong> in the admin configuration and restart the application.
+                {{ t('web.admin.remote_disabled_warning') }}
             </div>
             {% endif %}
 
             <div class="actions filters">
-                <button type="button" class="btn btn-ghost active" data-filter="all">All</button>
-                <button type="button" class="btn btn-ghost" data-filter="pending">Waiting</button>
-                <button type="button" class="btn btn-ghost" data-filter="printed">Printed</button>
-                <button type="button" class="btn btn-ghost" data-filter="rejected">Rejected</button>
-                <button id="refreshButton" type="button" class="btn btn-primary">Refresh</button>
+                <button type="button" class="btn btn-ghost active" data-filter="all">{{ t('web.admin.filter_all') }}</button>
+                <button type="button" class="btn btn-ghost" data-filter="pending">{{ t('web.admin.filter_pending') }}</button>
+                <button type="button" class="btn btn-ghost" data-filter="printed">{{ t('web.admin.filter_printed') }}</button>
+                <button type="button" class="btn btn-ghost" data-filter="rejected">{{ t('web.admin.filter_rejected') }}</button>
+                <button id="refreshButton" type="button" class="btn btn-primary">{{ t('web.admin.refresh') }}</button>
             </div>
 
             <section id="grid" class="remote-grid"></section>
-            <div id="emptyState" class="panel empty-state">Loading photos...</div>
+            <div id="emptyState" class="panel empty-state">{{ t('web.admin.loading_photos') }}</div>
         </div>
     </main>
 
     <script>
+        const I18N = {{ js_i18n|tojson }};
         const grid = document.getElementById('grid');
         const emptyState = document.getElementById('emptyState');
         const refreshButton = document.getElementById('refreshButton');
         const filterButtons = document.querySelectorAll('[data-filter]');
 
         const STATUS_LABELS = {
-            pending: 'Waiting at the booth',
-            printed: 'Printed',
-            rejected: 'Rejected',
+            pending: I18N.status_pending,
+            printed: I18N.status_printed,
+            rejected: I18N.status_rejected,
         };
 
         let photos = [];
@@ -123,8 +124,8 @@
             emptyState.hidden = visible.length > 0;
             if (!visible.length) {
                 emptyState.textContent = photos.length
-                    ? 'No photo with this status.'
-                    : 'No phone has sent a photo yet.';
+                    ? I18N.no_photo_with_status
+                    : I18N.no_photo_yet;
             }
         }
 
@@ -134,7 +135,7 @@
 
             const image = document.createElement('img');
             image.src = `/remote/photo/${encodeURIComponent(photo.id)}?size=small`;
-            image.alt = `Photo received on ${photo.received_at}`;
+            image.alt = `${I18N.photo_received_on_alt} ${photo.received_at}`;
             image.loading = 'lazy';
             card.appendChild(image);
 
@@ -148,16 +149,16 @@
 
             const meta = document.createElement('p');
             meta.className = 'remote-meta';
-            meta.textContent = `${photo.received_at.replace('T', ' ')} · phone ${photo.sender}`;
+            meta.textContent = `${photo.received_at.replace('T', ' ')} · ${I18N.phone_label} ${photo.sender}`;
             body.appendChild(meta);
 
             const actions = document.createElement('div');
             actions.className = 'actions';
 
             if (photo.status !== 'rejected') {
-                actions.appendChild(makeButton('Reject', 'btn-warning', () => reject(photo.id)));
+                actions.appendChild(makeButton(I18N.reject, 'btn-warning', () => reject(photo.id)));
             }
-            actions.appendChild(makeButton('Delete', 'btn-danger', () => remove(photo.id)));
+            actions.appendChild(makeButton(I18N.delete, 'btn-danger', () => remove(photo.id)));
 
             body.appendChild(actions);
             card.appendChild(body);
@@ -177,7 +178,7 @@
             try {
                 const response = await fetch('/api/remote/photos');
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Unable to load photos');
+                if (!response.ok) throw new Error(data.error || I18N.load_failed);
                 photos = data.photos || [];
                 render();
             } catch (error) {
@@ -192,7 +193,7 @@
         }
 
         async function remove(id) {
-            if (!confirm('Delete this photo permanently?')) return;
+            if (!confirm(I18N.confirm_delete)) return;
             await call(`/api/remote/photos/${encodeURIComponent(id)}`, 'DELETE');
         }
 
@@ -200,7 +201,7 @@
             try {
                 const response = await fetch(url, { method });
                 const data = await response.json();
-                if (!response.ok) throw new Error(data.error || 'Action failed');
+                if (!response.ok) throw new Error(data.error || I18N.action_failed);
                 await load();
             } catch (error) {
                 emptyState.hidden = false;

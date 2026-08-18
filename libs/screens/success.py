@@ -5,6 +5,7 @@ from kivy.logger import Logger
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 
+from libs.i18n import t
 from libs.kivywidgets import ResizeLabel
 from libs.screens.names import ScreenNames
 from libs.screens.theme import ICON_SUCCESS, ICON_SUCCESS2, ICON_TTF, LARGE_FONT, wh_bind
@@ -39,7 +40,7 @@ class SuccessScreen(ColorScreen):
 
         title = Label(
             size_hint=(1, 0.10),
-            text='Awesome !',
+            text=t('success.title'),
             font_size=LARGE_FONT(),
             bold=True,
             halign='center',

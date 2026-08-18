@@ -3,6 +3,7 @@
 from kivy.logger import Logger
 from kivy.uix.boxlayout import BoxLayout
 
+from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, RotatingLabel
 from libs.screens.theme import ICON_LOADING, ICON_TTF, ICON_USB
 from libs.screens.base import ColorScreen
@@ -37,7 +38,7 @@ class CopyingScreen(ColorScreen):
         info = ResizeLabel(
             size_hint=(0.9, 0.1),
             pos_hint={'center_x': 0.5, 'center_y': 0.6},
-            text='Do not disconnect your USB dongle before this screen disapears !',
+            text=t('copying.warning'),
             wh_fraction=0.07,
         )
         layout.add_widget(info)
@@ -46,7 +47,7 @@ class CopyingScreen(ColorScreen):
         self.progress = ResizeLabel(
             size_hint=(0.9, 0.2),
             pos_hint={'center_x': 0.5, 'center_y': 0.35},
-            text='-',
+            text=t('copying.initial'),
             wh_fraction=0.07,
         )
         layout.add_widget(self.progress)
@@ -73,4 +74,4 @@ class CopyingScreen(ColorScreen):
 
     def on_update(self, kwargs={}):
         if not 'label' in kwargs: return
-        self.progress.text = f"Copying {kwargs.get('label')}"
+        self.progress.text = t('copying.progress', label=kwargs.get('label'))

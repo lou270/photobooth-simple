@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -37,9 +37,9 @@
     <main class="empty-shell">
         <section class="panel empty-card">
             <div class="empty-icon">📸</div>
-            <span class="eyebrow">Gallery</span>
-            <h1>No collage available yet</h1>
-            <p>The web gallery will appear here as soon as the first PhotoBooth session is saved.</p>
+            <span class="eyebrow">{{ t('web.gallery.title') }}</span>
+            <h1>{{ t('web.gallery.empty_title') }}</h1>
+            <p>{{ t('web.gallery.empty_message') }}</p>
         </section>
     </main>
 </body>

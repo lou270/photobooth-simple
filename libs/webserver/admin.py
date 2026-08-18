@@ -3,11 +3,27 @@
 import os
 import zipfile
 
-from flask import Blueprint, Response, redirect, render_template, request, session
+from flask import Blueprint, Response, g, redirect, render_template, request, session
 from kivy.logger import Logger
 
+from libs import i18n
 from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
+
+# Strings admin/logs.html's own script needs, handed over as JSON.
+LOGS_PAGE_JS_KEYS = {
+    'no_log_selected': 'web.admin.no_log_selected',
+    'choose_file_from_list': 'web.admin.choose_file_from_list',
+    'loading': 'web.admin.loading',
+    'read_log_failed': 'web.admin.read_log_failed',
+    'empty_file': 'web.admin.empty_file',
+    'load_logs_failed': 'web.admin.load_logs_failed',
+    'no_log_files_found': 'web.admin.no_log_files_found',
+    'no_log_selected_period': 'web.admin.no_log_selected_period',
+    'confirm_delete_logs': 'web.admin.confirm_delete_logs',
+    'delete_logs_failed': 'web.admin.delete_logs_failed',
+    'logs_deleted_template': 'web.admin.logs_deleted_template',
+}
 
 
 def create_blueprint(server):
@@ -33,7 +49,7 @@ def create_blueprint(server):
         if auth_redirect is not None:
             return auth_redirect
 
-        return render_template('admin/logs.html')
+        return render_template('admin/logs.html', js_i18n=i18n.bundle(g.lang, LOGS_PAGE_JS_KEYS))
 
     @blueprint.route('/download/all-photos')
     def download_all_photos():
@@ -49,7 +65,7 @@ def create_blueprint(server):
 
         photos = server._get_all_downloadable_photos()
         if not photos:
-            return 'No photos found', 404
+            return i18n.translate(g.lang, 'web.admin.no_photos_found'), 404
 
         if server.stats_store is not None:
             server.stats_store.track_event('download')
@@ -95,20 +111,21 @@ def create_blueprint(server):
             return redirect('/admin')
 
         logout_flag = request.args.get('logout') == '1'
-        return server._render_admin_login_page(success_message='Logged out successfully.' if logout_flag else None)
+        logged_out_message = i18n.translate(g.lang, 'web.admin.logged_out') if logout_flag else None
+        return server._render_admin_login_page(success_message=logged_out_message)
 
     @blueprint.route('/admin/login', methods=['POST'])
     def admin_login():
         """Authenticate admin user."""
         if server.admin_password is None:
-            return server._render_admin_login_page(error_message='Admin access is disabled. Configure ADMIN_PASSWORD in config.ini.'), 403
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.access_disabled')), 403
 
         client_key = server._client_key()
         retry_after = server.login_throttle.retry_after(client_key)
         if retry_after:
             session.clear()
             return server._render_admin_login_page(
-                error_message=f'Too many failed attempts. Try again in {retry_after} seconds.',
+                error_message=i18n.translate(g.lang, 'web.admin.too_many_attempts', seconds=retry_after),
             ), 429
 
         provided_password = request.form.get('password') or ''
@@ -118,9 +135,9 @@ def create_blueprint(server):
             Logger.warning('WebServer: failed admin login from %s', client_key)
             if locked_for:
                 return server._render_admin_login_page(
-                    error_message=f'Too many failed attempts. Try again in {locked_for} seconds.',
+                    error_message=i18n.translate(g.lang, 'web.admin.too_many_attempts', seconds=locked_for),
                 ), 429
-            return server._render_admin_login_page(error_message='Invalid password.'), 403
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.invalid_password')), 403
 
         server.login_throttle.record_success(client_key)
         session.clear()
@@ -142,14 +159,16 @@ def create_blueprint(server):
 
         if server.admin_password is None:
             session.clear()
-            return server._render_admin_login_page(error_message='Admin access is disabled. Configure ADMIN_PASSWORD in config.ini.'), 403
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.access_disabled')), 403
 
         try:
             deleted_sessions = server._delete_all_sessions()
         except Exception:
-            return server._render_admin_page(error_message='Error while deleting files.'), 500
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.delete_files_failed')), 500
 
-        return server._render_admin_page(success_message=f'{deleted_sessions} session(s) deleted.')
+        return server._render_admin_page(
+            success_message=i18n.translate(g.lang, 'web.admin.sessions_deleted', count=deleted_sessions),
+        )
 
     @blueprint.route('/admin/config', methods=['POST'])
     def save_admin_config():
@@ -160,7 +179,7 @@ def create_blueprint(server):
 
         if server.admin_password is None:
             session.clear()
-            return server._render_admin_login_page(error_message='Admin access is disabled. Configure ADMIN_PASSWORD in config.ini.'), 403
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.access_disabled')), 403
 
         submitted_form_values = {}
 
@@ -173,24 +192,30 @@ def create_blueprint(server):
             return server._render_admin_page(error_message=str(exc), form_values=submitted_form_values), 400
         except Exception as exc:
             Logger.error(f'WebServer: Error while preparing config.ini update: {exc}')
-            return server._render_admin_page(error_message='Error while preparing config.ini.', form_values=request.form), 500
+            return server._render_admin_page(
+                error_message=i18n.translate(g.lang, 'web.admin.prepare_config_failed'),
+                form_values=request.form,
+            ), 500
 
         try:
             server._save_config_text(updated_config)
         except Exception:
-            return server._render_admin_page(error_message='Error while saving config.ini.', form_values=submitted_form_values), 500
+            return server._render_admin_page(
+                error_message=i18n.translate(g.lang, 'web.admin.save_config_failed'),
+                form_values=submitted_form_values,
+            ), 500
 
         try:
             updated_config = server._load_config_text()
             server._refresh_admin_password_from_config(updated_config)
         except Exception:
-            return server._render_admin_page(success_message='config.ini saved. Restart app to apply all changes.')
+            return server._render_admin_page(success_message=i18n.translate(g.lang, 'web.admin.config_saved_restart'))
 
         if server.admin_password is None:
             session.clear()
-            return server._render_admin_login_page(success_message='config.ini saved. Admin password disabled. Sign in is now disabled.')
+            return server._render_admin_login_page(success_message=i18n.translate(g.lang, 'web.admin.config_saved_password_disabled'))
 
-        return server._render_admin_page(success_message='config.ini saved. Restart app to apply all changes.')
+        return server._render_admin_page(success_message=i18n.translate(g.lang, 'web.admin.config_saved_restart'))
 
     @blueprint.route('/admin/restart', methods=['POST'])
     def restart_app():
@@ -201,18 +226,18 @@ def create_blueprint(server):
 
         if server.admin_password is None:
             session.clear()
-            return server._render_admin_login_page(error_message='Admin access is disabled. Configure ADMIN_PASSWORD in config.ini.'), 403
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.access_disabled')), 403
 
         if not callable(server.restart_callback):
-            return server._render_admin_page(error_message='Restart callback is unavailable.'), 500
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.restart_unavailable')), 500
 
         try:
             server.restart_callback()
         except Exception as e:
             Logger.error(f'WebServer: Error restarting app: {e}')
-            return server._render_admin_page(error_message='Error while restarting app.'), 500
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.restart_failed')), 500
 
-        return server._render_admin_page(success_message='Application restart requested. Page may become unavailable for a few seconds.')
+        return server._render_admin_page(success_message=i18n.translate(g.lang, 'web.admin.restart_requested'))
 
     @blueprint.route('/stats')
     def statistics():

@@ -16,6 +16,7 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 from kivy.core.image import Image as CoreImage
 
+from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, make_icon_button, make_icon_text_button
 from libs.screens.theme import CANCEL_COLOR, CONFIRM_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_ERROR_PRINTING, ICON_PRINT, ICON_SUCCESS, ICON_TTF, SMALL_FONT, wh_bind
 
@@ -68,7 +69,7 @@ class PrintStatusPopup(FloatLayout):
         self.card.add_widget(self.icon)
 
         self.title = ResizeLabel(
-            text='PRINTING',
+            text=t('popups.print_status.title'),
             size_hint=(1, 0.15),
             wh_fraction=0.05,
             bold=True,
@@ -79,7 +80,7 @@ class PrintStatusPopup(FloatLayout):
         self.card.add_widget(self.title)
 
         self.message = Label(
-            text='Saving photo before printing...',
+            text=t('popups.print_status.saving'),
             size_hint=(1, 0.28),
             font_size=SMALL_FONT(),
             color=(0, 0, 0, 1),
@@ -92,7 +93,7 @@ class PrintStatusPopup(FloatLayout):
 
         self.btn_close = make_icon_text_button(
             icon=ICON_CONFIRM,
-            text='OK',
+            text=t('popups.print_status.ok'),
             size_hint=(0.24, 0.13),
             pos_hint={'center_x': 0.5},
             icon_font=ICON_TTF,
@@ -130,15 +131,15 @@ class PrintStatusPopup(FloatLayout):
         self._clock = None
 
     def _set_print_error(self, detail=None):
-        message = 'Printing failed but the photo has been saved.'
+        message = t('popups.print_status.print_failed_saved')
         if detail:
             message = f'{message}\n{detail}'
         Logger.error('PrintStatusPopup: print failed: %s', detail or '-')
-        self._set_done('PRINT FAILED', message, error=True)
+        self._set_done(t('popups.print_status.print_failed_title'), message, error=True)
 
     def _tick(self, obj):
         if self.app.has_pending_photo_tasks():
-            self.message.text = 'Saving photo before printing...'
+            self.message.text = t('popups.print_status.saving')
             self._clock = Clock.schedule_once(self._tick, 0.2)
             return
 
@@ -146,15 +147,19 @@ class PrintStatusPopup(FloatLayout):
         if pending_error:
             Logger.error('PrintStatusPopup: save before print failed.')
             Logger.error(pending_error)
-            self._set_done('SAVE FAILED', 'The photo could not be saved, so printing was stopped.', error=True)
+            self._set_done(
+                t('popups.print_status.save_failed_title'),
+                t('popups.print_status.save_failed_message'),
+                error=True,
+            )
             return
 
         if time.monotonic() - self._started_at >= self._timeout:
-            self._set_print_error('The print operation timed out.')
+            self._set_print_error(t('popups.print_status.timed_out'))
             return
 
         if not self._print_started:
-            self.message.text = 'Sending photo to printer...'
+            self.message.text = t('popups.print_status.sending')
             try:
                 print_task_id = self.app.trigger_print(1, self.format_idx)
                 if print_task_id is None:
@@ -172,9 +177,9 @@ class PrintStatusPopup(FloatLayout):
                 Logger.warning('PrintStatusPopup: printer unavailable, waiting for recovery')
             waited = time.monotonic() - self._printer_wait_started_at
             remaining = max(0, int(self._timeout - waited))
-            self.message.text = f'Printer unavailable. Waiting for reconnection... {remaining}s'
+            self.message.text = t('popups.print_status.printer_unavailable', remaining=remaining)
             if waited >= self._timeout:
-                self._set_print_error('The printer did not reconnect in time.')
+                self._set_print_error(t('popups.print_status.printer_reconnect_failed'))
                 return
             self._clock = Clock.schedule_once(self._tick, 1)
             return
@@ -194,10 +199,10 @@ class PrintStatusPopup(FloatLayout):
             if not self._print_counted:
                 self.app.track_print_sent()
                 self._print_counted = True
-            self._set_done('PRINT SENT', 'The print job was sent to the printer.')
+            self._set_done(t('popups.print_status.sent_title'), t('popups.print_status.sent_message'))
             Clock.schedule_once(lambda dt: self._close(None), 2)
         else:
-            self.message.text = 'Printing...'
+            self.message.text = t('popups.print_status.printing')
             self._clock = Clock.schedule_once(self._tick, 1)
 
     def _close(self, obj):
@@ -299,7 +304,7 @@ class QRCodePopup(FloatLayout):
         for payload, _caption in steps:
             cls.preload_async(payload)
 
-    def __init__(self, steps, on_dismiss=None, title='SCAN ME', hint='', **kwargs):
+    def __init__(self, steps, on_dismiss=None, title=None, hint='', **kwargs):
         """`steps` is [(payload, caption), ...], shown side by side in order.
 
         Two of them is the normal case on a booth with its own access point:
@@ -309,6 +314,8 @@ class QRCodePopup(FloatLayout):
         super(QRCodePopup, self).__init__(**kwargs)
         self.on_dismiss = on_dismiss
         self.steps = list(steps)
+        if title is None:
+            title = t('popups.qr.default_title')
         self._close_scheduled = False
         
         # Semi-transparent overlay

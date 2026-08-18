@@ -10,6 +10,7 @@ from kivy.metrics import dp
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.floatlayout import FloatLayout
 
+from libs.i18n import t
 from libs.kivywidgets import BlurredImage, make_icon_button, make_icon_text_button
 from libs.file_utils import FileUtils
 from libs.screens.names import ScreenNames
@@ -59,7 +60,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
         self.btn_print = make_icon_text_button(
             icon=ICON_PRINT,
-            text='PRINT',
+            text=t('review.print'),
             size_hint=(0.16, 0.09),
             pos_hint={},
             icon_font=ICON_TTF,
@@ -74,7 +75,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         if self.app.SHARE:
             self.btn_share = make_icon_text_button(
                 icon=ICON_SHARE,
-                text='SHARE',
+                text=t('review.share'),
                 size_hint=(0.16, 0.09),
                 pos_hint={},
                 icon_font=ICON_TTF,

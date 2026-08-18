@@ -7,6 +7,7 @@ from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
 
+from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, RoundedButton
 from libs.screens.names import ScreenNames
 from libs.screens.theme import CONFIRM_COLOR, HOME_COLOR, ICON_ERROR, ICON_TTF, LARGE_FONT, SMALL_FONT, wh_bind
@@ -42,7 +43,7 @@ class ErrorScreen(ColorScreen):
 
         self.title = Label(
             size_hint=(1, 0.10),
-            text='Error',
+            text=t('error.title'),
             font_size=LARGE_FONT(),
             bold=True,
             halign='center',
@@ -54,7 +55,7 @@ class ErrorScreen(ColorScreen):
 
         self.message = Label(
             size_hint=(1, 0.24),
-            text='An error occurred.',
+            text=t('error.generic'),
             font_size=SMALL_FONT(),
             halign='center',
             valign='middle',
@@ -71,7 +72,7 @@ class ErrorScreen(ColorScreen):
         )
 
         self.btn_restart = RoundedButton(
-            text='RESTART',
+            text=t('error.restart'),
             size_hint=(1, 1),
             background_color=HOME_COLOR,
             font_size=SMALL_FONT(),
@@ -85,7 +86,7 @@ class ErrorScreen(ColorScreen):
         self.actions.add_widget(self.btn_restart)
 
         self.btn_continue = RoundedButton(
-            text='CONTINUE',
+            text=t('error.continue'),
             size_hint=(1, 1),
             background_color=CONFIRM_COLOR,
             font_size=SMALL_FONT(),
@@ -104,13 +105,13 @@ class ErrorScreen(ColorScreen):
 
     def on_entry(self, kwargs={}):
         Logger.info('ErrorScreen: on_entry().')
-        self.title.text = 'Error'
+        self.title.text = t('error.title')
         self.icon.text = str(kwargs.get('error', ICON_ERROR))
-        self.message.text = str(kwargs.get('message', 'An error occurred.'))
+        self.message.text = str(kwargs.get('message', t('error.generic')))
         self._show_continue = bool(kwargs.get('show_continue', True))
         self._show_restart = bool(kwargs.get('show_restart', False))
-        self.btn_continue.text = str(kwargs.get('continue_text', 'CONTINUE'))
-        self.btn_restart.text = str(kwargs.get('restart_text', 'RESTART'))
+        self.btn_continue.text = str(kwargs.get('continue_text', t('error.continue')))
+        self.btn_restart.text = str(kwargs.get('restart_text', t('error.restart')))
         self.btn_continue.opacity = 1 if self._show_continue else 0
         self.btn_continue.disabled = not self._show_continue
         self.btn_restart.opacity = 1 if self._show_restart else 0

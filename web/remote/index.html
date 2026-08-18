@@ -1,10 +1,10 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <meta name="theme-color" content="#26495c">
-    <title>PhotoBooth - Send a photo</title>
+    <title>PhotoBooth - {{ t('web.remote.title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         /* A page held in one hand, at arm's length, in a dark room: everything
@@ -179,8 +179,8 @@
 <body>
     <main class="remote-shell">
         <header class="remote-header">
-            <h1>Your phone is a camera</h1>
-            <p>Take a photo anywhere at the party, send it to the booth, then print it there.</p>
+            <h1>{{ t('web.remote.heading') }}</h1>
+            <p>{{ t('web.remote.subheading') }}</p>
         </header>
 
         <div id="feedback" class="feedback hidden" role="status" aria-live="polite"></div>
@@ -191,12 +191,12 @@
                  a booth on its own access point cannot offer, so the live view
                  below is only wired up when the page happens to have one. -->
             <div id="capture-step">
-                <label class="btn btn-capture btn-block" for="photo-input">Take a photo</label>
+                <label class="btn btn-capture btn-block" for="photo-input">{{ t('web.remote.take_photo') }}</label>
                 <input id="photo-input" type="file" accept="image/*" capture="environment" class="hidden">
                 <button id="live-button" type="button" class="btn btn-quiet btn-block hidden" style="margin-top: 10px;">
-                    Use the camera in this page
+                    {{ t('web.remote.use_live_camera') }}
                 </button>
-                <p class="hint">The photo stays on the booth and is deleted at the end of the event.</p>
+                <p class="hint">{{ t('web.remote.privacy_hint') }}</p>
             </div>
 
             <div id="live-step" class="hidden">
@@ -204,47 +204,49 @@
                     <video id="live-video" playsinline muted></video>
                 </div>
                 <div class="row">
-                    <button id="live-shoot" type="button" class="btn btn-capture">Shoot</button>
-                    <button id="live-cancel" type="button" class="btn btn-quiet">Cancel</button>
+                    <button id="live-shoot" type="button" class="btn btn-capture">{{ t('web.remote.shoot') }}</button>
+                    <button id="live-cancel" type="button" class="btn btn-quiet">{{ t('web.remote.cancel') }}</button>
                 </div>
             </div>
 
             <div id="review-step" class="hidden">
                 <div class="preview-frame">
-                    <img id="preview-image" alt="Photo to send">
+                    <img id="preview-image" alt="{{ t('web.remote.photo_to_send_alt') }}">
                 </div>
-                <button id="send-button" type="button" class="btn btn-send btn-block">Send to the booth</button>
+                <button id="send-button" type="button" class="btn btn-send btn-block">{{ t('web.remote.send_to_booth') }}</button>
                 <div class="row" style="margin-top: 10px;">
-                    <button id="retake-button" type="button" class="btn btn-quiet">Take another one</button>
+                    <button id="retake-button" type="button" class="btn btn-quiet">{{ t('web.remote.take_another') }}</button>
                 </div>
             </div>
         </section>
 
         <section class="card">
-            <h2>Photos you sent</h2>
+            <h2>{{ t('web.remote.sent_photos_heading') }}</h2>
             <div id="sent-list" class="sent-list"></div>
-            <p id="sent-empty" class="hint">Nothing sent yet. Your photos will appear here.</p>
+            <p id="sent-empty" class="hint">{{ t('web.remote.sent_empty') }}</p>
         </section>
 
         <p class="hint">
-            Up to {{ max_per_sender }} photos per phone, {{ max_upload_mb }} MB each.
-            {% if show_gallery_link %}<br><a href="/gallery">See the photos taken at the booth</a>{% endif %}
+            {{ t('web.remote.upload_limits', max_per_sender=max_per_sender, max_upload_mb=max_upload_mb) }}
+            {% if show_gallery_link %}<br><a href="/gallery">{{ t('web.remote.gallery_link') }}</a>{% endif %}
         </p>
 
         <!-- This network carries no internet, and Android says so with its own
              notification rather than anything this page can dismiss. Sending a
              photo quiets the connectivity probes on the server side, but the
              notification itself is only cleared by the guest, from the system
-             tray, tapping the option below. -->
+             tray. The option is named here in the phone's own language, which
+             is the only way a guest recognises it in their tray. -->
         <p class="hint">
-            If your phone warns that this WiFi has no internet, open the notification and choose
-            <strong>"Use this network as is"</strong> (Android: "Utiliser ce réseau tel quel").
+            {{ t('web.remote.no_internet_hint') }}
+            <strong>“{{ t('web.remote.no_internet_option') }}”</strong>
         </p>
     </main>
 
     <canvas id="scratch" class="hidden"></canvas>
 
     <script>
+        var I18N = {{ js_i18n|tojson }};
         (function () {
             'use strict';
 
@@ -278,9 +280,9 @@
             var liveStream = null;
 
             var STATUS_LABELS = {
-                pending: 'At the booth',
-                printed: 'Printed',
-                rejected: 'Removed'
+                pending: I18N.status_pending,
+                printed: I18N.status_printed,
+                rejected: I18N.status_rejected
             };
 
             function say(message, ok) {
@@ -366,7 +368,7 @@
                     return;
                 }
                 elements.send.disabled = true;
-                elements.send.textContent = 'Sending...';
+                elements.send.textContent = I18N.sending;
 
                 var payload = new FormData();
                 payload.append('photo', pendingBlob, 'phone.jpg');
@@ -379,23 +381,23 @@
                     })
                     .then(function (result) {
                         if (!result.ok) {
-                            say(result.body.error || 'The booth refused this photo.', false);
+                            say(result.body.error || I18N.refused, false);
                             return;
                         }
                         // The booth's WiFi carries no internet, so a guest who
                         // stays on it loses theirs without knowing why.
-                        say('Sent. Go to the booth to print it. You can leave this WiFi now.', true);
+                        say(I18N.sent_success, true);
                         pendingBlob = null;
                         releasePreview();
                         show('capture');
                         refreshSent();
                     })
                     .catch(function () {
-                        say('No connection to the booth. Stay on its WiFi and try again.', false);
+                        say(I18N.no_connection, false);
                     })
                     .then(function () {
                         elements.send.disabled = false;
-                        elements.send.textContent = 'Send to the booth';
+                        elements.send.textContent = I18N.send_to_booth;
                     });
             });
 
@@ -423,7 +425,7 @@
                         clearFeedback();
                         show('live');
                     }).catch(function () {
-                        say('The camera could not be opened. Use "Take a photo" instead.', false);
+                        say(I18N.camera_open_failed, false);
                     });
                 });
 
@@ -451,7 +453,7 @@
                 fetch('/remote/photo/' + encodeURIComponent(id), { method: 'DELETE' })
                     .then(refreshSent)
                     .catch(function () {
-                        say('Could not remove that photo.', false);
+                        say(I18N.withdraw_failed, false);
                     });
             }
 
@@ -465,7 +467,7 @@
 
                     var image = document.createElement('img');
                     image.src = '/remote/photo/' + encodeURIComponent(photo.id) + '?size=small';
-                    image.alt = 'Photo sent at ' + photo.received_at;
+                    image.alt = I18N.photo_sent_at_alt + ' ' + photo.received_at;
                     item.appendChild(image);
 
                     var meta = document.createElement('div');
@@ -480,7 +482,7 @@
                         var remove = document.createElement('button');
                         remove.type = 'button';
                         remove.className = 'link-button';
-                        remove.textContent = 'Remove';
+                        remove.textContent = I18N.remove;
                         remove.addEventListener('click', function () { withdraw(photo.id); });
                         meta.appendChild(document.createElement('br'));
                         meta.appendChild(remove);

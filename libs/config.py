@@ -3,6 +3,8 @@ import ast
 import logging
 from pathlib import Path
 
+from libs.i18n import AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE
+
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / 'config.ini'
 
@@ -51,6 +53,14 @@ class Config:
 
     def get_ringled(self):
         return self._get_boolean(('Global',), 'RINGLED', fallback=False)
+
+    def get_language(self):
+        """Interface language: the booth's screen, and the admin web pages."""
+        language = self._get_string(('Global',), 'LANGUAGE', fallback=DEFAULT_LANGUAGE).strip().lower()
+        if language not in AVAILABLE_LANGUAGES:
+            Logger.warning('Config: unknown LANGUAGE=%r, falling back to %r', language, DEFAULT_LANGUAGE)
+            return DEFAULT_LANGUAGE
+        return language
 
     def get_admin_password(self):
         password = self._get_string(('Global',), 'ADMIN_PASSWORD', fallback='').strip()

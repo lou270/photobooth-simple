@@ -9,6 +9,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.image import Image
 from kivy.uix.label import Label
 
+from libs.i18n import t
 from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba
 from libs.screens.names import ScreenNames
 from libs.screens.theme import BORDER_THINKNESS, SMALL_FONT, wh_bind
@@ -223,8 +224,9 @@ class SelectFormatScreen(ColorScreen):
         
         # Number of photos
         num_photos = format_template.get_photos_required()
+        photo_count_key = 'select_format.photo_count_plural' if num_photos > 1 else 'select_format.photo_count_singular'
         photos_label = ResizeLabel(
-            text=f"{num_photos} photo{'s' if num_photos > 1 else ''}",
+            text=t(photo_count_key, count=num_photos),
             size_hint=(1, 0.1),
             wh_fraction=0.018,
             halign='center',

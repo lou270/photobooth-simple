@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -13,8 +13,8 @@
 </head>
 <body>
     <main class="centered">
-        <h1>Sending photos is off</h1>
-        <p>This booth is not taking photos from phones right now. Come and use the booth itself.</p>
+        <h1>{{ t('web.remote.disabled_title') }}</h1>
+        <p>{{ t('web.remote.disabled_message') }}</p>
     </main>
 </body>
 </html>

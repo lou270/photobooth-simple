@@ -8,6 +8,7 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 
+from libs.i18n import t
 from libs.kivywidgets import KivyCamera, BackgroundBoxLayout, ResizeLabel, LabelRoundButton, RotatingLabel, CircularProgressCounter, make_icon_button
 from libs.screens.names import ScreenNames
 from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, COUNTDOWN_HOME_TIMEOUT_SECONDS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, SHOT_TIMEOUT_SECONDS
@@ -202,7 +203,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
                     self.overlay_layout.remove_widget(self.btn_trigger)
                 self.overlay_layout.add_widget(self.loading_layout)
             except:
-                return self.app.transition_to(ScreenNames.ERROR, message='Unable to start photo capture.')
+                return self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_start_failed'))
 
     def timer_bg(self, obj):
         self.camera.opacity = 0
@@ -216,7 +217,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
                 if hasattr(self.app, 'recover_devices_and_return_home'):
                     self.app.recover_devices_and_return_home(reason='capture_timeout')
                 else:
-                    self.app.transition_to(ScreenNames.ERROR, message='Photo capture took too long.')
+                    self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_timeout'))
             else:
                 # Retry after 1sec
                 self._clock_trigger = Clock.schedule_once(self.timer_trigger, 1)
@@ -228,7 +229,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             if hasattr(self.app, 'recover_devices_and_return_home'):
                 self.app.recover_devices_and_return_home(reason='capture_failure')
             else:
-                self.app.transition_to(ScreenNames.ERROR, message='Photo capture failed.')
+                self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_failed'))
         else:
             # Display photo for validation
             self.app.transition_to(ScreenNames.CONFIRM_CAPTURE, shot=self._current_shot, format=self._current_format)
