@@ -103,3 +103,26 @@ def test_a_corrupted_embedded_layer_is_skipped_instead_of_raising(photo):
     canvas = collage.assemble([photo])
 
     assert canvas.shape == (PAGE['height'], PAGE['width'], 3)
+
+
+# --- a look chosen on the review screen ------------------------------------
+
+def test_a_photo_filter_is_applied_to_the_photos(photo):
+    collage = template()
+
+    plain = collage.assemble([photo])
+    grey = collage.assemble([photo], photo_filter=lambda image: image * 0)
+
+    assert plain[50, 50].tolist() != grey[50, 50].tolist()
+    assert grey[50, 50].tolist() == [0, 0, 0]
+
+
+def test_a_photo_filter_leaves_the_template_alone(photo):
+    """A frame that turned grey with the faces is a change nobody asked for."""
+    collage = template(background=png_data_uri(PAGE['width'], PAGE['height'], channels=3))
+
+    plain = collage.assemble([photo])
+    filtered = collage.assemble([photo], photo_filter=lambda image: image * 0)
+
+    # A corner the photo does not reach: background only.
+    assert filtered[190, 290].tolist() == plain[190, 290].tolist()

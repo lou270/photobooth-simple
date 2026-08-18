@@ -214,7 +214,7 @@ class TemplateCollage:
         self._preview_cache = tmp_output
         return tmp_output
     
-    def assemble(self, image_paths, output_path=None, for_print=False):
+    def assemble(self, image_paths, output_path=None, for_print=False, photo_filter=None):
         """
         Assemble photos into a collage based on the template.
         Simple approach: create canvas, apply background, paste photos (clipping if needed), apply foreground.
@@ -223,6 +223,9 @@ class TemplateCollage:
             image_paths: List of paths to input images
             output_path: Optional path to save the output
             for_print: If True, apply duplication for printing. If False (default), don't duplicate.
+            photo_filter: Optional callable applied to each photo as it is read.
+                Photos only: a frame or a logo that turned grey along with the
+                faces would be a change the guest never asked for.
             
         Returns:
             The assembled collage as a numpy array
@@ -250,6 +253,9 @@ class TemplateCollage:
             if img is None:
                 Logger.warning(f'Could not load image: {image_paths[i]}')
                 continue
+
+            if photo_filter is not None:
+                img = photo_filter(img)
             
             # Get photo specifications
             x = photo_spec['x']

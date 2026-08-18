@@ -1,24 +1,20 @@
-"""Keeping or retaking the shot that was just taken, and picking a filter."""
+"""Keeping or retaking the shot that was just taken."""
 
 import threading
 import cv2
 
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.graphics import Color
-from kivy.graphics.texture import Texture
 from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
-from kivy.uix.image import Image
 
-from libs.kivywidgets import BlurredImage, FeedbackButtonBehavior, ResizeLabel, make_icon_button, hex_to_rgba
+from libs.kivywidgets import BlurredImage, ResizeLabel, make_icon_button
 from libs.file_utils import FileUtils
-from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_AUTO_KEEP_SECONDS, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
+from libs.screens.theme import BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_AUTO_KEEP_SECONDS, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
@@ -31,6 +27,10 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
     |                 |
     | NO          YES |
     +-----------------+
+
+    One question only: keep this one, or take it again. Choosing a look for the
+    photos is the review screen's job, where it is decided once for the whole
+    collage instead of once per shot, with the result in front of the guest.
     """
     def __init__(self, app, **kwargs):
         Logger.info('ConfirmCaptureScreen: __init__().')
@@ -39,8 +39,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self.app = app
         self._current_shot = 0
         self._current_format = 1
-        self._selected_filter = DEFAULT_FILTER  # Kept for the whole session
-        self._original_image = None  # Store original image
         self._auto_keep_clock = None
         self._auto_keep_progress_clock = None
         self._auto_keep_started_at = 0.0
@@ -50,7 +48,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self.overlay_layout = FloatLayout()
         self.layout.add_widget(self.overlay_layout)
 
-        # Display capture - always full size regardless of filters
+        # Display capture
         self.preview = BlurredImage(
             blur=self.app.BLUR_IMAGES,
             fit_mode='contain',
@@ -76,56 +74,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
             self.counter_layout.add_widget(icon)
             self.icons.append(icon)
         self.overlay_layout.add_widget(self.counter_layout)
-
-        # Filter cards container at bottom (always created in absolute position)
-        from kivy.uix.scrollview import ScrollView
-        
-        # Outer container to center the scroll view - in absolute position
-        self.filter_outer = AnchorLayout(
-            size_hint=(1, 0.20),
-            pos_hint={'x': 0, 'y': 0},
-            anchor_x='center',
-            anchor_y='center',
-            opacity=1 if self.app.FILTERS_ENABLED else 0,
-        )
-        
-        self.filter_scroll = ScrollView(
-            size_hint=(None, 1),
-            do_scroll_x=True,
-            do_scroll_y=False,
-        )
-        
-        self.filter_container = BoxLayout(
-            orientation='horizontal',
-            spacing=Window.height * 0.017,
-            padding=(Window.height * 0.022, Window.height * 0.011, Window.height * 0.022, Window.height * 0.011),
-            size_hint=(None, 1),
-        )
-        self.filter_container.bind(minimum_width=self.filter_container.setter('width'))
-        
-        # Update scroll view width based on container width
-        def update_scroll_width(instance, value):
-            # Limit scroll view width to avoid overlapping with confirm/cancel buttons
-            # Buttons are 14% of width each, positioned at edges with 5% margin
-            # So we need to leave space for: 5% + 14% on each side = 38% total
-            # Plus some padding: use 70% of window width maximum
-            max_available_width = Window.width * 0.70
-            max_width = min(max_available_width, value)
-            self.filter_scroll.width = max_width
-        
-        self.filter_container.bind(minimum_width=update_scroll_width)
-        
-        self.filter_scroll.add_widget(self.filter_container)
-        self.filter_outer.add_widget(self.filter_scroll)
-        self.overlay_layout.add_widget(self.filter_outer)
-        
-        # Create filter cards (even if filters are disabled, to maintain consistent layout)
-        self.filter_cards = []
-        if self.app.FILTERS_ENABLED:
-            for filter_def in FILTERS:
-                card = self._create_filter_card(filter_def)
-                self.filter_container.add_widget(card)
-                self.filter_cards.append(card)
 
         # Home button - top left
         # No ring on this one: the walk-away timeout is only a safety net here,
@@ -168,135 +116,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self.overlay_layout.add_widget(self.btn_confirm)
 
         self.add_widget(self.layout)
-
-    def _create_filter_card(self, filter_def):
-        """Create a card for a specific filter."""
-        from kivy.graphics import RoundedRectangle
-        
-        class ClickableCard(FeedbackButtonBehavior, BoxLayout):
-            pass
-        
-        card_size = Window.height * 0.18
-        card = ClickableCard(
-            orientation='vertical',
-            size_hint=(None, None),
-            size=(card_size, card_size),
-            padding=Window.height * 0.009,
-        )
-        
-        # Draw rounded card background
-        with card.canvas.before:
-            Color(*hex_to_rgba('#3d4f5c'))
-            card_bg = RoundedRectangle(
-                pos=card.pos,
-                size=card.size,
-                radius=[Window.height * 0.017,]
-            )
-            # Selection indicator (initially hidden)
-            card.selection_color = Color(0, 0, 0, 0)
-            card.selection_rect = RoundedRectangle(
-                pos=card.pos,
-                size=card.size,
-                radius=[Window.height * 0.017,]
-            )
-        
-        # Bind to update background when card size/pos changes
-        def update_card_bg(instance, value):
-            card_bg.pos = instance.pos
-            card_bg.size = instance.size
-            card.selection_rect.pos = instance.pos
-            card.selection_rect.size = instance.size
-        card.bind(pos=update_card_bg, size=update_card_bg)
-        
-        # Preview container for filter thumbnail
-        preview_container = AnchorLayout(
-            size_hint=(1, 1),
-            anchor_x='center',
-            anchor_y='center',
-        )
-        
-        # Thumbnail image (will be generated on entry)
-        card.thumbnail = Image(
-            size_hint=(None, None),
-            size=(card_size - Window.height * 0.011, card_size - Window.height * 0.011),
-            fit_mode='contain',
-        )
-        
-        preview_container.add_widget(card.thumbnail)
-        card.add_widget(preview_container)
-        
-        # Store filter info
-        card.filter_key = filter_def['key']
-        card.bind(on_release=self.on_filter_selected)
-        
-        return card
-    
-    def _generate_thumbnail(self, img, filter_key, size=None):
-        """Generate a thumbnail with the filter applied."""
-        if size is None:
-            thumb = int(Window.height * 0.12)
-            size = (thumb, thumb)
-        # Resize image for thumbnail
-        h, w = img.shape[:2]
-        aspect = w / h
-        if aspect > 1:
-            new_w = size[0]
-            new_h = int(size[0] / aspect)
-        else:
-            new_h = size[1]
-            new_w = int(size[1] * aspect)
-        
-        thumbnail = cv2.resize(img, (new_w, new_h), interpolation=cv2.INTER_AREA)
-        
-        # Apply filter
-        filtered = apply_filter(thumbnail, filter_key)
-        
-        return filtered
-    
-    def _update_filter_thumbnails(self):
-        """Generate thumbnails for all filters based on current image."""
-        if self._original_image is None:
-            return
-
-        thumbnails = []
-        for card in self.filter_cards:
-            thumbnails.append(self._generate_thumbnail(self._original_image, card.filter_key))
-
-        self._set_filter_thumbnails(thumbnails)
-
-    def _set_filter_thumbnails(self, thumbnails):
-        for card, thumbnail in zip(self.filter_cards, thumbnails):
-            # Convert to texture
-            thumbnail_flipped = cv2.flip(thumbnail, 0)
-            texture = Texture.create(size=(thumbnail.shape[1], thumbnail.shape[0]), colorfmt='bgr')
-            texture.blit_buffer(thumbnail_flipped.flatten(), colorfmt='bgr', bufferfmt='ubyte')
-            card.thumbnail.texture = texture
-    
-    def _update_selection_indicator(self):
-        """Update visual indicator for selected filter."""
-        for card in self.filter_cards:
-            if card.filter_key == self._selected_filter:
-                # Show selection with border color
-                card.selection_color.rgba = BORDER_COLOR
-            else:
-                # Hide selection
-                card.selection_color.rgba = (0, 0, 0, 0)
-    
-    def on_filter_selected(self, obj):
-        """Handle filter selection."""
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
-        Logger.info(f'ConfirmCaptureScreen: on_filter_selected({obj.filter_key}).')
-        
-        self._selected_filter = obj.filter_key
-        self._update_selection_indicator()
-        self._start_auto_keep()
-        
-        # Apply filter to preview
-        if self._original_image is not None:
-            filtered_image = apply_filter(self._original_image.copy(), self._selected_filter)
-
-            # Update preview directly in memory to avoid temp files.
-            self.preview.set_image(filtered_image)
 
     # --- keeping the shot without being asked ----------------------------
 
@@ -342,12 +161,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         Logger.info('ConfirmCaptureScreen: on_entry().')
         self._current_shot = kwargs.get('shot') if 'shot' in kwargs else 0
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
-        # The filter follows the guest through the session: picking black and
-        # white four times in a row was a chore, and forgetting once produced a
-        # collage with one photo out of step.
-        if self._current_shot == 0:
-            self._selected_filter = DEFAULT_FILTER
-        self._original_image = None
         self._stop_auto_keep()
 
         # Hide counter layout when only one photo is needed
@@ -363,47 +176,27 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
 
         load_id = (self._current_shot, self._current_format)
 
-        def load_images():
-            shot, fmt = self._current_shot, self._current_format
+        def load_image():
+            shot = self._current_shot
             small_path = FileUtils.get_small_path(self.app.get_shot(shot))
-            full_path = self.app.get_shot(shot)
             small_im = cv2.imread(small_path)
-            full_im = cv2.imread(full_path) if self.app.FILTERS_ENABLED else None
-            thumbnails = []
-            if self.app.FILTERS_ENABLED and full_im is not None:
-                thumbnails = [self._generate_thumbnail(full_im, card.filter_key) for card in self.filter_cards]
 
             def apply_on_main(dt):
                 if (self._current_shot, self._current_format) != load_id:
                     return
-                self._original_image = full_im
                 if small_im is not None:
-                    preview_im = small_im
-                    if self.app.FILTERS_ENABLED and self._selected_filter != DEFAULT_FILTER:
-                        preview_im = apply_filter(small_im.copy(), self._selected_filter)
-                    self.preview.set_image(preview_im)
+                    self.preview.set_image(small_im)
                 else:
                     self.preview.filepath = small_path
                     self.preview.reload()
-                if thumbnails:
-                    self._set_filter_thumbnails(thumbnails)
-                    self._update_selection_indicator()
                 # Counted from the moment the guest can actually see the photo,
                 # not from a screen that is still loading it.
                 self._start_auto_keep()
 
             Clock.schedule_once(apply_on_main, 0)
 
-        threading.Thread(target=load_images, daemon=True).start()
+        threading.Thread(target=load_image, daemon=True).start()
         self._start_home_timeout()
-
-    def _save_selected_filter(self, shot, filter_key, original_image):
-        filtered_image = apply_filter(original_image.copy(), filter_key)
-        shot_path = self.app.get_shot(shot)
-        FileUtils.write_image(shot_path, filtered_image)
-        small_path = FileUtils.get_small_path(shot_path)
-        small_filtered = cv2.resize(filtered_image, (0, 0), fx=0.3, fy=0.3)
-        FileUtils.write_image(small_path, small_filtered)
 
     def on_exit(self, kwargs={}):
         Logger.info('ConfirmCaptureScreen: on_exit().')
@@ -414,11 +207,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         self._stop_auto_keep()
         self._stop_home_timeout()
-        
-        # Apply selected filter off the UI thread; Processing waits before building the collage.
-        if self.app.FILTERS_ENABLED and self._selected_filter != DEFAULT_FILTER and self._original_image is not None:
-            self.app.start_photo_task(self._save_selected_filter, self._current_shot, self._selected_filter, self._original_image)
-        
+
         if self._current_shot == self.app.get_shots_to_take(self._current_format) - 1:
             self.app.transition_to(ScreenNames.PROCESSING, format=self._current_format)
         else:

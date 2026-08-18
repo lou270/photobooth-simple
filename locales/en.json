@@ -21,11 +21,6 @@
     "progress": "Copying {label}",
     "initial": "-"
   },
-  "collect": {
-    "title": "YOUR PHOTO IS ON ITS WAY",
-    "message": "Pick it up at the printer.",
-    "hint": "Touch the screen to continue"
-  },
   "error": {
     "title": "Error",
     "generic": "An error occurred.",
@@ -34,7 +29,8 @@
   },
   "review": {
     "print": "PRINT",
-    "share": "SHARE"
+    "share": "SHARE",
+    "copies": "COPIES"
   },
   "remote_gallery": {
     "title": "PHOTOS FROM PHONES",
@@ -53,9 +49,7 @@
       "sending": "Sending photo to printer...",
       "printer_unavailable": "Printer unavailable. Waiting for reconnection... {remaining}s",
       "printer_reconnect_failed": "The printer did not reconnect in time.",
-      "sent_title": "PRINT SENT",
-      "sent_message": "The print job was sent to the printer.",
-      "printing": "Printing..."
+      "printing": "Your photo is coming out of the printer."
     },
     "qr": {
       "default_title": "SCAN ME"

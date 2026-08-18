@@ -177,6 +177,14 @@ class Config:
             Logger.warning('Config: invalid MAX_PRINTS=%r, printing left unlimited', max_prints)
             return None
 
+    def get_max_copies(self):
+        """How many copies of one collage a guest may ask for in a single job.
+
+        Not a quota: MAX_PRINTS is what limits the paper. This only bounds the
+        stepper on the review screen, so a mistouch cannot empty a ribbon.
+        """
+        return min(10, max(1, self._get_int(('Print', 'Picture'), 'MAX_COPIES', fallback=3)))
+
     def get_camera_backend(self):
         backend = self._get_string(('Capture',), 'CAMERA', fallback='auto').strip().lower()
         if backend not in CAMERA_BACKENDS:

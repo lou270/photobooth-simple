@@ -58,26 +58,20 @@ The photobooth application follows this screen navigation flow:
                                │ Done                   │
                                ▼                        │
                         ┌─────────────┐                 │
-                        │   Review    │                 │
-                        │   Screen    │                 │
+                        │   Review    │ look, copies,   │
+                        │   Screen    │ print, share    │
                         └──┬────┬───┬─┘                 │
                            │    │   │                   │
                       Print│    │   │Share              │
                            ▼    │   ▼                   │
                     ┌──────────┐│┌──────────┐           │
                     │  Print   │││ QR Code  │           │
-                    │  Popup   │││  Popup   │           │
+                    │ animation│││  Popup   │           │
                     └────┬─────┘│└────┬─────┘           │
-                         │Close │Close│                 │
+                         │Done  │Close│                 │
                          └──────┴─────┘                 │
                                 │ Home                  │
-                                ▼                       │
-                         ┌─────────────┐                │
-                         │   Collect   │────────────────┘
-                         │ (if printed)│                │
-                         └─────────────┘                │
-                                                        │
-                          Home without printing ────────┘
+                                └───────────────────────┘
                                                         │
                                                         │
            ┌─────────────┐                              │
@@ -96,13 +90,12 @@ picking one there joins the flow at the Processing Screen.
 - **Start Screen:** Initial screen with "Press to begin" prompt
 - **Select Format Screen:** Choose between different photo layouts/formats. Skipped when a single template is installed, since there is nothing to choose
 - **Countdown Screen:** Live camera preview with countdown timer before capture. The first shot waits to be asked; the following ones start on their own, and the button under the preview cancels
-- **Confirm Capture Screen:** Review and validate the captured photo. Keeping it is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press. The chosen filter is kept for the rest of the session
+- **Confirm Capture Screen:** Keep the shot or take it again — nothing else. Keeping is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press
 - **Processing Screen:** Collage generation in progress
-- **Review Screen:** Final saved-collage screen with available actions: print, share, or go home
-- **Print Popup:** Shows print progress and reports print errors while keeping the saved photo available
+- **Review Screen:** The finished collage and everything still open: the filter, applied to the whole collage and previewed live; the number of copies; print, share, or go home. The session is written to disk when the guest prints or leaves, so what is saved is what they chose
+- **Print Popup:** A sheet coming out of a printer for as long as the job takes, then it closes on its own. It only asks for a tap when the print failed, in which case it says so and the photo is still saved
 - **QR Code Popup:** Shows the sharing QR code without leaving the review screen
 - **Remote Gallery Screen:** Photos guests sent from their phone, waiting to be printed (see [Phone as a remote camera](#phone-as-a-remote-camera))
-- **Collect Screen:** Shown only after a print was sent: tells the guest their photo is on its way out of the printer, and frees the booth on a touch or after a few seconds
 - **Error Screen:** Displayed when an error occurs during the process
 - **Maintenance Screen:** Displayed for operator intervention, such as storage, camera, web server, printer, or USB export issues
 

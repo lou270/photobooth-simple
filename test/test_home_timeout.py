@@ -139,41 +139,6 @@ def test_only_the_countdown_owns_the_ring():
     assert ReviewScreen.HOME_TIMEOUT_HIDES_RING is False
 
 
-# --- leaving the review ----------------------------------------------------
-
-class Leaving:
-    """Just enough of a review screen to ask it where the guest goes next."""
-
-    _leave = ReviewScreen._leave
-    _home_timeout_event = ReviewScreen._home_timeout_event
-
-    def __init__(self, app, printed):
-        self.app = app
-        self._printed = printed
-
-    def _stop_home_timeout(self):
-        pass
-
-
-def test_a_guest_who_printed_is_told_where_the_photo_comes_out(app):
-    Leaving(app, printed=True)._leave()
-
-    assert app.transitions == [ScreenMgr.COLLECT]
-
-
-def test_a_guest_who_printed_nothing_is_not_sent_to_wait_for_a_print(app):
-    Leaving(app, printed=False)._leave()
-
-    assert app.transitions == [ScreenMgr.START]
-
-
-def test_the_timeout_and_the_home_button_leave_the_same_way(app):
-    """They used to disagree: one celebrated, the other went straight home."""
-    Leaving(app, printed=True)._home_timeout_event(0)
-
-    assert app.transitions == [ScreenMgr.COLLECT]
-
-
 # --- keeping a shot without being asked ------------------------------------
 
 class Deciding:

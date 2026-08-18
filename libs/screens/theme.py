@@ -54,8 +54,9 @@ SHOT_AUTOSTART_SECONDS = 1.5
 # Keeping the shot is what nearly everyone does; retaking is the exception, so
 # it is the one that needs a button press. Any touch on the screen restarts it.
 CONFIRM_AUTO_KEEP_SECONDS = 6
-# Long enough for a dye-sub printer to actually hand the print over.
-COLLECT_SECONDS = 10
+# A beat between the printer taking the job and the popup getting out of the
+# way, so the animation does not cut mid-sheet.
+PRINT_DONE_SECONDS = 0.8
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
@@ -88,6 +89,7 @@ HOME_PROGRESS_COLOR = darken_rgba(HOME_COLOR) #lighten_rgba(HOME_COLOR)
 CONFIRM_PROGRESS_COLOR = darken_rgba(CONFIRM_COLOR)
 BADGE_COLOR = hex_to_rgba('#8b4846')
 SHARE_COLOR = hex_to_rgba('#667eea')
+STEPPER_COLOR = hex_to_rgba('#4a5c6a')
 REMOTE_COLOR = hex_to_rgba('#4a7c8c')
 
 # Icons
@@ -104,9 +106,9 @@ ICON_CONFIRM = '\u4908'
 ICON_CANCEL = '\u3d42'
 ICON_HOME = '\u4161'
 ICON_PRINT = '\u458e'
-ICON_SUCCESS = '\u4903'
-ICON_SUCCESS2 = '\u4304'
 ICON_USB = '\u49ba'
 ICON_TRIGGER = '\u3d3e'
 ICON_QRCODE = '\u45f4'
 ICON_SHARE = '\u46d4'
+ICON_MINUS = '\u43b0'
+ICON_PLUS = '\u3aa9'

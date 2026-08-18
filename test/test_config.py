@@ -140,3 +140,20 @@ def test_an_empty_booth_address_falls_back_to_guessing(tmp_path, monkeypatch):
         WIFI_AP_ADDRESS =
     """)
     assert config.get_wifi_ap_address() == ''
+
+
+def test_max_copies_defaults_to_three(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Print]
+    """)
+
+    assert config.get_max_copies() == 3
+
+
+def test_max_copies_is_clamped_to_something_a_guest_could_want(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Print]
+        MAX_COPIES = 99
+    """)
+
+    assert config.get_max_copies() == 10

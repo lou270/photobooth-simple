@@ -3,11 +3,12 @@
 import sys
 from pathlib import Path
 
+import cv2
 import numpy as np
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter, filter_keys
+from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter, apply_filter_to_file, filter_keys
 
 
 def photo(height=48, width=64):
@@ -78,3 +79,24 @@ def test_the_catalogue_is_complete_and_unique():
 def test_filters_survive_a_single_pixel_photo(key):
     """Thumbnails get small when the window does."""
     assert apply_filter(photo(height=1, width=1), key).shape == (1, 1, 3)
+
+
+# --- rewriting a capture the guest chose a look for ------------------------
+
+def test_a_capture_is_rewritten_with_its_small_copy(tmp_path):
+    """The gallery shows the captures too: they cannot stay in colour."""
+    path = tmp_path / 'capture-0.jpg'
+    small = tmp_path / 'capture-0_small.jpg'
+    cv2.imwrite(str(path), photo(height=120, width=160))
+
+    assert apply_filter_to_file(str(path), 'bw', small_path=str(small))
+
+    rewritten = cv2.imread(str(path))
+    blue, green, red = cv2.split(rewritten)
+    assert np.array_equal(blue, green) and np.array_equal(green, red)
+    assert small.exists()
+    assert cv2.imread(str(small)).shape[0] < rewritten.shape[0]
+
+
+def test_a_capture_that_cannot_be_read_is_reported(tmp_path):
+    assert apply_filter_to_file(str(tmp_path / 'missing.jpg'), 'sepia') is False

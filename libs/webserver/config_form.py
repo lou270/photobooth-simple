@@ -113,6 +113,7 @@ CONFIG_FORM_SECTIONS = (
         'fields': (
             {'section': 'Print', 'option': 'PRINTER', 'label': 'Printer name', 'control': 'text', 'placeholder': 'None', 'none_means_empty': True, 'help': 'Leave empty to disable printing.'},
             {'section': 'Print', 'option': 'MAX_PRINTS', 'label': 'Maximum prints', 'control': 'number', 'number_type': 'optional_int', 'min': 0, 'step': 1, 'placeholder': 'Unlimited', 'help': 'Leave empty for unlimited prints.'},
+            {'section': 'Print', 'option': 'MAX_COPIES', 'label': 'Maximum copies per print', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 10, 'step': 1, 'help': 'Copies a guest can ask for at once. Set to 1 to hide the selector.'},
             {'section': 'Print', 'option': 'PRINTER_WAIT_TIMEOUT', 'label': 'Printer wait timeout (seconds)', 'control': 'number', 'number_type': 'int', 'min': 5, 'step': 1},
             {'section': 'USB', 'option': 'USB_EXPORT', 'label': 'USB export', 'control': 'checkbox', 'help': 'Automatically copy saved sessions to removable USB media.'},
             {'section': 'USB', 'option': 'USB_MIN_FREE_GB', 'label': 'USB minimum free space (GB)', 'control': 'number', 'number_type': 'float', 'min': 0, 'step': 0.1},

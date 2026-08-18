@@ -159,5 +159,12 @@ class StatsStore:
     def can_print(self):
         return not self.get_print_limit_info()['reached']
 
-    def track_print(self):
-        self.track_event('print')
+    def track_print(self, copies=1):
+        """Count a print job. A job of three copies eats three prints of the quota."""
+        copies = max(1, int(copies))
+
+        def change(stats):
+            stats['prints'] = stats.get('prints', 0) + copies
+            stats['last_print_date'] = datetime.now().isoformat()
+
+        self._mutate(change)

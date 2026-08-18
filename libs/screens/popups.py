@@ -17,19 +17,27 @@ from kivy.uix.label import Label
 from kivy.core.image import Image as CoreImage
 
 from libs.i18n import t
-from libs.kivywidgets import ResizeLabel, make_icon_button, make_icon_text_button
-from libs.screens.theme import CANCEL_COLOR, CONFIRM_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_ERROR_PRINTING, ICON_PRINT, ICON_SUCCESS, ICON_TTF, SMALL_FONT, wh_bind
+from libs.kivywidgets import PaperFeedAnimation, ResizeLabel, make_icon_button, make_icon_text_button
+from libs.screens.theme import CANCEL_COLOR, CONFIRM_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, SMALL_FONT, wh_bind
 
 
 class PrintStatusPopup(FloatLayout):
-    """Non-blocking print overlay; the underlying confirm screen keeps all actions available after closing."""
+    """What a guest watches while their photo prints.
 
-    def __init__(self, app, format_idx, on_dismiss=None, on_printed=None, **kwargs):
+    A print takes about as long as it takes to read one sentence, so there is
+    nothing to confirm afterwards: the sheet animation plus the line telling the
+    guest where the photo comes out is the whole message, and the popup closes
+    itself once the printer has the job. Only a failure keeps the guest here,
+    because a failure is the one case where they have to be told something they
+    cannot see happening.
+    """
+
+    def __init__(self, app, format_idx, copies=1, on_dismiss=None, **kwargs):
         super(PrintStatusPopup, self).__init__(**kwargs)
         self.app = app
         self.format_idx = format_idx
+        self.copies = max(1, int(copies))
         self.on_dismiss = on_dismiss
-        self.on_printed = on_printed
         self._clock = None
         self._close_scheduled = False
         self._started_at = time.monotonic()
@@ -58,16 +66,21 @@ class PrintStatusPopup(FloatLayout):
             self.card_rect = RoundedRectangle(pos=self.card.pos, size=self.card.size, radius=[Window.height * 0.022])
         self.card.bind(pos=self._update_card, size=self._update_card)
 
+        # The printer sits on top of the sheet coming out of it: the animation
+        # draws on canvas.before, the icon is a child, children win.
+        self.animation = PaperFeedAnimation(size_hint=(1, 0.42))
         self.icon = ResizeLabel(
             text=ICON_PRINT,
             font_name=ICON_TTF,
-            size_hint=(1, 0.28),
-            wh_fraction=0.14,
+            size_hint=(1, 0.72),
+            pos_hint={'center_x': 0.5, 'top': 1},
+            wh_fraction=0.12,
             color=(0, 0, 0, 1),
             halign='center',
             valign='middle',
         )
-        self.card.add_widget(self.icon)
+        self.animation.add_widget(self.icon)
+        self.card.add_widget(self.animation)
 
         self.title = ResizeLabel(
             text=t('popups.print_status.title'),
@@ -123,10 +136,12 @@ class PrintStatusPopup(FloatLayout):
         self.card_rect.pos = instance.pos
         self.card_rect.size = instance.size
 
-    def _set_done(self, title, message, error=False):
+    def _fail(self, title, message):
+        """Stop on a failure, with the one button that has to be pressed."""
+        self.animation.stop()
         self.title.text = title
         self.message.text = message
-        self.icon.text = ICON_ERROR_PRINTING if error else ICON_SUCCESS
+        self.icon.text = ICON_ERROR_PRINTING
         self.btn_close.opacity = 1
         self.btn_close.disabled = False
         self._clock = None
@@ -136,7 +151,7 @@ class PrintStatusPopup(FloatLayout):
         if detail:
             message = f'{message}\n{detail}'
         Logger.error('PrintStatusPopup: print failed: %s', detail or '-')
-        self._set_done(t('popups.print_status.print_failed_title'), message, error=True)
+        self._fail(t('popups.print_status.print_failed_title'), message)
 
     def _tick(self, obj):
         if self.app.has_pending_photo_tasks():
@@ -148,10 +163,9 @@ class PrintStatusPopup(FloatLayout):
         if pending_error:
             Logger.error('PrintStatusPopup: save before print failed.')
             Logger.error(pending_error)
-            self._set_done(
+            self._fail(
                 t('popups.print_status.save_failed_title'),
                 t('popups.print_status.save_failed_message'),
-                error=True,
             )
             return
 
@@ -162,7 +176,7 @@ class PrintStatusPopup(FloatLayout):
         if not self._print_started:
             self.message.text = t('popups.print_status.sending')
             try:
-                print_task_id = self.app.trigger_print(1, self.format_idx)
+                print_task_id = self.app.trigger_print(self.copies, self.format_idx)
                 if print_task_id is None:
                     raise RuntimeError('Printer did not return a task id')
                 self._print_task_id = print_task_id
@@ -198,12 +212,12 @@ class PrintStatusPopup(FloatLayout):
         Logger.info('PrintStatusPopup: print status task=%s status=%s', self._print_task_id, status)
         if status == 'done':
             if not self._print_counted:
-                self.app.track_print_sent()
+                self.app.track_print_sent(self.copies)
                 self._print_counted = True
-                if self.on_printed:
-                    self.on_printed()
-            self._set_done(t('popups.print_status.sent_title'), t('popups.print_status.sent_message'))
-            Clock.schedule_once(lambda dt: self._close(None), 2)
+            # Nothing more to say: the line already on screen says where the
+            # photo comes out, and it is coming out as the popup fades.
+            self.animation.stop()
+            self._clock = Clock.schedule_once(lambda dt: self._close(None), PRINT_DONE_SECONDS)
         else:
             self.message.text = t('popups.print_status.printing')
             self._clock = Clock.schedule_once(self._tick, 1)
@@ -216,6 +230,7 @@ class PrintStatusPopup(FloatLayout):
         if self._clock:
             Clock.unschedule(self._clock)
             self._clock = None
+        self.animation.stop()
         if self.on_dismiss:
             self.on_dismiss()
 

@@ -140,3 +140,17 @@ def test_the_print_limit_is_reached_after_enough_prints(tmp_path):
     assert store.get_print_limit_info() == {
         'enabled': True, 'max_prints': 2, 'prints': 2, 'remaining': 0, 'reached': True,
     }
+
+
+def test_a_job_of_three_copies_counts_three_prints(tmp_path):
+    """MAX_PRINTS counts paper, and three copies is three sheets."""
+    store = StatsStore(str(tmp_path / 'stats.json'), max_prints=4)
+
+    store.track_print(3)
+
+    assert store.get_print_limit_info()['prints'] == 3
+    assert store.get_print_limit_info()['remaining'] == 1
+    assert store.can_print()
+
+    store.track_print(1)
+    assert store.can_print() is False

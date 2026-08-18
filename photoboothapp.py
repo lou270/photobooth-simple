@@ -31,6 +31,8 @@ from kivy.uix.screenmanager import FadeTransition
 from libs.config import Config
 from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
+from libs.file_utils import FileUtils
+from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
 from libs import i18n
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import ScreenMgr
@@ -86,6 +88,7 @@ class PhotoboothApp(App):
         self.USB_MIN_FREE_GB = config.get_usb_min_free_gb()
         self.PRINTER = config.get_printer()
         self.MAX_PRINTS = config.get_max_prints()
+        self.MAX_COPIES = config.get_max_copies()
         self.CALIBRATION = config.get_calibration()
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
@@ -375,6 +378,11 @@ class PhotoboothApp(App):
 
         self.storage.purge_tmp()
         shutil.copyfile(photo_path, self.get_shot(0))
+        # The small copy travels with it: the review screen builds its filter
+        # previews from that one, and the store already made it on upload.
+        small_source = self.get_remote_photo_path(entry_id, small=True)
+        if small_source and os.path.exists(small_source):
+            shutil.copyfile(small_source, FileUtils.get_small_path(self.get_shot(0)))
         self.remote_store.set_status(entry_id, RemoteStore.STATUS_PRINTED)
 
     def _rotate_logs(self):
@@ -502,8 +510,8 @@ class PhotoboothApp(App):
     def get_print_limit_info(self):
         return self.stats_store.get_print_limit_info()
 
-    def track_print_sent(self):
-        self.stats_store.track_print()
+    def track_print_sent(self, copies=1):
+        self.stats_store.track_print(copies)
 
     def trigger_print(self, copies, format=0):
         Logger.info('PhotoboothApp: trigger_print().')
@@ -604,6 +612,51 @@ class PhotoboothApp(App):
                 )
 
         threading.Thread(target=recover, name='photobooth-device-recovery', daemon=True).start()
+
+    def _shot_paths(self, format_idx, small=False):
+        paths = []
+        for idx in range(self.get_shots_to_take(format_idx)):
+            path = self.get_shot(idx)
+            if small:
+                # Not every capture arrives with a small copy beside it, and a
+                # preview built from a missing file is a hole in the collage.
+                small_path = FileUtils.get_small_path(path)
+                path = small_path if os.path.exists(small_path) else path
+            paths.append(path)
+        return paths
+
+    def build_preview_collage(self, format_idx, filter_key):
+        """A collage to look at, built from the small captures.
+
+        The review screen rebuilds this every time a guest tries a filter, so it
+        never touches the full-size captures: the small copies are a third of the
+        size, and the result is only ever shown at screen size anyway. The files
+        on disk are left alone until the guest is done choosing.
+        """
+        template = self.print_formats[format_idx]
+        photo_filter = None
+        if filter_key and filter_key != DEFAULT_FILTER:
+            photo_filter = lambda image: apply_filter(image, filter_key)
+        collage = template.assemble(self._shot_paths(format_idx, small=True), photo_filter=photo_filter)
+        return FileUtils.resize(collage)
+
+    def finalize_session(self, format_idx, filter_key=DEFAULT_FILTER):
+        """Write the session in the form the guest chose, then file it away.
+
+        Called once, when they leave the review screen or ask for a print —
+        whichever comes first. Doing it any earlier would mean saving a collage
+        they were still busy changing.
+        """
+        Logger.info('PhotoboothApp: finalize_session(format=%s, filter=%s).', format_idx, filter_key)
+        if filter_key and filter_key != DEFAULT_FILTER:
+            for path in self._shot_paths(format_idx):
+                apply_filter_to_file(path, filter_key, small_path=FileUtils.get_small_path(path))
+            self.print_formats[format_idx].assemble(
+                image_paths=self._shot_paths(format_idx),
+                output_path=self.get_collage(),
+                for_print=True,
+            )
+        self.save_collage()
 
     def save_collage(self):
         Logger.info('PhotoboothApp: save_collage().')

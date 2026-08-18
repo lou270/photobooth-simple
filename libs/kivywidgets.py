@@ -765,3 +765,51 @@ def make_icon_text_button(icon, text, size_hint=(0.25, 0.09), pos_hint={}, icon_
         button.bind(on_release=on_release)
     
     return button
+
+
+Builder.load_string('''
+<PaperFeedAnimation>:
+    canvas.before:
+        Color:
+            rgba: (root.sheet_color[0], root.sheet_color[1], root.sheet_color[2], root.sheet_color[3] * root.sheet_alpha)
+        RoundedRectangle:
+            pos: (self.center_x - self.width * 0.20, self.y + self.height * (0.42 - 0.40 * root.progress))
+            size: (self.width * 0.40, self.height * 0.30)
+            radius: [min(self.width, self.height) * 0.03,]
+''')
+class PaperFeedAnimation(FloatLayout):
+    """A sheet sliding out from under whatever is drawn on top of it.
+
+    Meant to sit behind a printer icon: the caller adds the icon as a child, and
+    children are drawn after canvas.before, so the sheet comes out from under it.
+    Driven by the clock rather than an Animation, like every other moving widget
+    here, so it can skip itself when its screen is not the one being shown.
+    """
+
+    progress = NumericProperty(0)
+    sheet_alpha = NumericProperty(0)
+    sheet_color = ColorProperty([0.82, 0.82, 0.82, 1])
+    speed = NumericProperty(0.55)  # sheets per second
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self._clock = Clock.schedule_interval(self.update, 1 / 30.0)
+
+    def update(self, dt):
+        if self.parent is None:
+            # Detached with the popup that held it: nothing left to animate,
+            # and nobody left to stop the clock.
+            self.stop()
+            return
+        if is_offscreen(self):
+            return
+        self.progress = (self.progress + dt * self.speed) % 1.0
+        # Fades in as it appears and out as it leaves, so the loop does not jump.
+        self.sheet_alpha = max(0.0, min(1.0, self.progress * 6, (1.0 - self.progress) * 4))
+
+    def stop(self):
+        """Park the sheet: the job is over, one way or another."""
+        if self._clock:
+            Clock.unschedule(self._clock)
+            self._clock = None
+        self.sheet_alpha = 0

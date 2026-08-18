@@ -125,6 +125,9 @@ PRINTER = DS620
 # Maximum number of prints allowed (None for unlimited)
 MAX_PRINTS = None
 
+# Maximum copies a guest can ask for in one print job (1 hides the selector)
+MAX_COPIES = 3
+
 # Seconds to wait for printer recovery before continuing without printing
 PRINTER_WAIT_TIMEOUT = 45
 

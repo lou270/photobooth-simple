@@ -17,6 +17,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from libs.core import SessionStorage
+from libs.file_utils import FileUtils
 from libs.remote_store import RemoteStore, new_sender_id
 from libs.screens.remote_gallery import RemoteGalleryScreen
 from photoboothapp import PhotoboothApp
@@ -89,7 +90,22 @@ def test_staging_clears_whatever_the_previous_session_left(tmp_path):
     # Otherwise a four-photo strip would print three faces from the session
     # before and one from the phone.
     assert not leftover.exists()
-    assert sorted(p.name for p in Path(app.storage.tmp_directory).iterdir()) == ['capture-0.jpg']
+    # The phone's photo and the small copy the review screen previews from.
+    assert sorted(p.name for p in Path(app.storage.tmp_directory).iterdir()) == [
+        'capture-0.jpg', 'capture-0_small.jpg',
+    ]
+
+
+def test_a_staged_photo_brings_its_small_copy(tmp_path):
+    """The review screen builds its filter previews from the small copy."""
+    app = make_app(tmp_path)
+    entry = app.remote_store.submit(jpeg_bytes(), new_sender_id())
+
+    app.stage_remote_photo(entry['id'])
+
+    small = FileUtils.get_small_path(app.get_shot(0))
+    assert os.path.isfile(small)
+    assert cv2.imread(small) is not None
 
 
 def test_a_staged_photo_leaves_the_queue(tmp_path):

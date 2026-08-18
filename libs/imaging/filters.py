@@ -1,15 +1,17 @@
-"""Photo filters offered to the guest after each capture.
+"""Photo filters, offered once the collage is on screen.
 
 Each filter takes a BGR image and returns the filtered result. None of them
 modifies its input, except that `color` returns the very same array, since
 there is nothing to do; callers that need to keep the original should pass a
-copy, which is what the confirm screen does.
+copy.
 """
 
 import logging
 
 import cv2
 import numpy as np
+
+from libs.file_utils import FileUtils
 
 Logger = logging.getLogger('kivy.photobooth')
 
@@ -170,3 +172,22 @@ def apply_filter(image, key):
         Logger.warning('filters: unknown filter %r, leaving the photo unchanged', key)
         return image
     return definition['apply'](image)
+
+
+def apply_filter_to_file(path, filter_key, small_path=None, small_scale=0.3):
+    """Rewrite a capture with the filter applied, and its small copy with it.
+
+    The captures are saved beside the collage and shown in the online gallery,
+    so a guest who picked black and white has to find black and white there too.
+    Returns False when the file could not be read.
+    """
+    image = cv2.imread(path)
+    if image is None:
+        Logger.warning('apply_filter_to_file: could not read %s', path)
+        return False
+
+    filtered = apply_filter(image, filter_key)
+    FileUtils.write_image(path, filtered)
+    if small_path:
+        FileUtils.write_image(small_path, cv2.resize(filtered, (0, 0), fx=small_scale, fy=small_scale))
+    return True
