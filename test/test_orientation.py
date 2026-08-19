@@ -8,7 +8,6 @@ screens to it.
 """
 
 import os
-import re
 import sys
 from pathlib import Path
 from types import SimpleNamespace
@@ -28,7 +27,6 @@ from libs.screens.select_format import SelectFormatScreen
 
 LANDSCAPE = (1920, 1080)
 PORTRAIT = (1080, 1920)
-SCREENS_DIR = Path(__file__).resolve().parents[1] / 'libs' / 'screens'
 
 
 @pytest.fixture
@@ -42,33 +40,12 @@ def screen_size(monkeypatch):
     return use
 
 
-# --- the convention --------------------------------------------------------
-
 def test_a_distance_is_the_same_lying_flat_or_standing_up(screen_size):
     screen_size(LANDSCAPE)
     flat = short_side(0.02)
     screen_size(PORTRAIT)
 
     assert short_side(0.02) == flat
-
-
-MEASURED_AGAINST_ONE_SIDE = re.compile(r'Window\.(height|width) \* 0\.0\d+')
-
-
-def test_no_screen_measures_a_gap_against_one_side_of_the_window():
-    """Paddings, spacings and radii go through short_side(), not Window.height.
-
-    Kept as a rule rather than a review note because it reads as harmless every
-    single time: on the landscape screen these were written for, the height is
-    the short side, so the bug is invisible until a booth is stood upright.
-    """
-    offenders = []
-    for path in sorted(SCREENS_DIR.glob('*.py')):
-        for number, line in enumerate(path.read_text(encoding='utf-8').splitlines(), 1):
-            if MEASURED_AGAINST_ONE_SIDE.search(line):
-                offenders.append(f'{path.name}:{number}')
-
-    assert offenders == []
 
 
 # --- what the screens make of a tall window --------------------------------

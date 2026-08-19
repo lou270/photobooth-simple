@@ -251,7 +251,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         A count that only goes up would strand a guest who overshot, and the
         highest it goes is three.
         """
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         limit = self._copies_limit()
         self._copies = (self._copies % limit) + 1 if limit > 1 else 1
         Logger.info('ReviewScreen: copies=%s.', self._copies)
