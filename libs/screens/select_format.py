@@ -11,7 +11,7 @@ from kivy.uix.image import Image
 from kivy.uix.label import Label
 
 from libs.i18n import t
-from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba, make_icon_button
+from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba, make_icon_button, ResizeLabel, short_side
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
     BORDER_THINKNESS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_TTF,
@@ -66,8 +66,8 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         # Grid for format cards (centered)
         self.cards_grid = GridLayout(
             cols=3,
-            spacing=Window.height * 0.033,
-            padding=Window.height * 0.022,
+            spacing=short_side(0.033),
+            padding=short_side(0.022),
             size_hint=(None, None),
         )
         self.cards_grid.bind(minimum_height=self.cards_grid.setter('height'))
@@ -114,19 +114,17 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
 
     def _calculate_card_size(self):
         """Calculate card size and column count that fills the screen optimally for any aspect ratio."""
-        padding = Window.height * 0.022
-        spacing = Window.height * 0.033
+        padding = short_side(0.022)
+        spacing = short_side(0.033)
         border = 2 * BORDER_THINKNESS
         n_cards = len(self.format_cards)
         aspect = Window.width / Window.height  # <1 portrait, ~1 square, >1 landscape
 
-        # Choose columns: 1 in portrait, 2 in square, 3 in landscape
-        if aspect < 0.75:
-            cols = 1
-        elif aspect < 1.2:
-            cols = 2
-        else:
-            cols = 3
+        # Choose columns: 2 up to a squarish screen, 3 in landscape. Never one:
+        # the cards are capped at 40% of the width, so a single column showed one
+        # card floating in the middle of a screen turned upright with the rest
+        # below the fold, where two columns show four at once.
+        cols = 2 if aspect < 1.2 else 3
         cols = min(cols, n_cards)
 
         # Width from horizontal space
@@ -153,7 +151,7 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         card_width, card_height, cols = self._calculate_card_size()
 
         self.cards_grid.cols = cols
-        self.cards_grid.spacing = Window.height * 0.033
+        self.cards_grid.spacing = short_side(0.033)
         self.cards_grid.row_default_height = card_height
         self.cards_grid.row_force_default = True
 
@@ -180,8 +178,8 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
             orientation='vertical',
             size_hint=(None, None),
             size=(self.MIN_CARD_WIDTH, self.MIN_CARD_HEIGHT),
-            padding=Window.height * 0.022,
-            spacing=Window.height * 0.011,
+            padding=short_side(0.022),
+            spacing=short_side(0.011),
         )
         
         # Draw rounded card background using canvas
@@ -190,7 +188,7 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
             card_bg = RoundedRectangle(
                 pos=card.pos,
                 size=card.size,
-                radius=[Window.height * 0.022,]
+                radius=[short_side(0.022),]
             )
         
         # Bind to update background when card size/pos changes
@@ -204,7 +202,7 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
             size_hint=(1, 0.75),
             anchor_x='center',
             anchor_y='center',
-            padding=Window.height * 0.022,
+            padding=short_side(0.022),
         )
         
         # Draw rounded preview background
@@ -213,7 +211,7 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
             preview_bg = RoundedRectangle(
                 pos=preview_container.pos,
                 size=preview_container.size,
-                radius=[Window.height * 0.017,]
+                radius=[short_side(0.017),]
             )
         
         # Bind to update preview background
@@ -230,10 +228,10 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         
         # Update image size to fit within container
         def update_image_size(instance, *args):
-            if preview_container.width <= Window.height * 0.044 or preview_container.height <= Window.height * 0.044:
+            if preview_container.width <= short_side(0.044) or preview_container.height <= short_side(0.044):
                 return
-            max_width = preview_container.width - Window.height * 0.044
-            max_height = preview_container.height - Window.height * 0.044
+            max_width = preview_container.width - short_side(0.044)
+            max_height = preview_container.height - short_side(0.044)
             preview_image.size = (max_width, max_height)
         
         preview_container.bind(size=update_image_size)

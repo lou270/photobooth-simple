@@ -4,13 +4,12 @@ import threading
 import cv2
 
 from kivy.clock import Clock
-from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 
-from libs.kivywidgets import BlurredImage, ResizeLabel, make_icon_button
+from libs.kivywidgets import BlurredImage, make_icon_button, ResizeLabel, short_side
 from libs.file_utils import FileUtils
 from libs.screens.names import ScreenNames
 from libs.screens.theme import BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_AUTO_KEEP_SECONDS, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
@@ -59,7 +58,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         # Add counter
         self.counter_layout = BoxLayout(
             orientation='horizontal',
-            spacing=Window.height * 0.022,
+            spacing=short_side(0.022),
             size_hint=(0.25, 0.1),
             pos_hint={'x': 0.375, 'y':0.85},
         )

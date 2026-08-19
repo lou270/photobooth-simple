@@ -15,7 +15,7 @@ from kivy.uix.image import Image
 from kivy.core.image import Image as CoreImage
 
 from libs.i18n import t
-from libs.kivywidgets import ResizeLabel, make_icon_button
+from libs.kivywidgets import make_icon_button, ResizeLabel, short_side
 from libs.screens.theme import CANCEL_COLOR, ICON_CANCEL, ICON_TTF
 
 
@@ -129,18 +129,20 @@ class QRCodePopup(FloatLayout):
         
         from kivy.graphics import RoundedRectangle
 
-        # Card uses size_hint so it reflows automatically on Window resize.
-        # Portrait hint: 60% wide, 85% tall — FloatLayout centers it via pos_hint.
+        # Card uses size_hint so it reflows automatically on Window resize, and
+        # takes more of the width on a screen turned upright, where 60% of a
+        # narrow side leaves the codes too small to scan comfortably.
+        portrait = Window.height > Window.width
         self.card = BoxLayout(
             orientation='vertical',
-            size_hint=(0.6, 0.85),
+            size_hint=(0.86 if portrait else 0.6, 0.85),
             pos_hint={'center_x': 0.5, 'center_y': 0.5},
-            padding=Window.height * 0.03,
-            spacing=Window.height * 0.015,
+            padding=short_side(0.03),
+            spacing=short_side(0.015),
         )
         with self.card.canvas.before:
             Color(1, 1, 1, 1)
-            self.card_rect = RoundedRectangle(pos=self.card.pos, size=self.card.size, radius=[Window.height * 0.022])
+            self.card_rect = RoundedRectangle(pos=self.card.pos, size=self.card.size, radius=[short_side(0.022)])
         self.card.bind(pos=self._update_card, size=self._update_card)
 
         scan_label = ResizeLabel(
@@ -156,10 +158,12 @@ class QRCodePopup(FloatLayout):
 
         # The codes fill the remaining space, side by side and in order.
         self.qr_images = []
+        # Side by side on a wide screen, stacked on a tall one: two codes in a
+        # row of a portrait card end up small and swimming in empty space.
         codes_row = BoxLayout(
-            orientation='horizontal',
+            orientation='vertical' if portrait else 'horizontal',
             size_hint=(1, 1),
-            spacing=Window.height * 0.02,
+            spacing=short_side(0.02),
         )
         for payload, caption in self.steps:
             column = BoxLayout(orientation='vertical')

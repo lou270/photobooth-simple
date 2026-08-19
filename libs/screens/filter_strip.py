@@ -17,7 +17,7 @@ from kivy.uix.image import Image
 from kivy.uix.scrollview import ScrollView
 
 from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
-from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba
+from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba, short_side
 from libs.screens.theme import BORDER_COLOR
 
 
@@ -35,7 +35,7 @@ def build_thumbnails(image, size=None):
         return []
 
     if size is None:
-        side = int(Window.height * 0.12)
+        side = int(short_side(0.12))
         size = (side, side)
 
     height, width = image.shape[:2]
@@ -69,8 +69,8 @@ class FilterStrip(AnchorLayout):
         self.scroll = ScrollView(size_hint=(None, 1), do_scroll_x=True, do_scroll_y=False)
         self.container = BoxLayout(
             orientation='horizontal',
-            spacing=Window.height * 0.017,
-            padding=(Window.height * 0.022, Window.height * 0.011, Window.height * 0.022, Window.height * 0.011),
+            spacing=short_side(0.017),
+            padding=(short_side(0.022), short_side(0.011), short_side(0.022), short_side(0.011)),
             size_hint=(None, 1),
         )
         self.container.bind(minimum_width=self.container.setter('width'))
@@ -97,19 +97,19 @@ class FilterStrip(AnchorLayout):
         self.scroll.width = min(self.max_width, value)
 
     def _create_card(self, filter_def):
-        card_size = Window.height * 0.18
+        card_size = short_side(0.18)
         card = ClickableCard(
             orientation='vertical',
             size_hint=(None, None),
             size=(card_size, card_size),
-            padding=Window.height * 0.009,
+            padding=short_side(0.009),
         )
 
         with card.canvas.before:
             Color(*hex_to_rgba('#3d4f5c'))
-            card_bg = RoundedRectangle(pos=card.pos, size=card.size, radius=[Window.height * 0.017,])
+            card_bg = RoundedRectangle(pos=card.pos, size=card.size, radius=[short_side(0.017),])
             card.selection_color = Color(0, 0, 0, 0)
-            card.selection_rect = RoundedRectangle(pos=card.pos, size=card.size, radius=[Window.height * 0.017,])
+            card.selection_rect = RoundedRectangle(pos=card.pos, size=card.size, radius=[short_side(0.017),])
 
         def update_card_bg(instance, value):
             card_bg.pos = instance.pos
@@ -121,7 +121,7 @@ class FilterStrip(AnchorLayout):
         preview_container = AnchorLayout(size_hint=(1, 1), anchor_x='center', anchor_y='center')
         card.thumbnail = Image(
             size_hint=(None, None),
-            size=(card_size - Window.height * 0.011, card_size - Window.height * 0.011),
+            size=(card_size - short_side(0.011), card_size - short_side(0.011)),
             fit_mode='contain',
         )
         preview_container.add_widget(card.thumbnail)

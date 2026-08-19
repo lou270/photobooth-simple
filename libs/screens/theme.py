@@ -83,7 +83,8 @@ def darken_rgba(color, amount=0.25):
 # Colors
 BACKGROUND_COLOR = hex_to_rgba('#26495c')
 BORDER_COLOR = hex_to_rgba('#c4a35a')
-BORDER_THINKNESS = dp(0)#Window.height * 0.011
+# 0 draws no frame at all; short_side(0.011) is the one it used to draw.
+BORDER_THINKNESS = dp(0)
 PROGRESS_COLOR = hex_to_rgba('#e5e5e5')
 CONFIRM_COLOR = hex_to_rgba('#538a64')
 CANCEL_COLOR = hex_to_rgba('#8b4846')

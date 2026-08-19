@@ -11,7 +11,7 @@ from kivy.uix.floatlayout import FloatLayout
 
 from libs.i18n import t
 from libs.imaging import DEFAULT_FILTER
-from libs.kivywidgets import BlurredImage, ResizeLabel, make_icon_button, make_icon_text_button
+from libs.kivywidgets import BlurredImage, ResizeLabel, make_icon_button, make_icon_text_button, short_side
 from libs.file_utils import FileUtils
 from libs.screens.filter_strip import FilterStrip, build_thumbnails
 from libs.screens.theme import (
@@ -43,8 +43,12 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
     HOME_TIMEOUT_SECONDS = REVIEW_HOME_TIMEOUT_SECONDS
 
-    # Bottom band left to the filters, as a fraction of the screen height.
-    FILTER_BAND_FRACTION = 0.20
+    # Bottom band left to the filters, and the size of the action buttons, both
+    # as fractions of the short side: a button sized by size_hint on both axes
+    # changes shape with the screen, and came out square on a panel turned
+    # upright instead of the pill it is on one lying flat.
+    FILTER_BAND_FRACTION = 0.22
+    ACTION_BUTTON_SIZE = (0.30, 0.11)
 
     def __init__(self, app, **kwargs):
         Logger.info('ReviewScreen: __init__().')
@@ -128,7 +132,8 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         if self.app.FILTERS_ENABLED:
             self.filters = FilterStrip(
                 self.on_filter_selected,
-                size_hint=(1, self.FILTER_BAND_FRACTION),
+                size_hint=(1, None),
+                height=short_side(self.FILTER_BAND_FRACTION),
                 pos_hint={'x': 0, 'y': 0},
             )
             self.overlay_layout.add_widget(self.filters)
@@ -136,7 +141,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self.btn_print = make_icon_text_button(
             icon=ICON_PRINT,
             text=t('review.print'),
-            size_hint=(0.16, 0.09),
+            size_hint=(None, None),
             pos_hint={},
             icon_font=ICON_TTF,
             icon_font_size_fraction=0.07,
@@ -144,6 +149,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             bgcolor=CONFIRM_COLOR,
             on_release=self.print_event,
         )
+        self.btn_print.size = (short_side(self.ACTION_BUTTON_SIZE[0]), short_side(self.ACTION_BUTTON_SIZE[1]))
         self.overlay_layout.add_widget(self.btn_print)
 
         self.btn_share = None
@@ -151,7 +157,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             self.btn_share = make_icon_text_button(
                 icon=ICON_SHARE,
                 text=t('review.share'),
-                size_hint=(0.16, 0.09),
+                size_hint=(None, None),
                 pos_hint={},
                 icon_font=ICON_TTF,
                 icon_font_size_fraction=0.07,
@@ -159,6 +165,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
                 bgcolor=SHARE_COLOR,
                 on_release=self.share_event,
             )
+            self.btn_share.size = (short_side(self.ACTION_BUTTON_SIZE[0]), short_side(self.ACTION_BUTTON_SIZE[1]))
             self.overlay_layout.add_widget(self.btn_share)
 
         self.overlay_layout.bind(size=self._layout_action_buttons)
@@ -179,7 +186,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         buttons = self._action_buttons()
         if not buttons:
             return
-        band = self.overlay_layout.height * self.FILTER_BAND_FRACTION if self.filters is not None else 0
+        band = self.filters.height if self.filters is not None else 0
         bottom = band + max(dp(4), self.overlay_layout.height * 0.03)
         gap = max(dp(4), self.overlay_layout.height * 0.02)
         top = max(dp(4), self.overlay_layout.height * 0.05)
@@ -187,17 +194,20 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         y = bottom
         for btn in buttons:
             if btn.height > max_h:
+                # Shrink, but keep the shape: a squashed pill reads as a bug.
+                ratio = btn.width / max(1.0, btn.height)
                 btn.height = max_h
+                btn.width = max_h * ratio
             btn.pos_hint = {}
             btn.x = max(0, min(self.overlay_layout.width * 0.95 - btn.width, self.overlay_layout.width - btn.width))
             btn.y = y
             y = btn.top + gap
 
         if self.filters is not None:
-            # The strip is centred, so it has to stop short of the buttons on
-            # both sides or it slides under them.
-            edge = min(btn.x for btn in buttons)
-            self.filters.set_max_width(2 * (edge - gap - self.overlay_layout.width / 2))
+            # The buttons stack above the band, not beside it, so the strip has
+            # the whole width. Reserving room for them squeezed it to a single
+            # visible filter on a screen turned upright.
+            self.filters.set_max_width(self.overlay_layout.width * 0.94)
 
     # --- printer state ----------------------------------------------------
 

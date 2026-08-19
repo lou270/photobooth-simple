@@ -19,6 +19,20 @@ import cv2
 from libs.file_utils import FileUtils
 
 
+def short_side(fraction=1.0):
+    """Pixels, as a fraction of the window's shortest side.
+
+    Every distance in the interface goes through here: paddings, spacings,
+    corner radii, card sizes. Measuring them against Window.height instead is
+    what made a booth on a screen turned upright look inflated — the tall side
+    is the wrong ruler, and on a 1080x1920 panel it made every gap and every
+    card almost twice the size it is on the same panel lying flat. The shortest
+    side is the one that constrains what fits, in either orientation, which is
+    why the font scale has always used it.
+    """
+    return min(Window.size) * fraction
+
+
 def is_offscreen(widget):
     """True when the widget belongs to a screen the ScreenManager is not showing.
 
@@ -392,7 +406,7 @@ class SquareFloatLayout(FloatLayout):
     def _update_size_from_parent(self, *args):
         # Use parent size for buttons in BoxLayouts
         if self.parent:
-            parent_min = min(self.parent.size) if self.parent.size[0] > 0 and self.parent.size[1] > 0 else Window.height * 0.17
+            parent_min = min(self.parent.size) if self.parent.size[0] > 0 and self.parent.size[1] > 0 else short_side(0.17)
             button_size = parent_min * self.size_square
             self.size = (button_size, button_size)
             self._update_progress_line_width()
@@ -602,9 +616,15 @@ class CircularProgressCounter(FloatLayout):
         self.small_screen_padding = min(Window.size) * 0.035
         self._update_responsive_size()
 
+    # Below this the screen is genuinely small and the counter has to give room
+    # back to the preview behind it. It is an absolute size on purpose: the old
+    # test compared the short side to the tall one, which only ever asked
+    # whether the booth was in portrait.
+    SMALL_SCREEN_SIDE = 480
+
     def _update_responsive_size(self, *args):
         window_min = min(Window.size)
-        is_small_screen = window_min < Window.height * 0.75
+        is_small_screen = window_min < self.SMALL_SCREEN_SIDE
         size_ratio = self.small_screen_ratio if is_small_screen else self.size_ratio
         responsive_circle_size = min(self.max_circle_size, window_min * size_ratio)
         self.circle_size = max(self.min_circle_size, responsive_circle_size)

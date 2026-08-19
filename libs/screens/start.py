@@ -4,12 +4,11 @@ import threading
 
 from kivy.animation import Animation
 from kivy.clock import Clock
-from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.uix.label import Label
 
 from libs.i18n import t
-from libs.kivywidgets import LayoutButton, ResizeLabel, BreezyBorderedLabel, make_icon_button
+from libs.kivywidgets import BreezyBorderedLabel, LayoutButton, make_icon_button, ResizeLabel, short_side
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
@@ -39,9 +38,9 @@ class StartScreen(BackgroundScreen):
         start = BreezyBorderedLabel(
             text=t('start.title'),
             border_color=(1,1,1,1),
-            border_width=Window.height * 0.006,
+            border_width=short_side(0.006),
             size_hint=(0.7, 0.2),
-            padding=(Window.height * 0.033, Window.height * 0.033, Window.height * 0.033, Window.height * 0.033),
+            padding=(short_side(0.033), short_side(0.033), short_side(0.033), short_side(0.033)),
             pos_hint={'x': 0.15, 'y': 0.4},
         )
         # BreezyBorderedLabel.on_size() recomputes font_size from width — no wh_bind needed
@@ -161,7 +160,7 @@ class StartScreen(BackgroundScreen):
             font_size_fraction=0.06,
             bgcolor=REMOTE_COLOR,
             badge=str(count) if count < 100 else '99+',
-            badge_font_size=Window.height * 0.03,
+            badge_font_size=short_side(0.03),
             badge_color=BADGE_COLOR,
             on_release=self.remote_queue_event,
         )

@@ -47,7 +47,7 @@ class PrintingScreen(ColorScreen):
         self.animation = PaperFeedAnimation(
             icon_text=ICON_PRINT,
             icon_font=ICON_TTF,
-            icon_wh_fraction=0.16,
+            icon_wh_fraction=0.20,
             sheet_color=[1, 1, 1, 1],
             size_hint=(1, 0.55),
         )

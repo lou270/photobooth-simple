@@ -74,6 +74,39 @@ class BackgroundScreen(Screen):
 
     def on_size(self, *args):
         self.background_image.size = self.size
+        self._crop_background()
+
+    def _crop_background(self):
+        """Fill the screen with the photo without distorting it.
+
+        A rectangle stretches its texture to whatever shape it is given, which
+        is fine on the landscape screen the artwork was made for and grotesque
+        on a panel turned upright: faces a third narrower than they should be.
+        Sampling a centred part of the texture instead crops the overflow, the
+        way any "cover" background does.
+
+        The texture's own coordinates are the starting point rather than a flat
+        (0, 0, 1, 1): images arrive flipped, and rebuilding the pairs from
+        scratch would turn the photo upside down.
+        """
+        texture = self.background_image.texture
+        if texture is None or not all(self.size) or not all(texture.size):
+            return
+
+        screen_ratio = self.width / self.height
+        image_ratio = texture.size[0] / texture.size[1]
+        if image_ratio > screen_ratio:
+            keep_u, keep_v = screen_ratio / image_ratio, 1.0
+        else:
+            keep_u, keep_v = 1.0, image_ratio / screen_ratio
+
+        coords = list(texture.tex_coords)
+        centre_u = sum(coords[0::2]) / 4.0
+        centre_v = sum(coords[1::2]) / 4.0
+        for corner in range(4):
+            coords[2 * corner] = centre_u + (coords[2 * corner] - centre_u) * keep_u
+            coords[2 * corner + 1] = centre_v + (coords[2 * corner + 1] - centre_v) * keep_v
+        self.background_image.tex_coords = coords
 
     def on_update(self, kwargs={}):
         pass

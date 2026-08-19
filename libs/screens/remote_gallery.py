@@ -21,7 +21,7 @@ from kivy.uix.label import Label
 from kivy.uix.scrollview import ScrollView
 
 from libs.i18n import t
-from libs.kivywidgets import FeedbackButtonBehavior, ResizeLabel, hex_to_rgba, make_icon_button
+from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba, make_icon_button, ResizeLabel, short_side
 from libs.screens.base import ColorScreen, HomeTimeoutMixin
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
@@ -95,8 +95,8 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
 
         self.cards_grid = GridLayout(
             cols=3,
-            spacing=Window.height * 0.02,
-            padding=Window.height * 0.02,
+            spacing=short_side(0.02),
+            padding=short_side(0.02),
             size_hint=(None, None),
         )
         self.cards_grid.bind(minimum_height=self.cards_grid.setter('height'))
@@ -139,10 +139,10 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         aspect = Window.width / max(1, Window.height)
         cols = 2 if aspect < 1.0 else (3 if aspect < 1.6 else 4)
 
-        spacing = Window.height * 0.02
-        padding = Window.height * 0.02
+        spacing = short_side(0.02)
+        padding = short_side(0.02)
         available_width = Window.width * 0.96 - (2 * padding) - (cols - 1) * spacing
-        width = max(Window.height * 0.12, available_width / cols)
+        width = max(short_side(0.12), available_width / cols)
         height = width * 1.2
 
         # The grid sits in a scroll view 86% of the screen tall; a card taller
@@ -161,7 +161,7 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         # Empty columns would still take their spacing, pushing a short row off
         # centre, so the grid only declares the columns it fills.
         self.cards_grid.cols = max(1, min(cols, len(self.photo_cards)))
-        self.cards_grid.spacing = Window.height * 0.02
+        self.cards_grid.spacing = short_side(0.02)
         self.cards_grid.row_default_height = card_height
         self.cards_grid.row_force_default = True
 
@@ -177,13 +177,13 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
             orientation='vertical',
             size_hint=(None, None),
             size=(card_width, card_height),
-            padding=Window.height * 0.012,
-            spacing=Window.height * 0.008,
+            padding=short_side(0.012),
+            spacing=short_side(0.008),
         )
 
         with card.canvas.before:
             Color(*hex_to_rgba('#3d4f5c'))
-            card_background = RoundedRectangle(pos=card.pos, size=card.size, radius=[Window.height * 0.018])
+            card_background = RoundedRectangle(pos=card.pos, size=card.size, radius=[short_side(0.018)])
 
         def update_card_background(instance, value):
             card_background.pos = instance.pos
