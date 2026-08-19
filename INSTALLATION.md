@@ -204,7 +204,22 @@ reconfiguration: ask them to forget the network and rejoin.
 
 **Screen resolution wrong.** For the Ingcool panel, confirm the
 `photobooth:screen-ingcool7` block is present in the firmware config. Other
-panels usually negotiate their own mode; set `SCREEN=none`.
+panels usually negotiate their own mode; set `SCREEN=none`. Then set
+`WINDOW_WIDTH` and `WINDOW_HEIGHT` in `config.ini` to that same mode: the booth
+asks for a real fullscreen rather than a desktop-sized one, so a panel running
+1920x1080 has to be named there as well.
+
+**Panel mounted on its side.** Set `ROTATION` to 90, 180 or 270 in `config.ini`
+and leave the width and height at the panel's own mode. The installer does not
+rotate the host, on purpose: that would mean Wayfire, labwc, X11 and bare KMS
+each needing their own mechanism, plus a calibration matrix per touchscreen,
+where the booth rotating its own display and its own touch input works the same
+on every install.
+
+One exception, and it is a development one: on Windows, Kivy computes its
+viewport from the rotated size instead of the panel's, and draws the interface
+into a corner of the window. `ROTATION` is therefore a booth setting, verified
+on the Linux path the booth runs; leave it at 0 on a Windows workstation.
 
 ## USB photo dump
 

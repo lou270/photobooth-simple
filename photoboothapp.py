@@ -22,6 +22,16 @@ KivyConfig.set('kivy', 'exit_on_escape', '0')
 # several ms per frame here and buys nothing on a photobooth UI.
 KivyConfig.set('graphics', 'multisamples', '0')
 
+# The window is created by the first import of kivy.core.window, a few lines
+# below, and takes its size and rotation from this config as it stands right
+# then. Nothing set after that import moves it, so the booth's own settings are
+# read here.
+from libs.config import window_settings_from_config
+WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_ROTATION = window_settings_from_config()
+KivyConfig.set('graphics', 'width', str(WINDOW_WIDTH))
+KivyConfig.set('graphics', 'height', str(WINDOW_HEIGHT))
+KivyConfig.set('graphics', 'rotation', str(WINDOW_ROTATION))
+
 # os.environ['KIVY_NO_CONSOLELOG'] = '1'
 from kivy.app import App
 from kivy.clock import Clock

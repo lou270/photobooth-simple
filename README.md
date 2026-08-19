@@ -174,6 +174,8 @@ first.
 
 You can edit `config.ini` to change various parameters such as:
  - **FULLSCREEN:** Full screen window mode
+ - **WINDOW_WIDTH / WINDOW_HEIGHT:** Size of the booth window in pixels, and the mode fullscreen runs at (1024 x 600 for the Ingcool 7" panel, 1920 x 1080 for a full HD monitor)
+ - **ROTATION:** Quarter turn for a panel mounted on its side (0, 90, 180, 270), applied by the booth itself so no desktop or touchscreen configuration is needed
  - **SHARE:** Enable/disable share buttons using a QRCode
  - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)

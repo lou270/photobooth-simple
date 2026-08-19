@@ -7,6 +7,23 @@ LANGUAGE = en
 # If set to True, the window fill be fullscren
 FULLSCREEN = False
 
+# Size of the booth window, in pixels. This is also the mode fullscreen runs at,
+# so it has to match the panel: 1024 x 600 for the Ingcool 7" touchscreen,
+# 1920 x 1080 for a full HD monitor. The interface scales to whatever is set
+# here, portrait included. Takes effect on the next start.
+WINDOW_WIDTH = 1024
+WINDOW_HEIGHT = 600
+
+# Quarter turn applied to the whole interface, for a panel mounted on its side:
+# 0, 90, 180 or 270. Leave WINDOW_WIDTH and WINDOW_HEIGHT at the panel's own
+# mode, they are not swapped: a 1920 x 1080 screen standing upright is
+# 1920 / 1080 / 90. The booth rotates its own display and its own touch input,
+# so nothing has to be configured in the desktop or the touchscreen driver.
+# Leave this at 0 when developing on Windows: Kivy sizes its viewport from the
+# rotated size there and clips the interface to a corner of the window. The
+# booth's own Linux host renders it correctly.
+ROTATION = 0
+
 # If set to True, the SHARE buttons and the WiFi QR code are displayed in the UI.
 # Leave it False when guests are not meant to reach the gallery during an event:
 # the booth then shows no QR code pointing at a server they cannot use.

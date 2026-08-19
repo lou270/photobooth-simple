@@ -140,3 +140,73 @@ def test_an_empty_booth_address_falls_back_to_guessing(tmp_path, monkeypatch):
         WIFI_AP_ADDRESS =
     """)
     assert config.get_wifi_ap_address() == ''
+
+
+def test_window_size_defaults_to_the_reference_panel(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        FULLSCREEN = False
+    """)
+    assert config.get_window_size() == (1024, 600)
+
+
+def test_window_size_is_read_from_the_file(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        WINDOW_WIDTH = 1920
+        WINDOW_HEIGHT = 1080
+    """)
+    assert config.get_window_size() == (1920, 1080)
+
+
+@pytest.mark.parametrize('raw', ['grand', '', '64'])
+def test_an_unusable_window_side_falls_back_instead_of_raising(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        WINDOW_WIDTH = {raw}
+        WINDOW_HEIGHT = 1080
+    """)
+    assert config.get_window_size() == (1024, 1080)
+
+
+def test_the_window_settings_helper_survives_a_missing_config(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, 'CONFIG_PATH', tmp_path / 'absent.ini')
+    assert config_module.window_settings_from_config() == (1024, 600, 0)
+
+
+def test_rotation_defaults_to_none(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        FULLSCREEN = False
+    """)
+    assert config.get_window_rotation() == 0
+
+
+@pytest.mark.parametrize('raw', ['0', '90', '180', '270'])
+def test_every_quarter_turn_is_accepted(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        ROTATION = {raw}
+    """)
+    assert config.get_window_rotation() == int(raw)
+
+
+@pytest.mark.parametrize('raw', ['portrait', '45', '-90', ''])
+def test_an_impossible_rotation_leaves_the_screen_alone(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        ROTATION = {raw}
+    """)
+    assert config.get_window_rotation() == 0
+
+
+def test_a_rotated_booth_keeps_the_panel_mode_unswapped(tmp_path, monkeypatch):
+    """The size is what the panel runs at; Kivy is what turns the interface."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        WINDOW_WIDTH = 1920
+        WINDOW_HEIGHT = 1080
+        ROTATION = 90
+    """)
+    assert config.get_window_size() == (1920, 1080)
+    assert config.get_window_rotation() == 90

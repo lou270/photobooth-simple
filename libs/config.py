@@ -16,6 +16,19 @@ Logger = logging.getLogger('kivy.photobooth')
 # runs the whole application with a synthetic camera and no hardware at all.
 CAMERA_BACKENDS = ('auto', 'gphoto2', 'picamera2', 'opencv', 'fake')
 
+# Window size used when config.ini says nothing: the 7" Ingcool panel the booth
+# is built around. Below MIN_WINDOW_SIDE the interface, sized in fractions of
+# the shortest side, stops being touchable.
+DEFAULT_WINDOW_SIZE = (1024, 600)
+MIN_WINDOW_SIDE = 320
+
+# Quarter turns Kivy accepts. Rotating in the application rather than in the
+# host keeps one setting working on every install: Kivy reports a rotated
+# Window.size to the interface and turns touch coordinates with it, where a
+# host-level rotation would need a different mechanism per display stack and a
+# calibration matrix per touchscreen.
+WINDOW_ROTATIONS = (0, 90, 180, 270)
+
 class Config:
     def __init__(self):
         self.config = configparser.ConfigParser()
@@ -47,6 +60,53 @@ class Config:
 
     def get_fullscreen(self):
         return self._get_boolean(('Global',), 'FULLSCREEN', fallback=True)
+
+    def get_window_size(self):
+        """Window size in pixels, as (width, height).
+
+        Also the mode fullscreen runs at: the booth asks for a real fullscreen
+        rather than a borderless desktop-sized one, so a panel that negotiates
+        1920x1080 needs to be told so here as well.
+        """
+        width = self._get_window_side('WINDOW_WIDTH', DEFAULT_WINDOW_SIZE[0])
+        height = self._get_window_side('WINDOW_HEIGHT', DEFAULT_WINDOW_SIZE[1])
+        return width, height
+
+    def get_window_rotation(self):
+        """Quarter turn applied to the whole interface, for a panel on its side.
+
+        WINDOW_WIDTH and WINDOW_HEIGHT stay the panel's own mode: a 1920x1080
+        screen turned upright is 1920 x 1080 with ROTATION = 90, and the
+        interface lays itself out in the 1080x1920 Kivy then reports.
+
+        Windows is the exception: Kivy sizes its viewport from the rotated size
+        there rather than from the panel's, and clips the interface to a corner
+        of the window. The booth's Linux host renders it correctly.
+        """
+        raw_value = self._get_string(('Global',), 'ROTATION', fallback='0').strip()
+        try:
+            rotation = int(raw_value)
+        except ValueError:
+            Logger.warning('Config: invalid ROTATION=%r, keeping the screen unrotated', raw_value)
+            return 0
+        if rotation not in WINDOW_ROTATIONS:
+            Logger.warning('Config: ROTATION must be one of %s, got %d, keeping the screen unrotated',
+                           ', '.join(str(value) for value in WINDOW_ROTATIONS), rotation)
+            return 0
+        return rotation
+
+    def _get_window_side(self, option, fallback):
+        raw_value = self._get_string(('Global',), option, fallback=str(fallback)).strip()
+        try:
+            side = int(raw_value)
+        except ValueError:
+            # A malformed value must never keep the booth from starting on site.
+            Logger.warning('Config: invalid %s=%r, using %d', option, raw_value, fallback)
+            return fallback
+        if side < MIN_WINDOW_SIDE:
+            Logger.warning('Config: %s=%d is below %d, using %d', option, side, MIN_WINDOW_SIDE, fallback)
+            return fallback
+        return side
 
     def get_share(self):
         return self._get_boolean(('Global',), 'SHARE', fallback=True)
@@ -236,3 +296,19 @@ class Config:
 
     def get_dslr_capture_params(self):
         return self._get_dslr_params('DSLR_Capture')
+
+
+def window_settings_from_config():
+    """(width, height, rotation) for Kivy, needed before the app object exists.
+
+    Kivy fixes the window when kivy.core.window is first imported, and reads
+    these from the Kivy config as it stands at that moment - so config.ini has to
+    be consulted at the top of photoboothapp.py, ahead of every Kivy import. A
+    file that cannot be read is not reported here: the application loads it again
+    a moment later and raises then, with the message an operator should see.
+    """
+    try:
+        config = Config()
+    except (OSError, configparser.Error):
+        return DEFAULT_WINDOW_SIZE + (0,)
+    return config.get_window_size() + (config.get_window_rotation(),)
