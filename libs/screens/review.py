@@ -5,19 +5,16 @@ import cv2
 
 from kivy.clock import Clock
 from kivy.logger import Logger
-from kivy.metrics import dp
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.floatlayout import FloatLayout
 
-from libs.i18n import t
 from libs.imaging import DEFAULT_FILTER
-from libs.kivywidgets import BlurredImage, ResizeLabel, make_icon_button, make_icon_text_button, short_side
+from libs.kivywidgets import BlurredImage, icon_button_label, make_icon_button, short_side
 from libs.file_utils import FileUtils
 from libs.screens.filter_strip import FilterStrip, build_thumbnails
 from libs.screens.theme import (
-    BORDER_THINKNESS, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_MINUS,
-    ICON_PLUS, ICON_PRINT, ICON_SHARE, ICON_TTF, REVIEW_HOME_TIMEOUT_SECONDS, SHARE_COLOR,
-    STEPPER_COLOR,
+    BORDER_THINKNESS, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_PRINT,
+    ICON_SHARE, ICON_TTF, REVIEW_HOME_TIMEOUT_SECONDS, SHARE_COLOR, STEPPER_COLOR,
 )
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 from libs.screens.names import ScreenNames
@@ -28,10 +25,10 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     """Final action screen: the saved collage, with the choices still open.
 
     +---------------------------+
-    | [home]           - 2 +    |
+    | [home]                    |
     |                           |
-    |          collage          |
-    |                    [print]|
+    |          collage   (share)|
+    |               (x2)(print) |
     |   [filter][filter]        |
     +---------------------------+
 
@@ -43,12 +40,13 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
     HOME_TIMEOUT_SECONDS = REVIEW_HOME_TIMEOUT_SECONDS
 
-    # Bottom band left to the filters, and the size of the action buttons, both
-    # as fractions of the short side: a button sized by size_hint on both axes
-    # changes shape with the screen, and came out square on a panel turned
-    # upright instead of the pill it is on one lying flat.
+    # All as fractions of the short side, so the screen looks the same whichever
+    # way the panel is turned. The print button is the biggest: it is what the
+    # guest came for.
     FILTER_BAND_FRACTION = 0.22
-    ACTION_BUTTON_SIZE = (0.30, 0.11)
+    PRINT_BUTTON_SIZE = 0.17
+    SHARE_BUTTON_SIZE = 0.14
+    COPIES_BUTTON_SIZE = 0.12
 
     def __init__(self, app, **kwargs):
         Logger.info('ReviewScreen: __init__().')
@@ -63,6 +61,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._preview_token = None
         self._copies = 1
         self._finalized = False
+        self.lbl_copies = None
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
         self.layout.add_widget(self.overlay_layout)
@@ -89,45 +88,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         )
         self.overlay_layout.add_widget(self.btn_home)
 
-        # How many copies, top right: the one number a guest may want to change
-        # before printing, and nothing to read if they do not.
-        self.btn_less = make_icon_button(
-            ICON_MINUS,
-            size=0.09,
-            pos_hint={'right': 0.855, 'top': 0.96},
-            font=ICON_TTF,
-            font_size_fraction=0.045,
-            bgcolor=STEPPER_COLOR,
-            on_release=self.less_copies_event,
-        )
-        self.lbl_copies = ResizeLabel(
-            text='1',
-            size_hint=(0.06, 0.09),
-            pos_hint={'center_x': 0.895, 'top': 0.96},
-            wh_fraction=0.055,
-            bold=True,
-            halign='center',
-            valign='middle',
-        )
-        self.btn_more = make_icon_button(
-            ICON_PLUS,
-            size=0.09,
-            pos_hint={'right': 0.98, 'top': 0.96},
-            font=ICON_TTF,
-            font_size_fraction=0.045,
-            bgcolor=STEPPER_COLOR,
-            on_release=self.more_copies_event,
-        )
-        self.lbl_copies_caption = ResizeLabel(
-            text=t('review.copies'),
-            size_hint=(0.20, 0.05),
-            pos_hint={'right': 0.98, 'top': 0.87},
-            wh_fraction=0.022,
-            halign='right',
-            valign='middle',
-        )
-        self._copies_widgets = (self.btn_less, self.lbl_copies, self.btn_more, self.lbl_copies_caption)
-
         self.filters = None
         if self.app.FILTERS_ENABLED:
             self.filters = FilterStrip(
@@ -138,34 +98,45 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             )
             self.overlay_layout.add_widget(self.filters)
 
-        self.btn_print = make_icon_text_button(
-            icon=ICON_PRINT,
-            text=t('review.print'),
-            size_hint=(None, None),
+        # Round icon buttons like every other button in the booth. They were an
+        # icon beside a word, the one shape in the interface that was not a
+        # circle, and the only one whose proportions had to be argued with every
+        # time the screen changed shape.
+        self.btn_print = make_icon_button(
+            ICON_PRINT,
+            size=self.PRINT_BUTTON_SIZE,
             pos_hint={},
-            icon_font=ICON_TTF,
-            icon_font_size_fraction=0.07,
-            text_font_size_fraction=0.035,
+            font=ICON_TTF,
+            font_size_fraction=0.08,
             bgcolor=CONFIRM_COLOR,
             on_release=self.print_event,
         )
-        self.btn_print.size = (short_side(self.ACTION_BUTTON_SIZE[0]), short_side(self.ACTION_BUTTON_SIZE[1]))
         self.overlay_layout.add_widget(self.btn_print)
+
+        # How many copies: one button showing what will come out, tapped to go
+        # round. A number between a minus and a plus was three widgets and a
+        # caption to place, and they overlapped each other on a narrow screen.
+        self.btn_copies = make_icon_button(
+            'x1',
+            size=self.COPIES_BUTTON_SIZE,
+            pos_hint={},
+            font_size_fraction=0.045,
+            bgcolor=STEPPER_COLOR,
+            on_release=self.copies_event,
+        )
+        self.lbl_copies = icon_button_label(self.btn_copies)
 
         self.btn_share = None
         if self.app.SHARE:
-            self.btn_share = make_icon_text_button(
-                icon=ICON_SHARE,
-                text=t('review.share'),
-                size_hint=(None, None),
+            self.btn_share = make_icon_button(
+                ICON_SHARE,
+                size=self.SHARE_BUTTON_SIZE,
                 pos_hint={},
-                icon_font=ICON_TTF,
-                icon_font_size_fraction=0.07,
-                text_font_size_fraction=0.035,
+                font=ICON_TTF,
+                font_size_fraction=0.07,
                 bgcolor=SHARE_COLOR,
                 on_release=self.share_event,
             )
-            self.btn_share.size = (short_side(self.ACTION_BUTTON_SIZE[0]), short_side(self.ACTION_BUTTON_SIZE[1]))
             self.overlay_layout.add_widget(self.btn_share)
 
         self.overlay_layout.bind(size=self._layout_action_buttons)
@@ -175,33 +146,41 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     # --- layout -----------------------------------------------------------
 
     def _action_buttons(self):
+        """Bottom of the stack first: printing is what a guest reaches for."""
         buttons = []
-        if self.btn_share is not None:
-            buttons.append(self.btn_share)
         if self.btn_print.parent is not None:
             buttons.append(self.btn_print)
+        if self.btn_share is not None:
+            buttons.append(self.btn_share)
         return buttons
 
     def _layout_action_buttons(self, *args):
-        buttons = self._action_buttons()
-        if not buttons:
+        """Place the buttons in pixels, up the right edge above the filters.
+
+        Positions used to be fractions of the width, which moves a square button
+        around as the screen changes shape: on a panel turned upright the copies
+        control landed on top of itself.
+        """
+        if not self.overlay_layout.width:
             return
+
+        margin = short_side(0.03)
+        gap = short_side(0.02)
         band = self.filters.height if self.filters is not None else 0
-        bottom = band + max(dp(4), self.overlay_layout.height * 0.03)
-        gap = max(dp(4), self.overlay_layout.height * 0.02)
-        top = max(dp(4), self.overlay_layout.height * 0.05)
-        max_h = max(dp(18), (self.overlay_layout.height - bottom - top - gap * (len(buttons) - 1)) / len(buttons))
-        y = bottom
-        for btn in buttons:
-            if btn.height > max_h:
-                # Shrink, but keep the shape: a squashed pill reads as a bug.
-                ratio = btn.width / max(1.0, btn.height)
-                btn.height = max_h
-                btn.width = max_h * ratio
+        right = self.overlay_layout.width - margin
+
+        y = band + margin
+        for btn in self._action_buttons():
             btn.pos_hint = {}
-            btn.x = max(0, min(self.overlay_layout.width * 0.95 - btn.width, self.overlay_layout.width - btn.width))
+            btn.x = right - btn.width
             btn.y = y
             y = btn.top + gap
+
+        if self.btn_copies.parent is not None and self.btn_print.parent is not None:
+            # Beside the print button, on the same line: the two are one decision.
+            self.btn_copies.pos_hint = {}
+            self.btn_copies.x = self.btn_print.x - gap - self.btn_copies.width
+            self.btn_copies.y = self.btn_print.y + (self.btn_print.height - self.btn_copies.height) / 2
 
         if self.filters is not None:
             # The buttons stack above the band, not beside it, so the strip has
@@ -256,34 +235,28 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     def _sync_copies(self, printing_possible=True):
         limit = self._copies_limit()
         self._copies = max(1, min(self._copies, limit))
-        self.lbl_copies.text = str(self._copies)
+        if self.lbl_copies is not None:
+            self.lbl_copies.text = 'x%d' % self._copies
 
         # One possible copy is not a choice, and no printer is not a question.
         visible = printing_possible and limit > 1
-        for widget in self._copies_widgets:
-            if visible and widget.parent is None:
-                self.overlay_layout.add_widget(widget)
-            elif not visible and widget.parent is not None:
-                self.overlay_layout.remove_widget(widget)
+        if visible and self.btn_copies.parent is None:
+            self.overlay_layout.add_widget(self.btn_copies)
+        elif not visible and self.btn_copies.parent is not None:
+            self.overlay_layout.remove_widget(self.btn_copies)
 
-        if visible:
-            self.btn_less.opacity = 1.0 if self._copies > 1 else 0.35
-            self.btn_more.opacity = 1.0 if self._copies < limit else 0.35
+    def copies_event(self, obj):
+        """Round and round: 1, 2, 3, back to 1.
 
-    def _change_copies(self, delta):
-        copies = max(1, min(self._copies_limit(), self._copies + delta))
-        if copies == self._copies:
-            return
-        self._copies = copies
+        A count that only goes up would strand a guest who overshot, and the
+        highest it goes is three.
+        """
+        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
+        limit = self._copies_limit()
+        self._copies = (self._copies % limit) + 1 if limit > 1 else 1
         Logger.info('ReviewScreen: copies=%s.', self._copies)
         self._reset_timeout()
         self._sync_copies()
-
-    def less_copies_event(self, obj):
-        self._change_copies(-1)
-
-    def more_copies_event(self, obj):
-        self._change_copies(1)
 
     # --- filters ----------------------------------------------------------
 

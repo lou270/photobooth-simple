@@ -8,7 +8,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 
 from libs.i18n import t
-from libs.kivywidgets import KivyCamera, BackgroundBoxLayout, ResizeLabel, LabelRoundButton, RotatingLabel, CircularProgressCounter, make_icon_button
+from libs.kivywidgets import KivyCamera, BackgroundBoxLayout, ResizeLabel, RotatingLabel, CircularProgressCounter, icon_button_label, make_icon_button
 from libs.screens.names import ScreenNames
 from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, COUNTDOWN_HOME_TIMEOUT_SECONDS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, SHOT_AUTOSTART_SECONDS, SHOT_TIMEOUT_SECONDS
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
@@ -126,11 +126,9 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self.camera.start(aspect_ratio)
         
         # Reset button icon and color (access child button from parent layout)
-        for child in self.btn_trigger.children:
-            if isinstance(child, LabelRoundButton):
-                child.text = ICON_TRIGGER
-                child.background_color = CONFIRM_COLOR
-                break
+        trigger = icon_button_label(self.btn_trigger)
+        trigger.text = ICON_TRIGGER
+        trigger.background_color = CONFIRM_COLOR
         
         # Show home button and trigger button, hide circular counter
         if not self.btn_home.parent:
@@ -286,11 +284,9 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             self.overlay_layout.add_widget(self.circular_counter)
         
         # Update button icon and color (access child button from parent layout)
-        for child in self.btn_trigger.children:
-            if isinstance(child, LabelRoundButton):
-                child.text = ICON_CANCEL
-                child.background_color = CANCEL_COLOR
-                break
+        trigger = icon_button_label(self.btn_trigger)
+        trigger.text = ICON_CANCEL
+        trigger.background_color = CANCEL_COLOR
         
         # Reset timer
         self.time_remaining = self.app.COUNTDOWN
@@ -324,11 +320,9 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self._start_home_timeout()
         
         # Update button icon and color (access child button from parent layout)
-        for child in self.btn_trigger.children:
-            if isinstance(child, LabelRoundButton):
-                child.text = ICON_TRIGGER
-                child.background_color = CONFIRM_COLOR
-                break
+        trigger = icon_button_label(self.btn_trigger)
+        trigger.text = ICON_TRIGGER
+        trigger.background_color = CONFIRM_COLOR
         
         # Clear LED
         self.app.ringled.clear()

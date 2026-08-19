@@ -39,7 +39,7 @@ class Choosing:
     """Just enough of a review screen to run the choices it offers."""
 
     _copies_limit = ReviewScreen._copies_limit
-    _change_copies = ReviewScreen._change_copies
+    copies_event = ReviewScreen.copies_event
     _finalize_once = ReviewScreen._finalize_once
     on_filter_selected = ReviewScreen.on_filter_selected
 
@@ -51,6 +51,7 @@ class Choosing:
         self._selected_filter = DEFAULT_FILTER
         self._finalized = False
         self.filters = None
+        self.lbl_copies = None
         self.rebuilds = 0
         self.timeouts_reset = 0
 
@@ -71,37 +72,43 @@ def app():
 
 # --- copies ----------------------------------------------------------------
 
-def test_the_copies_stop_at_what_the_operator_allows(app):
+def test_the_copies_go_round_rather_than_stopping(app):
+    """Tapping past the last one comes back to one, so nobody is stranded."""
     screen = Choosing(app)
 
-    for _ in range(10):
-        screen._change_copies(1)
+    seen = []
+    for _ in range(5):
+        screen.copies_event(None)
+        seen.append(screen._copies)
 
-    assert screen._copies == FakeApp.MAX_COPIES
-
-
-def test_the_copies_never_go_below_one(app):
-    screen = Choosing(app)
-
-    screen._change_copies(-1)
-
-    assert screen._copies == 1
+    assert seen == [2, 3, 1, 2, 3]
 
 
 def test_the_quota_left_wins_over_the_operator_limit(app):
     """Two prints left is two copies, whatever MAX_COPIES says."""
     screen = Choosing(app, remaining=2)
 
-    for _ in range(5):
-        screen._change_copies(1)
+    seen = []
+    for _ in range(3):
+        screen.copies_event(None)
+        seen.append(screen._copies)
 
-    assert screen._copies == 2
+    assert seen == [2, 1, 2]
 
 
 def test_an_unlimited_quota_leaves_the_operator_limit_alone(app):
     screen = Choosing(app, remaining=None)
 
     assert screen._copies_limit() == FakeApp.MAX_COPIES
+
+
+def test_a_single_possible_copy_is_not_a_question(app):
+    """A booth with one print left has nothing to cycle through."""
+    screen = Choosing(app, remaining=1)
+
+    screen.copies_event(None)
+
+    assert screen._copies == 1
 
 
 # --- the look, and when it stops being a question --------------------------

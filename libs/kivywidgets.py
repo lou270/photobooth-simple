@@ -656,6 +656,20 @@ Builder.load_string("""
 class RoundedButton(FeedbackButtonBehavior, Label):
     background_color = ListProperty([1, 1, 1, 1])
 
+def icon_button_label(button):
+    """The label inside a round icon button, for callers that relabel one.
+
+    make_icon_button() hands back the square wrapper, and the text lives on a
+    child of it. Three screens were each digging it out with the same loop.
+    """
+    # Last in children is first added, which is the icon: a badge goes on after
+    # it and would otherwise be the one handed back.
+    for child in reversed(button.children):
+        if isinstance(child, LabelRoundButton):
+            return child
+    return None
+
+
 def make_icon_button(icon, size, pos_hint={}, font='Roboto', font_size=sp(10), font_size_fraction=0, bgcolor=(1,1,1,1), badge=None, badge_font_size=sp(10), badge_color=(1,0,0,1), on_release=None, progress=False, progress_color=(1,1,1,1), progress_line_width_fraction=0.045):
     # If size >= 1, use parent size (for buttons in BoxLayouts), otherwise use Window size
     use_parent = (size >= 1.0)
@@ -690,121 +704,6 @@ def make_icon_button(icon, size, pos_hint={}, font='Roboto', font_size=sp(10), f
     ic.bind(on_release=on_release)
     return parent
 
-Builder.load_string("""
-<IconTextButton>:
-    background_color: 1, 1, 1, 1
-    orientation: 'horizontal'
-    spacing: 10
-    padding: 15
-    canvas.before:
-        Color:
-            rgba: self.background_color
-        RoundedRectangle:
-            pos: self.pos
-            size: self.size
-            radius: [20,]
-""")
-class IconTextButton(FeedbackButtonBehavior, BoxLayout):
-    background_color = ListProperty([1, 1, 1, 1])
-
-# An icon and a short label side by side need a wide button; below this they
-# stop reading as one thing.
-ICON_TEXT_MIN_RATIO = 2.5
-
-
-def icon_text_button_size(parent_size, size_hint, min_ratio=ICON_TEXT_MIN_RATIO):
-    """The size a labelled icon button takes inside a FloatLayout of that size.
-
-    None means the caller sized the button itself and this has nothing to say:
-    a size_hint with a None in it used to be multiplied by the parent anyway,
-    which is not an error Python lets pass.
-    """
-    if size_hint[0] is None or size_hint[1] is None:
-        return None
-
-    parent_width, parent_height = parent_size
-    width = parent_width * size_hint[0]
-    height = min(max(parent_height * size_hint[1], dp(48)), parent_height)
-    width = max(width, height * min_ratio)
-    if width > parent_width:
-        width = parent_width
-        height = min(height, width / min_ratio)
-    return width, height
-
-
-def make_icon_text_button(icon, text, size_hint=(0.25, 0.09), pos_hint={}, icon_font='Roboto', text_font='Roboto', icon_font_size=sp(50), icon_font_size_fraction=0, text_font_size=sp(30), text_font_size_fraction=0, bgcolor=(1,1,1,1), on_release=None):
-    """
-    Create a horizontal button with icon on left and text on right.
-    Icon/text sizing follows the real button size, not Window height/width alone.
-    """
-    button = IconTextButton(
-        size_hint=size_hint,
-        pos_hint=pos_hint,
-        background_color=bgcolor,
-    )
-    def resize_button(*args):
-        if not button.parent:
-            return
-        if isinstance(button.parent, FloatLayout):
-            size = icon_text_button_size(button.parent.size, size_hint)
-            if size is not None:
-                button.size_hint = (None, None)
-                button.size = size
-        # Even a button the caller sized keeps its padding in step with it.
-        margin = min(dp(15), max(dp(3), button.height * 0.12))
-        button.padding = (margin, margin, margin, margin)
-        button.spacing = margin
-    def bind_parent_size(*args):
-        if button.parent:
-            button.parent.bind(size=resize_button)
-        resize_button()
-    button.bind(parent=bind_parent_size)
-    Clock.schedule_once(resize_button, 0)
-    
-    # Icon container: icon follows the real button height, not Window height.
-    icon_container = BoxLayout(
-        size_hint=(0.4, 1),
-    )
-    
-    icon_label = Label(
-        text=icon,
-        font_name=icon_font,
-        color=(1, 1, 1, 1),
-        font_size=icon_font_size,
-        size_hint=(1, 1),
-        halign='center',
-        valign='middle',
-    )
-    def resize_icon(*args):
-        icon_label.font_size = max(sp(1), min(icon_container.height, icon_container.width) * 0.95)
-        icon_label.text_size = icon_label.size
-    icon_container.bind(size=resize_icon)
-    icon_label.bind(size=resize_icon)
-    Clock.schedule_once(resize_icon, 0)
-    icon_container.add_widget(icon_label)
-    button.add_widget(icon_container)
-    
-    text_label = Label(
-        text=text,
-        font_name=text_font,
-        size_hint=(0.6, 1),
-        color=(1, 1, 1, 1),
-        bold=True,
-        halign='center',
-        valign='middle',
-    )
-    def resize_text(*args):
-        text_label.text_size = text_label.size
-        fit_width = text_label.width / max(len(text), 1) * 1.5
-        text_label.font_size = max(sp(1), min(text_label.height * 0.7, fit_width))
-    text_label.bind(size=resize_text)
-    Clock.schedule_once(resize_text, 0)
-    button.add_widget(text_label)
-    
-    if on_release:
-        button.bind(on_release=on_release)
-    
-    return button
 
 
 Builder.load_string('''

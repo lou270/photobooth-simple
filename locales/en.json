@@ -38,11 +38,6 @@
     "restart": "RESTART",
     "continue": "CONTINUE"
   },
-  "review": {
-    "print": "PRINT",
-    "share": "SHARE",
-    "copies": "COPIES"
-  },
   "remote_gallery": {
     "title": "PHOTOS FROM PHONES",
     "empty": "Nothing yet.\nScan the QR code on the welcome screen\nto send a photo from your phone."

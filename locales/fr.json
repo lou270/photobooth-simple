@@ -38,11 +38,6 @@
     "restart": "REDÉMARRER",
     "continue": "CONTINUER"
   },
-  "review": {
-    "print": "IMPRIMER",
-    "share": "PARTAGER",
-    "copies": "COPIES"
-  },
   "remote_gallery": {
     "title": "PHOTOS DES TÉLÉPHONES",
     "empty": "Rien pour l'instant.\nScannez le QR code sur l'écran d'accueil\npour envoyer une photo depuis votre téléphone."

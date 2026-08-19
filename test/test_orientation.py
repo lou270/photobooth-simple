@@ -21,7 +21,7 @@ os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 
 from libs import kivywidgets
-from libs.kivywidgets import ICON_TEXT_MIN_RATIO, icon_text_button_size, short_side
+from libs.kivywidgets import short_side
 from libs.screens import remote_gallery, select_format
 from libs.screens.remote_gallery import RemoteGalleryScreen
 from libs.screens.select_format import SelectFormatScreen
@@ -112,19 +112,3 @@ def test_a_tall_screen_shows_more_than_one_format_at_a_time(screen_size):
     _width, _height, cols = Choosing(3)._calculate_card_size()
 
     assert cols >= 2
-
-
-# --- the print and share buttons -------------------------------------------
-
-def test_a_button_the_screen_sized_itself_is_left_alone():
-    """It used to multiply the parent by the None it was handed, and crash."""
-    assert icon_text_button_size((1080, 1920), (None, None)) is None
-    assert icon_text_button_size((1080, 1920), (0.3, None)) is None
-
-
-def test_a_button_keeps_its_shape_on_a_tall_screen():
-    for parent in (LANDSCAPE, PORTRAIT):
-        width, height = icon_text_button_size(parent, (0.16, 0.09))
-
-        assert width / height >= ICON_TEXT_MIN_RATIO - 0.01, parent
-        assert width <= parent[0], parent
