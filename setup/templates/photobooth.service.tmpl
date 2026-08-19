@@ -1,0 +1,24 @@
+[Unit]
+Description=Simple PhotoBooth application
+After=network-online.target display-manager.service graphical.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=${PHOTOBOOTH_USER}
+Group=${PHOTOBOOTH_GROUP}
+WorkingDirectory=${PHOTOBOOTH_DIR_ESCAPED}
+Environment=PYTHONUNBUFFERED=1
+Environment=DISPLAY=${DISPLAY_TARGET}
+ExecStart=${PHOTOBOOTH_PYTHON_ESCAPED} ${PHOTOBOOTH_DIR_ESCAPED}/photoboothapp.py
+Restart=always
+RestartSec=5
+StartLimitIntervalSec=300
+StartLimitBurst=20
+KillMode=control-group
+TimeoutStopSec=15
+StandardOutput=append:/var/log/photobooth.log
+StandardError=append:/var/log/photobooth.log
+
+[Install]
+WantedBy=graphical.target

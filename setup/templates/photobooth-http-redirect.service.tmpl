@@ -1,0 +1,13 @@
+[Unit]
+Description=Redirect HTTP traffic to PhotoBooth web app
+After=photobooth-ap-network.service hostapd.service
+Wants=photobooth-ap-network.service
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c "/usr/sbin/iptables -t nat -C PREROUTING -i ${WIFI_INTERFACE} -p tcp --dport 80 -j REDIRECT --to-ports ${WEB_PORT} 2>/dev/null || /usr/sbin/iptables -t nat -A PREROUTING -i ${WIFI_INTERFACE} -p tcp --dport 80 -j REDIRECT --to-ports ${WEB_PORT}"
+ExecStop=/bin/sh -c "/usr/sbin/iptables -t nat -D PREROUTING -i ${WIFI_INTERFACE} -p tcp --dport 80 -j REDIRECT --to-ports ${WEB_PORT} 2>/dev/null || true"
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

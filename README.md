@@ -145,16 +145,26 @@ For detailed installation instructions, please see [INSTALLATION.md](INSTALLATIO
 git clone https://github.com/IArchi/py-photobooth-simple.git
 cd py-photobooth-simple
 
-# Run automated installation (recommended)
-chmod +x install.sh
+# Build the booth. Asks what hardware it has, then saves the answers.
 ./install.sh
 
-# Or install manually
-pip3 install -r requirements.txt --break-system-packages
+# Check it is actually ready
+./setup/doctor.sh
 
 # Run the application
-python3 photoboothapp.py
+.venv/bin/python photoboothapp.py
 ```
+
+Building a second booth costs one command, because the first run saved its answers to
+`setup/booth.conf`:
+
+```bash
+./install.sh --profile setup/booth.conf --yes
+```
+
+The installer is safe to re-run: it rewrites delimited blocks and generated files rather than
+appending to them, so a second pass changes nothing. Use `--dry-run` to see what it would do
+first.
 
 ## Customization
 
@@ -162,6 +172,8 @@ python3 photoboothapp.py
 
 You can edit `config.ini` to change various parameters such as:
  - **FULLSCREEN:** Full screen window mode
+ - **WINDOW_WIDTH / WINDOW_HEIGHT:** Size of the booth window in pixels, and the mode fullscreen runs at (1024 x 600 for the Ingcool 7" panel, 1920 x 1080 for a full HD monitor)
+ - **ROTATION:** Quarter turn for a panel mounted on its side (0, 90, 180, 270), applied by the booth itself so no desktop or touchscreen configuration is needed
  - **SHARE:** Enable/disable share buttons using a QRCode
  - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
@@ -263,13 +275,17 @@ trade-off entirely and makes the portal unnecessary.
 
 ### Upgrading a booth that is already installed
 
-`install.sh` writes this configuration on a fresh install, and rewrites `/etc/dnsmasq.conf` whole,
-so the simplest way to move an existing booth onto it is to run the installer again and answer *no*
-to every step except the WiFi access point one:
+The access point configuration is generated from `config.ini`, so moving an existing booth onto it
+does not mean reinstalling anything:
 
 ```bash
-./install.sh
+./setup/apply-wifi.sh
 ```
+
+That regenerates `/etc/hostapd/hostapd.conf`, `/etc/dnsmasq.conf` and the two helper units from the
+current `[WiFi]` section, then restarts the services. Run it any time the network name or
+passphrase changes — including when it was changed from the admin page, which writes `config.ini`
+just the same.
 
 Phones already connected keep their old lease, and its old routing, until it expires. Ask them to
 forget the network and rejoin rather than wondering why nothing changed.
@@ -302,8 +318,8 @@ the sharing one included:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
-| `WIFI_SSID` | `PhotoBooth` | Network name put in the code. Must match `ssid=` in `/etc/hostapd/hostapd.conf`. |
-| `WIFI_PASSWORD` | *(empty)* | Empty for an open network, which is how `install.sh` configures it. |
+| `WIFI_SSID` | `PhotoBooth` | Network name put in the code, and the one `setup/apply-wifi.sh` writes into `hostapd.conf`. |
+| `WIFI_PASSWORD` | *(empty)* | Empty for an open network. Fill it in for WPA2 (8-63 characters) and re-run `setup/apply-wifi.sh`. |
 | `WIFI_HIDDEN` | `False` | Only if hostapd is set to `ignore_broadcast_ssid`. |
 | `WIFI_AP_ADDRESS` | `192.168.4.1` | The booth's address on that network, which the second code carries. |
 
@@ -312,8 +328,12 @@ that network has no default route, so the address the system would pick for itse
 whatever else the Pi is plugged into. Leave it empty only for a booth sitting on somebody else's
 WiFi, where guessing is the right answer.
 
-Nothing here configures hostapd; these values only describe it. Renaming the network on the Pi means
-renaming it here too, otherwise the QR code invites guests onto a network that no longer exists.
+This section configures hostapd, rather than merely describing it: `setup/apply-wifi.sh` generates
+`/etc/hostapd/hostapd.conf` from these values, so the network named in the QR code and the one
+actually broadcast are the same by construction. Change the name here, run that script, and both
+move together. `./setup/doctor.sh` compares them and reports a mismatch, which is otherwise
+invisible until a guest scans the code.
+
 Clearing `WIFI_SSID` says the booth has no access point of its own, and the QR codes then carry the
 booth's address directly instead.
 
