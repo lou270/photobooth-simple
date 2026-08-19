@@ -11,7 +11,6 @@ import threading
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -262,9 +261,6 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         self.app.ringled.clear()
 
     def on_photo_selected(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent):
-            return
-
         entry_id = obj.entry_id
         Logger.info('RemoteGalleryScreen: on_photo_selected(%s).', entry_id)
         self._stop_home_timeout()

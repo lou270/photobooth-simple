@@ -2,7 +2,6 @@
 
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -235,7 +234,6 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             self.app.transition_to(ScreenNames.CONFIRM_CAPTURE, shot=self._current_shot, format=self._current_format)
 
     def trigger_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('CountdownScreen: trigger_event().')
         
         if not self._timer_active:

@@ -5,7 +5,6 @@ import threading
 from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.core.window import Window
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.label import Label
 
@@ -169,7 +168,6 @@ class StartScreen(BackgroundScreen):
         self.overlay_layout.add_widget(self.btn_remote_queue)
 
     def remote_qr_event(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('StartScreen: remote_qr_event().')
         if getattr(self, 'qr_popup', None) is not None and self.qr_popup.parent:
             return
@@ -189,12 +187,10 @@ class StartScreen(BackgroundScreen):
         self.qr_popup = None
 
     def remote_queue_event(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('StartScreen: remote_queue_event().')
         self.app.transition_to(ScreenNames.REMOTE_GALLERY)
 
     def on_click(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('StartScreen: on_click().')
         self.app.transition_to(ScreenNames.SELECT_FORMAT)
 

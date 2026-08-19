@@ -7,7 +7,6 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color
 from kivy.graphics.texture import Texture
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -277,7 +276,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
     
     def on_filter_selected(self, obj):
         """Handle filter selection."""
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info(f'ConfirmCaptureScreen: on_filter_selected({obj.filter_key}).')
         
         self._selected_filter = obj.filter_key
@@ -351,7 +349,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self._stop_home_timeout()
 
     def keep_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         self._stop_home_timeout()
         
         # Apply selected filter off the UI thread; Processing waits before building the collage.
@@ -364,7 +361,6 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
             self.app.transition_to(ScreenNames.COUNTDOWN, shot=self._current_shot + 1, format=self._current_format)
 
     def no_event(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         self._stop_home_timeout()
         self.app.transition_to(ScreenNames.COUNTDOWN, shot=self._current_shot, format=self._current_format)
 

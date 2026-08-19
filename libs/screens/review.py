@@ -4,7 +4,6 @@ import threading
 import cv2
 
 from kivy.clock import Clock
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.metrics import dp
 from kivy.uix.anchorlayout import AnchorLayout
@@ -183,13 +182,11 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._start_home_timeout()
 
     def home_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: home_event().')
         self._stop_home_timeout()
         self.app.transition_to(ScreenNames.SUCCESS)
 
     def print_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: print_event().')
         self._reset_timeout()
         if hasattr(self, 'print_popup') and self.print_popup.parent:
@@ -198,7 +195,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self.layout.add_widget(self.print_popup)
 
     def share_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: share_event().')
         self._reset_timeout()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:

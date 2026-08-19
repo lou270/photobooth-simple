@@ -2,7 +2,6 @@
 
 from kivy.clock import Clock
 from kivy.graphics import Color, Rectangle
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.screenmanager import Screen
 
@@ -60,8 +59,6 @@ class HomeTimeoutMixin:
         self.app.transition_to(ScreenNames.START)
 
     def home_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent):
-            return
         Logger.info('%s: home_event().', type(self).__name__)
         self._stop_home_timeout()
         self.app.transition_to(ScreenNames.START)
