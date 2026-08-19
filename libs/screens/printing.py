@@ -1,0 +1,188 @@
+"""The booth printing, and nothing else.
+
+Its own screen rather than an overlay on the review screen: sending a photo to
+the printer ends the session, and a guest who pressed the last button has to see
+the booth move on, or they keep looking for what else there is to do. When the
+sheet is on its way this screen hands the booth to the next guest by itself; a
+failure is the only thing that needs a person, and that is what the error screen
+is for.
+"""
+
+import time
+
+from kivy.clock import Clock
+from kivy.logger import Logger
+from kivy.uix.boxlayout import BoxLayout
+
+from libs.i18n import t
+from libs.kivywidgets import PaperFeedAnimation, ResizeLabel
+from libs.screens.names import ScreenNames
+from libs.screens.theme import ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS
+from libs.screens.base import ColorScreen
+
+
+class PrintingScreen(ColorScreen):
+    """
+    +-----------------+
+    |     [printer]   |
+    |       [sheet]   |
+    |   IMPRESSION    |
+    | Your photo is   |
+    | coming out      |
+    +-----------------+
+    """
+
+    def __init__(self, app, **kwargs):
+        Logger.info('PrintingScreen: __init__().')
+        super(PrintingScreen, self).__init__(**kwargs)
+
+        self.app = app
+        self._current_format = 0
+        self._copies = 1
+        self._clock = None
+
+        layout = BoxLayout(orientation='vertical', size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
+
+        # The printer sits on top of the sheet coming out of it: the animation
+        # draws on canvas.before, the icon is a child, children win.
+        self.animation = PaperFeedAnimation(size_hint=(1, 0.55), sheet_color=[1, 1, 1, 1])
+        self.icon = ResizeLabel(
+            text=ICON_PRINT,
+            font_name=ICON_TTF,
+            size_hint=(1, 0.72),
+            pos_hint={'center_x': 0.5, 'top': 1},
+            wh_fraction=0.16,
+            halign='center',
+            valign='middle',
+        )
+        self.animation.add_widget(self.icon)
+        layout.add_widget(self.animation)
+
+        self.title = ResizeLabel(
+            text=t('printing.title'),
+            size_hint=(1, 0.14),
+            wh_fraction=0.06,
+            bold=True,
+            halign='center',
+            valign='middle',
+        )
+        layout.add_widget(self.title)
+
+        self.message = ResizeLabel(
+            text=t('printing.saving'),
+            size_hint=(1, 0.14),
+            wh_fraction=0.035,
+            halign='center',
+            valign='middle',
+        )
+        layout.add_widget(self.message)
+
+        self.add_widget(layout)
+
+    def on_entry(self, kwargs={}):
+        Logger.info('PrintingScreen: on_entry().')
+        self._current_format = kwargs.get('format') if 'format' in kwargs else 0
+        self._copies = max(1, int(kwargs.get('copies', 1)))
+        self._started_at = time.monotonic()
+        self._print_started = False
+        self._print_counted = False
+        self._print_task_id = None
+        self._printer_wait_started_at = None
+        self._timeout = getattr(self.app, 'PRINTER_WAIT_TIMEOUT', 45)
+        self.title.text = t('printing.title')
+        self.message.text = t('printing.saving')
+        self.animation.start()
+        self.app.ringled.wave([255, 255, 255])
+        self._clock = Clock.schedule_once(self._tick, 0.2)
+
+    def on_exit(self, kwargs={}):
+        Logger.info('PrintingScreen: on_exit().')
+        if self._clock:
+            Clock.unschedule(self._clock)
+            self._clock = None
+        self.animation.stop()
+        self.app.ringled.clear()
+
+    # --- getting the job to the printer -----------------------------------
+
+    def _fail(self, message, detail=None):
+        """Hand the guest to the error screen: this one has nothing to press."""
+        Logger.error('PrintingScreen: print failed: %s', detail or '-')
+        if detail:
+            message = f'{message}\n{detail}'
+        self._clock = None
+        self.app.transition_to(
+            ScreenNames.ERROR,
+            message=message,
+            error=ICON_ERROR_PRINTING,
+            show_continue=True,
+            show_restart=False,
+        )
+
+    def _done(self):
+        """The printer has the job; the booth belongs to the next guest."""
+        self.animation.stop()
+        self._clock = Clock.schedule_once(lambda dt: self.app.transition_to(ScreenNames.START), PRINT_DONE_SECONDS)
+
+    def _tick(self, obj):
+        if self.app.has_pending_photo_tasks():
+            self.message.text = t('printing.saving')
+            self._clock = Clock.schedule_once(self._tick, 0.2)
+            return
+
+        pending_error = self.app.get_pending_photo_error()
+        if pending_error:
+            Logger.error('PrintingScreen: save before print failed.')
+            Logger.error(pending_error)
+            self._fail(t('printing.save_failed'))
+            return
+
+        if time.monotonic() - self._started_at >= self._timeout:
+            self._fail(t('printing.print_failed'), t('printing.timed_out'))
+            return
+
+        if not self._print_started:
+            self.message.text = t('printing.sending')
+            try:
+                print_task_id = self.app.trigger_print(self._copies, self._current_format)
+                if print_task_id is None:
+                    raise RuntimeError('Printer did not return a task id')
+                self._print_task_id = print_task_id
+                self._print_started = True
+                Logger.info('PrintingScreen: print started task=%s copies=%s', self._print_task_id, self._copies)
+            except Exception as exc:
+                self._fail(t('printing.print_failed'), str(exc))
+                return
+
+        if not self.app.has_printer():
+            if self._printer_wait_started_at is None:
+                self._printer_wait_started_at = time.monotonic()
+                Logger.warning('PrintingScreen: printer unavailable, waiting for recovery')
+            waited = time.monotonic() - self._printer_wait_started_at
+            remaining = max(0, int(self._timeout - waited))
+            self.message.text = t('printing.printer_unavailable', remaining=remaining)
+            if waited >= self._timeout:
+                self._fail(t('printing.print_failed'), t('printing.printer_reconnect_failed'))
+                return
+            self._clock = Clock.schedule_once(self._tick, 1)
+            return
+
+        if self._printer_wait_started_at is not None:
+            Logger.info('PrintingScreen: printer recovered after %.2fs', time.monotonic() - self._printer_wait_started_at)
+            self._printer_wait_started_at = None
+
+        try:
+            status = self.app.devices.get_print_status(self._print_task_id)
+        except Exception as exc:
+            self._fail(t('printing.print_failed'), str(exc))
+            return
+
+        Logger.info('PrintingScreen: print status task=%s status=%s', self._print_task_id, status)
+        if status == 'done':
+            if not self._print_counted:
+                self.app.track_print_sent(self._copies)
+                self._print_counted = True
+            self._done()
+        else:
+            self.message.text = t('printing.printing')
+            self._clock = Clock.schedule_once(self._tick, 1)

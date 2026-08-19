@@ -16,6 +16,17 @@
     "photo_failed": "Le traitement de la photo a échoué.",
     "collage_failed": "La création du montage a échoué."
   },
+  "printing": {
+    "title": "IMPRESSION",
+    "saving": "Enregistrement de la photo...",
+    "sending": "Envoi de la photo à l'imprimante...",
+    "printing": "Votre photo sort de l'imprimante.",
+    "printer_unavailable": "Imprimante indisponible. Attente de reconnexion... {remaining}s",
+    "printer_reconnect_failed": "L'imprimante ne s'est pas reconnectée à temps.",
+    "timed_out": "L'impression a dépassé le délai imparti.",
+    "print_failed": "L'impression a échoué mais la photo a été enregistrée.",
+    "save_failed": "La photo n'a pas pu être enregistrée, l'impression a donc été annulée."
+  },
   "copying": {
     "warning": "Ne débranchez pas la clé USB avant la disparition de cet écran !",
     "progress": "Copie de {label}",
@@ -37,20 +48,6 @@
     "empty": "Rien pour l'instant.\nScannez le QR code sur l'écran d'accueil\npour envoyer une photo depuis votre téléphone."
   },
   "popups": {
-    "print_status": {
-      "title": "IMPRESSION",
-      "saving": "Enregistrement de la photo avant impression...",
-      "ok": "OK",
-      "print_failed_title": "ÉCHEC DE L'IMPRESSION",
-      "print_failed_saved": "L'impression a échoué mais la photo a été enregistrée.",
-      "save_failed_title": "ÉCHEC DE L'ENREGISTREMENT",
-      "save_failed_message": "La photo n'a pas pu être enregistrée, l'impression a donc été annulée.",
-      "timed_out": "L'impression a dépassé le délai imparti.",
-      "sending": "Envoi de la photo à l'imprimante...",
-      "printer_unavailable": "Imprimante indisponible. Attente de reconnexion... {remaining}s",
-      "printer_reconnect_failed": "L'imprimante ne s'est pas reconnectée à temps.",
-      "printing": "Votre photo sort de l'imprimante."
-    },
     "qr": {
       "default_title": "SCANNEZ-MOI"
     }

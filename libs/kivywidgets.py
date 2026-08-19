@@ -793,14 +793,15 @@ class PaperFeedAnimation(FloatLayout):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self._clock = Clock.schedule_interval(self.update, 1 / 30.0)
+        self._clock = None
+
+    def start(self):
+        """Feed sheets until told otherwise. Idempotent: screens are reused."""
+        if self._clock is None:
+            self.progress = 0
+            self._clock = Clock.schedule_interval(self.update, 1 / 30.0)
 
     def update(self, dt):
-        if self.parent is None:
-            # Detached with the popup that held it: nothing left to animate,
-            # and nobody left to stop the clock.
-            self.stop()
-            return
         if is_offscreen(self):
             return
         self.progress = (self.progress + dt * self.speed) % 1.0

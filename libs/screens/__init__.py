@@ -7,7 +7,8 @@ from libs.screens.countdown import CountdownScreen
 from libs.screens.error import ErrorScreen
 from libs.screens.manager import ScreenMgr
 from libs.screens.names import ScreenNames
-from libs.screens.popups import PrintStatusPopup, QRCodePopup
+from libs.screens.popups import QRCodePopup
+from libs.screens.printing import PrintingScreen
 from libs.screens.processing import ProcessingScreen
 from libs.screens.remote_gallery import RemoteGalleryScreen
 from libs.screens.review import ReviewScreen
@@ -18,5 +19,5 @@ __all__ = [
     'BackgroundScreen', 'ColorScreen', 'HomeTimeoutMixin', 'ScreenMgr', 'ScreenNames',
     'StartScreen', 'SelectFormatScreen', 'ErrorScreen', 'CountdownScreen',
     'ConfirmCaptureScreen', 'ProcessingScreen', 'ReviewScreen',
-    'CopyingScreen', 'RemoteGalleryScreen', 'PrintStatusPopup', 'QRCodePopup',
+    'CopyingScreen', 'RemoteGalleryScreen', 'PrintingScreen', 'QRCodePopup',
 ]

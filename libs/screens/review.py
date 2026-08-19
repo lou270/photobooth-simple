@@ -21,7 +21,8 @@ from libs.screens.theme import (
     STEPPER_COLOR,
 )
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
-from libs.screens.popups import PrintStatusPopup, QRCodePopup
+from libs.screens.names import ScreenNames
+from libs.screens.popups import QRCodePopup
 
 
 class ReviewScreen(HomeTimeoutMixin, ColorScreen):
@@ -383,8 +384,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._finalize_once()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:
             self.layout.remove_widget(self.qr_popup)
-        if hasattr(self, 'print_popup') and self.print_popup.parent:
-            self.layout.remove_widget(self.print_popup)
         self.app.ringled.clear()
 
     def _reset_timeout(self):
@@ -393,19 +392,16 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     def print_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: print_event(copies=%s).', self._copies)
-        self._reset_timeout()
-        if hasattr(self, 'print_popup') and self.print_popup.parent:
-            return
-        # The popup waits on pending photo tasks before sending anything, so the
-        # printer gets the collage the guest chose, not the one it started as.
+        # The session is written first and the printing screen waits on it, so
+        # the printer gets the collage the guest chose, not the one it started
+        # as. Pressing print ends the session: the booth moves on rather than
+        # dropping the guest back here with nothing left to do.
         self._finalize_once()
-        self.print_popup = PrintStatusPopup(
-            self.app,
-            self._current_format,
+        self.app.transition_to(
+            ScreenNames.PRINTING,
+            format=self._current_format,
             copies=self._copies,
-            on_dismiss=self._dismiss_print_popup,
         )
-        self.layout.add_widget(self.print_popup)
 
     def share_event(self, obj):
         if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
@@ -416,12 +412,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         steps, title, hint = self.app.get_qr_invitation(self.app.gallery_url)
         self.qr_popup = QRCodePopup(steps, on_dismiss=self._dismiss_qr_popup, title=title, hint=hint)
         self.layout.add_widget(self.qr_popup)
-
-    def _dismiss_print_popup(self):
-        if hasattr(self, 'print_popup') and self.print_popup.parent:
-            self.layout.remove_widget(self.print_popup)
-        self._sync_print_button()
-        self._reset_timeout()
 
     def _dismiss_qr_popup(self):
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:

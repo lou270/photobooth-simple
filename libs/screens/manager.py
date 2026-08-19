@@ -9,6 +9,7 @@ from libs.screens.copying import CopyingScreen
 from libs.screens.countdown import CountdownScreen
 from libs.screens.error import ErrorScreen
 from libs.screens.names import ScreenNames
+from libs.screens.printing import PrintingScreen
 from libs.screens.processing import ProcessingScreen
 from libs.screens.remote_gallery import RemoteGalleryScreen
 from libs.screens.review import ReviewScreen
@@ -36,6 +37,7 @@ class ScreenMgr(ScreenNames, ScreenManager):
             self.COUNTDOWN          : CountdownScreen(app, name=self.COUNTDOWN),
             self.CONFIRM_CAPTURE    : ConfirmCaptureScreen(app, name=self.CONFIRM_CAPTURE),
             self.PROCESSING         : ProcessingScreen(app, name=self.PROCESSING),
+            self.PRINTING           : PrintingScreen(app, name=self.PRINTING),
             self.REVIEW             : ReviewScreen(app, name=self.REVIEW),
             self.COPYING            : CopyingScreen(app, name=self.COPYING),
         }

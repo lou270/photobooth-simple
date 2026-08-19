@@ -13,6 +13,7 @@ class ScreenNames:
     COUNTDOWN = 'countdown'
     CONFIRM_CAPTURE = 'confirm_capture'
     PROCESSING = 'processing'
+    PRINTING = 'printing'
     REVIEW = 'review'
     COPYING = 'copying'
     REMOTE_GALLERY = 'remote_gallery'

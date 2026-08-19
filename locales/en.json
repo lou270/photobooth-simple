@@ -16,6 +16,17 @@
     "photo_failed": "Photo processing failed.",
     "collage_failed": "Collage creation failed."
   },
+  "printing": {
+    "title": "PRINTING",
+    "saving": "Saving your photo...",
+    "sending": "Sending photo to printer...",
+    "printing": "Your photo is coming out of the printer.",
+    "printer_unavailable": "Printer unavailable. Waiting for it to come back... {remaining}s",
+    "printer_reconnect_failed": "The printer did not come back in time.",
+    "timed_out": "The print operation timed out.",
+    "print_failed": "Printing failed but the photo has been saved.",
+    "save_failed": "The photo could not be saved, so printing was stopped."
+  },
   "copying": {
     "warning": "Do not disconnect your USB dongle before this screen disapears !",
     "progress": "Copying {label}",
@@ -37,20 +48,6 @@
     "empty": "Nothing yet.\nScan the QR code on the welcome screen\nto send a photo from your phone."
   },
   "popups": {
-    "print_status": {
-      "title": "PRINTING",
-      "saving": "Saving photo before printing...",
-      "ok": "OK",
-      "print_failed_title": "PRINT FAILED",
-      "print_failed_saved": "Printing failed but the photo has been saved.",
-      "save_failed_title": "SAVE FAILED",
-      "save_failed_message": "The photo could not be saved, so printing was stopped.",
-      "timed_out": "The print operation timed out.",
-      "sending": "Sending photo to printer...",
-      "printer_unavailable": "Printer unavailable. Waiting for reconnection... {remaining}s",
-      "printer_reconnect_failed": "The printer did not reconnect in time.",
-      "printing": "Your photo is coming out of the printer."
-    },
     "qr": {
       "default_title": "SCAN ME"
     }
