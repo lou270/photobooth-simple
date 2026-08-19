@@ -126,3 +126,18 @@ def test_a_photo_filter_leaves_the_template_alone(photo):
 
     # A corner the photo does not reach: background only.
     assert filtered[190, 290].tolist() == plain[190, 290].tolist()
+
+
+# --- what comes out of the printer -----------------------------------------
+
+def test_a_plain_template_is_one_photo_per_sheet():
+    assert template().get_copies_per_sheet() == 1
+
+
+def test_a_strip_printed_twice_across_the_sheet_is_two_photos():
+    """It is cut in two, so one sheet is two strips in the guest's hand."""
+    assert template(duplicate_horizontal=True).get_copies_per_sheet() == 2
+
+
+def test_a_template_duplicated_both_ways_is_four():
+    assert template(duplicate_horizontal=True, duplicate_vertical=True).get_copies_per_sheet() == 4

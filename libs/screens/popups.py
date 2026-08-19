@@ -216,11 +216,23 @@ class QRCodePopup(FloatLayout):
         self._generate_qr_code()
     
     def on_touch_down(self, touch):
-        """Block all touch events from reaching widgets below the popup."""
-        # Only allow touches on the card to be processed
-        if self.card.collide_point(*touch.pos):
-            return super(QRCodePopup, self).on_touch_down(touch)
-        # Block all other touches
+        """Nothing under an overlay ever sees a touch, wherever it lands.
+
+        Passing on what the card returned was not enough: a tap that landed on
+        the card but on none of its widgets — a code, a caption, the space
+        around them — was reported unhandled and went through to the screen
+        behind, where the welcome screen reads any touch as "start a session".
+        Closing the codes started a photo session.
+        """
+        super(QRCodePopup, self).on_touch_down(touch)
+        return True
+
+    def on_touch_move(self, touch):
+        super(QRCodePopup, self).on_touch_move(touch)
+        return True
+
+    def on_touch_up(self, touch):
+        super(QRCodePopup, self).on_touch_up(touch)
         return True
     
     def _update_bg(self, *args):

@@ -120,6 +120,16 @@ class TemplateCollage:
     def uses_print_version(self):
         """Return True when printing needs the generated _print collage."""
         return self._duplicate_horizontal or self._duplicate_vertical
+
+    def get_copies_per_sheet(self):
+        """How many finished photos one printed sheet carries.
+
+        A strip template prints twice across the sheet and is cut in two, so a
+        guest who asked for one sheet walks away with two strips. The booth
+        counts sheets, because that is what the printer and the paper budget
+        count; what it shows the guest has to be what they will hold.
+        """
+        return (2 if self._duplicate_horizontal else 1) * (2 if self._duplicate_vertical else 1)
     
     def _decode_image(self, image_data, imread_flags=cv2.IMREAD_UNCHANGED):
         """

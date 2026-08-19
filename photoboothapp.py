@@ -314,6 +314,10 @@ class PhotoboothApp(App):
     def get_shots_to_take(self, format=0):
         return self.print_formats[format].get_photos_required()
 
+    def get_copies_per_sheet(self, format_idx=0):
+        """Photos out of the printer for one sheet of this format."""
+        return self.print_formats[format_idx].get_copies_per_sheet()
+
     def get_format_aspect_ratio(self, format_idx):
         """Get the aspect ratio (width/height) for the given format."""
         return self.print_formats[format_idx].get_aspect_ratio()

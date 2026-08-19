@@ -143,7 +143,9 @@ PRINTER = DS620
 # Maximum number of prints allowed (None for unlimited)
 MAX_PRINTS = None
 
-# Maximum copies a guest can ask for in one print job (1 hides the selector)
+# Maximum sheets a guest can ask for in one print job (1 hides the selector).
+# A template that duplicates its collage puts two photos on each sheet, so the
+# booth offers up to twice this many finished photos.
 MAX_COPIES = 3
 
 # Seconds to wait for printer recovery before continuing without printing

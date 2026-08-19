@@ -236,7 +236,11 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         limit = self._copies_limit()
         self._copies = max(1, min(self._copies, limit))
         if self.lbl_copies is not None:
-            self.lbl_copies.text = 'x%d' % self._copies
+            # Photos, not sheets: a strip template prints two of them per sheet,
+            # and a guest who reads x1 and is handed two of everything has been
+            # told the booth's arithmetic instead of their own.
+            per_sheet = self.app.get_copies_per_sheet(self._current_format)
+            self.lbl_copies.text = 'x%d' % (self._copies * per_sheet)
 
         # One possible copy is not a choice, and no printer is not a question.
         visible = printing_possible and limit > 1

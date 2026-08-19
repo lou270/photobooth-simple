@@ -9,6 +9,7 @@ a window this suite does not have.
 import os
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
@@ -25,8 +26,12 @@ class FakeApp:
     MAX_COPIES = 3
     FILTERS_ENABLED = True
 
-    def __init__(self):
+    def __init__(self, copies_per_sheet=1):
         self.finalized = []
+        self.copies_per_sheet = copies_per_sheet
+
+    def get_copies_per_sheet(self, format_idx=0):
+        return self.copies_per_sheet
 
     def start_photo_task(self, target, *args):
         self.finalized.append((target, args))
@@ -35,10 +40,21 @@ class FakeApp:
         pass
 
 
+class FakeOverlay:
+    """Enough of a layout to be added to and removed from."""
+
+    def add_widget(self, widget):
+        widget.parent = self
+
+    def remove_widget(self, widget):
+        widget.parent = None
+
+
 class Choosing:
     """Just enough of a review screen to run the choices it offers."""
 
     _copies_limit = ReviewScreen._copies_limit
+    _sync_copies = ReviewScreen._sync_copies
     copies_event = ReviewScreen.copies_event
     _finalize_once = ReviewScreen._finalize_once
     on_filter_selected = ReviewScreen.on_filter_selected
@@ -51,12 +67,11 @@ class Choosing:
         self._selected_filter = DEFAULT_FILTER
         self._finalized = False
         self.filters = None
-        self.lbl_copies = None
+        self.lbl_copies = SimpleNamespace(text='')
+        self.btn_copies = SimpleNamespace(parent=None)
+        self.overlay_layout = FakeOverlay()
         self.rebuilds = 0
         self.timeouts_reset = 0
-
-    def _sync_copies(self, printing_possible=True):
-        pass
 
     def _reset_timeout(self):
         self.timeouts_reset += 1
@@ -151,3 +166,25 @@ def test_the_look_stops_changing_once_the_session_is_written(app):
 
     assert screen._selected_filter == DEFAULT_FILTER
     assert screen.rebuilds == 0
+
+
+# --- what the guest will be handed -----------------------------------------
+
+def test_the_button_counts_photos_not_sheets():
+    """A strip template prints two per sheet: one sheet is two in the hand."""
+    screen = Choosing(FakeApp(copies_per_sheet=2))
+
+    screen._sync_copies()
+    assert screen.lbl_copies.text == 'x2'
+
+    screen.copies_event(None)
+    assert screen._copies == 2
+    assert screen.lbl_copies.text == 'x4'
+
+
+def test_a_plain_template_counts_one_for_one():
+    screen = Choosing(FakeApp(copies_per_sheet=1))
+
+    screen._sync_copies()
+
+    assert screen.lbl_copies.text == 'x1'
