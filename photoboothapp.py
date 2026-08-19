@@ -377,6 +377,17 @@ class PhotoboothApp(App):
             return None
         return self.remote_store.photo_path(entry_id, small=small)
 
+    def delete_remote_photo(self, entry_id):
+        """Drop a waiting photo and its files; returns whether one was removed.
+
+        No sender_id is passed: this is the booth acting, not a phone, and the
+        operator standing at it is allowed to clear a photo nobody claims.
+        """
+        if not self.has_remote_capture():
+            return False
+        Logger.info('PhotoboothApp: delete_remote_photo(%s).', entry_id)
+        return self.remote_store.delete(entry_id)
+
     def stage_remote_photo(self, entry_id):
         """Put a photo a phone sent where the print pipeline expects a capture.
 

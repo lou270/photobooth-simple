@@ -1,4 +1,5 @@
-"""The sharing QR code, shown on top of the screen that offers it."""
+"""Overlays shown on top of a screen: the sharing QR code, and the question
+asked before something is thrown away."""
 
 import io
 import threading
@@ -12,11 +13,15 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.image import Image
+from kivy.uix.label import Label
 from kivy.core.image import Image as CoreImage
 
 from libs.i18n import t
 from libs.kivywidgets import make_icon_button, ResizeLabel, short_side
-from libs.screens.theme import CANCEL_COLOR, ICON_CANCEL, ICON_TTF
+from libs.screens.theme import (
+    CANCEL_COLOR, CONFIRM_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_DELETE, ICON_TTF,
+    SMALL_FONT, wh_bind,
+)
 
 
 class QRCodePopup(FloatLayout):
@@ -258,3 +263,153 @@ class QRCodePopup(FloatLayout):
         self._close_scheduled = True
         if self.on_dismiss:
             Clock.schedule_once(lambda dt: self.on_dismiss(), 0)
+
+
+class ConfirmPopup(FloatLayout):
+    """The question asked before something is destroyed for good.
+
+    Anyone can walk up to the booth, so an action that cannot be undone is never
+    one tap away. The photo it is about to remove is shown inside the popup: on a
+    wall of similar faces the thumbnail is what tells a guest whether the tap
+    landed on their own photo or on the one next to it.
+    """
+
+    def __init__(self, title, message, on_confirm, on_dismiss=None,
+                 image_source=None, icon=ICON_DELETE, **kwargs):
+        super(ConfirmPopup, self).__init__(**kwargs)
+        self.on_confirm = on_confirm
+        self.on_dismiss = on_dismiss
+        self._answered = False
+
+        with self.canvas.before:
+            Color(0, 0, 0, 0.8)
+            self.bg_rect = Rectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._update_bg, size=self._update_bg)
+
+        from kivy.graphics import RoundedRectangle
+
+        self.card = BoxLayout(
+            orientation='vertical',
+            size_hint=(0.72, 0.62),
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            padding=short_side(0.03),
+            spacing=short_side(0.018),
+        )
+        with self.card.canvas.before:
+            Color(1, 1, 1, 1)
+            self.card_rect = RoundedRectangle(pos=self.card.pos, size=self.card.size, radius=[short_side(0.022)])
+        self.card.bind(pos=self._update_card, size=self._update_card)
+
+        if image_source:
+            self.card.add_widget(Image(
+                source=image_source,
+                size_hint=(1, 0.38),
+                fit_mode='contain',
+            ))
+        else:
+            self.card.add_widget(ResizeLabel(
+                text=icon,
+                font_name=ICON_TTF,
+                size_hint=(1, 0.38),
+                wh_fraction=0.14,
+                color=(0, 0, 0, 1),
+                halign='center',
+                valign='middle',
+            ))
+
+        self.card.add_widget(ResizeLabel(
+            text=title,
+            size_hint=(1, 0.16),
+            wh_fraction=0.05,
+            bold=True,
+            color=(0, 0, 0, 1),
+            halign='center',
+            valign='middle',
+        ))
+
+        message_label = Label(
+            text=message,
+            size_hint=(1, 0.24),
+            font_size=SMALL_FONT(),
+            color=(0, 0, 0, 1),
+            halign='center',
+            valign='middle',
+        )
+        wh_bind(message_label, 'font_size', SMALL_FONT)
+        message_label.bind(size=message_label.setter('text_size'))
+        self.card.add_widget(message_label)
+
+        buttons = BoxLayout(
+            orientation='horizontal',
+            size_hint=(1, 0.22),
+            spacing=short_side(0.02),
+        )
+        # Cancel sits first, under the thumb that is already moving away.
+        buttons.add_widget(self._button_container(make_icon_button(
+            ICON_CANCEL,
+            size=0.11,
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            font=ICON_TTF,
+            font_size_fraction=0.055,
+            bgcolor=CANCEL_COLOR,
+            on_release=self._cancel,
+        )))
+        buttons.add_widget(self._button_container(make_icon_button(
+            ICON_CONFIRM,
+            size=0.11,
+            pos_hint={'center_x': 0.5, 'center_y': 0.5},
+            font=ICON_TTF,
+            font_size_fraction=0.055,
+            bgcolor=CONFIRM_COLOR,
+            on_release=self._confirm,
+        )))
+        self.card.add_widget(buttons)
+
+        self.add_widget(self.card)
+
+    @staticmethod
+    def _button_container(button):
+        container = AnchorLayout(anchor_x='center', anchor_y='center')
+        container.add_widget(button)
+        return container
+
+    def on_touch_down(self, touch):
+        """Swallow every touch, including one on the card that hits no widget.
+
+        Reporting those as unhandled sent them on to the wall of photos behind,
+        where the card under the question would have been picked for printing.
+        """
+        super(ConfirmPopup, self).on_touch_down(touch)
+        return True
+
+    def on_touch_move(self, touch):
+        super(ConfirmPopup, self).on_touch_move(touch)
+        return True
+
+    def on_touch_up(self, touch):
+        super(ConfirmPopup, self).on_touch_up(touch)
+        return True
+
+    def _update_bg(self, *args):
+        self.bg_rect.pos = self.pos
+        self.bg_rect.size = self.size
+
+    def _update_card(self, instance, *args):
+        self.card_rect.pos = instance.pos
+        self.card_rect.size = instance.size
+
+    def _answer(self, obj, confirmed):
+        # Both buttons close the popup, so a double tap must not delete twice.
+        if self._answered:
+            return
+        self._answered = True
+        if confirmed and self.on_confirm:
+            Clock.schedule_once(lambda dt: self.on_confirm(), 0)
+        if self.on_dismiss:
+            Clock.schedule_once(lambda dt: self.on_dismiss(), 0)
+
+    def _cancel(self, obj):
+        self._answer(obj, False)
+
+    def _confirm(self, obj):
+        self._answer(obj, True)

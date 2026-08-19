@@ -40,7 +40,11 @@
   },
   "remote_gallery": {
     "title": "PHOTOS FROM PHONES",
-    "empty": "Nothing yet.\nScan the QR code on the welcome screen\nto send a photo from your phone."
+    "empty": "Nothing yet.\nScan the QR code on the welcome screen\nto send a photo from your phone.",
+    "delete": {
+      "title": "DELETE THIS PHOTO?",
+      "message": "It will be removed from the booth.\nThis cannot be undone."
+    }
   },
   "popups": {
     "qr": {
