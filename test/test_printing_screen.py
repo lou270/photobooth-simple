@@ -70,6 +70,7 @@ class Printing:
     _tick = PrintingScreen._tick
     _fail = PrintingScreen._fail
     _done = PrintingScreen._done
+    _leave = PrintingScreen._leave
 
     def __init__(self, app, copies=1):
         self.app = app
@@ -80,6 +81,7 @@ class Printing:
         self._print_counted = False
         self._print_task_id = None
         self._printer_wait_started_at = None
+        self._can_leave = False
         self._timeout = app.PRINTER_WAIT_TIMEOUT
         self._clock = None
         self.title = SimpleNamespace(text='')
@@ -95,6 +97,7 @@ def settle(seconds):
 @pytest.fixture
 def quick_exit(monkeypatch):
     monkeypatch.setattr(printing_module, 'PRINT_DONE_SECONDS', 0.01)
+    monkeypatch.setattr(printing_module, 'PRINT_MIN_SECONDS', 0.01)
 
 
 # --- the job goes through --------------------------------------------------
@@ -185,3 +188,28 @@ def test_nothing_is_sent_while_the_photo_is_still_being_written():
 
     assert app.printed == []
     assert app.transitions == []
+
+
+# --- long enough to be read ------------------------------------------------
+
+def test_a_printer_that_answers_at_once_does_not_flash_past():
+    """CUPS calls the job done well before the sheet is out of the printer."""
+    app = FakeApp()
+    screen = Printing(app)
+
+    screen._tick(None)
+    settle(0.05)
+
+    assert app.printed == [(1, 0)]
+    assert app.transitions == []
+
+
+def test_a_guest_who_has_understood_can_skip_the_wait():
+    app = FakeApp()
+    screen = Printing(app)
+    screen._tick(None)
+
+    assert screen._can_leave
+    screen._leave()
+
+    assert app.transitions == [(ScreenMgr.START, {})]

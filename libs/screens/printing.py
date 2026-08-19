@@ -17,7 +17,7 @@ from kivy.uix.boxlayout import BoxLayout
 from libs.i18n import t
 from libs.kivywidgets import PaperFeedAnimation, ResizeLabel
 from libs.screens.names import ScreenNames
-from libs.screens.theme import ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS
+from libs.screens.theme import ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, PRINT_MIN_SECONDS
 from libs.screens.base import ColorScreen
 
 
@@ -40,22 +40,17 @@ class PrintingScreen(ColorScreen):
         self._current_format = 0
         self._copies = 1
         self._clock = None
+        self._can_leave = False
 
         layout = BoxLayout(orientation='vertical', size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
 
-        # The printer sits on top of the sheet coming out of it: the animation
-        # draws on canvas.before, the icon is a child, children win.
-        self.animation = PaperFeedAnimation(size_hint=(1, 0.55), sheet_color=[1, 1, 1, 1])
-        self.icon = ResizeLabel(
-            text=ICON_PRINT,
-            font_name=ICON_TTF,
-            size_hint=(1, 0.72),
-            pos_hint={'center_x': 0.5, 'top': 1},
-            wh_fraction=0.16,
-            halign='center',
-            valign='middle',
+        self.animation = PaperFeedAnimation(
+            icon_text=ICON_PRINT,
+            icon_font=ICON_TTF,
+            icon_wh_fraction=0.16,
+            sheet_color=[1, 1, 1, 1],
+            size_hint=(1, 0.55),
         )
-        self.animation.add_widget(self.icon)
         layout.add_widget(self.animation)
 
         self.title = ResizeLabel(
@@ -88,6 +83,7 @@ class PrintingScreen(ColorScreen):
         self._print_counted = False
         self._print_task_id = None
         self._printer_wait_started_at = None
+        self._can_leave = False
         self._timeout = getattr(self.app, 'PRINTER_WAIT_TIMEOUT', 45)
         self.title.text = t('printing.title')
         self.message.text = t('printing.saving')
@@ -120,9 +116,28 @@ class PrintingScreen(ColorScreen):
         )
 
     def _done(self):
-        """The printer has the job; the booth belongs to the next guest."""
-        self.animation.stop()
-        self._clock = Clock.schedule_once(lambda dt: self.app.transition_to(ScreenNames.START), PRINT_DONE_SECONDS)
+        """The printer has the job; the booth belongs to the next guest.
+
+        Not immediately, though: CUPS calls a job done well before the sheet is
+        out, and a screen that flashes past leaves the guest walking away from a
+        printer they were never told to go to. The sheet keeps moving until the
+        screen goes, because so does the real one.
+        """
+        self._can_leave = True
+        elapsed = time.monotonic() - self._started_at
+        delay = max(PRINT_DONE_SECONDS, PRINT_MIN_SECONDS - elapsed)
+        self._clock = Clock.schedule_once(self._leave, delay)
+
+    def _leave(self, *args):
+        self._clock = None
+        self.app.transition_to(ScreenNames.START)
+
+    def on_touch_down(self, touch):
+        # A guest who has understood should not have to wait out the delay.
+        if self._can_leave:
+            self._leave()
+            return True
+        return super(PrintingScreen, self).on_touch_down(touch)
 
     def _tick(self, obj):
         if self.app.has_pending_photo_tasks():

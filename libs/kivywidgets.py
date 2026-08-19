@@ -773,27 +773,65 @@ Builder.load_string('''
         Color:
             rgba: (root.sheet_color[0], root.sheet_color[1], root.sheet_color[2], root.sheet_color[3] * root.sheet_alpha)
         RoundedRectangle:
-            pos: (self.center_x - self.width * 0.20, self.y + self.height * (0.42 - 0.40 * root.progress))
-            size: (self.width * 0.40, self.height * 0.30)
-            radius: [min(self.width, self.height) * 0.03,]
+            pos: (root.sheet_x, root.sheet_y - root.sheet_travel * root.progress)
+            size: (root.sheet_width, root.sheet_height)
+            radius: [max(1.0, root.sheet_height * 0.08),]
 ''')
 class PaperFeedAnimation(FloatLayout):
-    """A sheet sliding out from under whatever is drawn on top of it.
+    """A printer icon with a sheet sliding out from under it.
 
-    Meant to sit behind a printer icon: the caller adds the icon as a child, and
-    children are drawn after canvas.before, so the sheet comes out from under it.
+    It draws the icon itself rather than taking one from the caller, because the
+    sheet has to be measured against the glyph: the icon is a font character
+    drawn at its own size, which has nothing to do with the box the widget was
+    given, and a sheet measured against the box came out several times too wide
+    for the printer it was supposed to be leaving. Children are drawn after
+    canvas.before, so the icon covers the sheet on its way out.
+
     Driven by the clock rather than an Animation, like every other moving widget
     here, so it can skip itself when its screen is not the one being shown.
     """
 
     progress = NumericProperty(0)
     sheet_alpha = NumericProperty(0)
-    sheet_color = ColorProperty([0.82, 0.82, 0.82, 1])
+    sheet_color = ColorProperty([1, 1, 1, 1])
     speed = NumericProperty(0.55)  # sheets per second
 
-    def __init__(self, **kwargs):
+    # Geometry taken from the glyph, recomputed whenever it is redrawn.
+    sheet_x = NumericProperty(0)
+    sheet_y = NumericProperty(0)
+    sheet_width = NumericProperty(0)
+    sheet_height = NumericProperty(0)
+    sheet_travel = NumericProperty(0)
+
+    def __init__(self, icon_text='', icon_font='Roboto', icon_wh_fraction=0.16,
+                 icon_color=(1, 1, 1, 1), **kwargs):
         super().__init__(**kwargs)
         self._clock = None
+        self.icon = ResizeLabel(
+            text=icon_text,
+            font_name=icon_font,
+            wh_fraction=icon_wh_fraction,
+            color=icon_color,
+            size_hint=(1, 1),
+            pos_hint={'x': 0, 'y': 0},
+            halign='center',
+            valign='middle',
+        )
+        self.add_widget(self.icon)
+        self.icon.bind(texture_size=self._sync_sheet, pos=self._sync_sheet, size=self._sync_sheet)
+        self.bind(pos=self._sync_sheet, size=self._sync_sheet)
+
+    def _sync_sheet(self, *args):
+        """Cut the sheet to the size of the printer it comes out of."""
+        glyph_width, glyph_height = self.icon.texture_size
+        if glyph_width <= 1 or glyph_height <= 1:
+            return
+        self.sheet_width = glyph_width * 0.5
+        self.sheet_height = glyph_height * 0.34
+        self.sheet_x = self.icon.center_x - self.sheet_width / 2
+        # Starts hidden behind the printer body and ends half out below it.
+        self.sheet_y = self.icon.center_y - self.sheet_height
+        self.sheet_travel = max(0.0, glyph_height * 0.5 - self.sheet_height * 0.5)
 
     def start(self):
         """Feed sheets until told otherwise. Idempotent: screens are reused."""

@@ -54,9 +54,12 @@ SHOT_AUTOSTART_SECONDS = 1.5
 # Keeping the shot is what nearly everyone does; retaking is the exception, so
 # it is the one that needs a button press. Any touch on the screen restarts it.
 CONFIRM_AUTO_KEEP_SECONDS = 6
-# A beat between the printer taking the job and the popup getting out of the
-# way, so the animation does not cut mid-sheet.
-PRINT_DONE_SECONDS = 0.8
+# A beat between the printer taking the job and the screen getting out of the
+# way, so the animation does not cut mid-sheet...
+PRINT_DONE_SECONDS = 1.5
+# ...and a floor under the whole screen, because a printer that answers at once
+# would otherwise leave nothing on screen long enough to read. A touch skips it.
+PRINT_MIN_SECONDS = 6.0
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90

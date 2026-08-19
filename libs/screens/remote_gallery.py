@@ -126,24 +126,41 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
 
     # --- layout ----------------------------------------------------------
 
-    def _card_size(self, card_count):
-        """Card size and column count, from the window's shape and how many there are."""
+    def _card_size(self):
+        """Card size and column count, from the window's shape only.
+
+        Deliberately not from how many photos there are. Sizing the columns to
+        the queue turned a single waiting photo into one column the width of the
+        window, and a card taller than the screen: one guest's photo blown up
+        like a poster, with the clock label pushed out of sight. The grid keeps
+        the columns it would have had for a full queue and a lone card simply
+        sits in the first of them, at the same size as its neighbours would be.
+        """
         aspect = Window.width / max(1, Window.height)
         cols = 2 if aspect < 1.0 else (3 if aspect < 1.6 else 4)
-        cols = max(1, min(cols, max(1, card_count)))
 
         spacing = Window.height * 0.02
         padding = Window.height * 0.02
         available_width = Window.width * 0.96 - (2 * padding) - (cols - 1) * spacing
         width = max(Window.height * 0.12, available_width / cols)
-        return width, width * 1.2, cols
+        height = width * 1.2
+
+        # The grid sits in a scroll view 86% of the screen tall; a card taller
+        # than that can only be scrolled past, never seen whole.
+        max_height = Window.height * 0.78
+        if height > max_height:
+            height = max_height
+            width = height / 1.2
+        return width, height, cols
 
     def _update_card_sizes(self, *args):
         if not self.photo_cards:
             return
 
-        card_width, card_height, cols = self._card_size(len(self.photo_cards))
-        self.cards_grid.cols = cols
+        card_width, card_height, cols = self._card_size()
+        # Empty columns would still take their spacing, pushing a short row off
+        # centre, so the grid only declares the columns it fills.
+        self.cards_grid.cols = max(1, min(cols, len(self.photo_cards)))
         self.cards_grid.spacing = Window.height * 0.02
         self.cards_grid.row_default_height = card_height
         self.cards_grid.row_force_default = True
@@ -227,7 +244,7 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
         self.cards_grid.clear_widgets()
         self.photo_cards = []
 
-        card_width, card_height, _cols = self._card_size(len(thumbnails))
+        card_width, card_height, _cols = self._card_size()
         for entry, thumbnail_path in thumbnails:
             card = self._create_photo_card(entry, thumbnail_path, (card_width, card_height))
             self.cards_grid.add_widget(card)

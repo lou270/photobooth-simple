@@ -188,3 +188,17 @@ def test_without_an_access_point_a_single_code_carries_the_address(tmp_path):
 
     assert steps == [('http://192.168.1.20:5000/remote', '')]
     assert hint == 'http://192.168.1.20:5000/remote'
+
+
+# --- the wall of waiting photos --------------------------------------------
+
+def test_a_lone_photo_is_a_card_like_any_other():
+    """One waiting photo used to fill the window: one column, taller than the screen."""
+    from kivy.core.window import Window
+
+    width, height, cols = RemoteGalleryScreen._card_size(None)
+
+    assert cols >= 2
+    assert width <= Window.width / 2
+    # It has to fit the scroll view it lives in, which is 86% of the screen.
+    assert height <= Window.height * 0.86
