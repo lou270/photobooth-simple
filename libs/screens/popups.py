@@ -7,7 +7,6 @@ import time
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.graphics import Color, Rectangle
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -238,7 +237,6 @@ class QRCodePopup(FloatLayout):
                 Logger.info('QRCodePopup: Using cached QR code')
     
     def _close(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         if self._close_scheduled:
             return
         self._close_scheduled = True

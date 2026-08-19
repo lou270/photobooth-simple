@@ -4,7 +4,6 @@ import threading
 import cv2
 
 from kivy.clock import Clock
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.metrics import dp
 from kivy.uix.anchorlayout import AnchorLayout
@@ -271,11 +270,9 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._sync_copies()
 
     def less_copies_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         self._change_copies(-1)
 
     def more_copies_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         self._change_copies(1)
 
     # --- filters ----------------------------------------------------------
@@ -390,7 +387,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._start_home_timeout()
 
     def print_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: print_event(copies=%s).', self._copies)
         # The session is written first and the printing screen waits on it, so
         # the printer gets the collage the guest chose, not the one it started
@@ -404,7 +400,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         )
 
     def share_event(self, obj):
-        if obj is not None and not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ReviewScreen: share_event().')
         self._reset_timeout()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:

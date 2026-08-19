@@ -4,7 +4,6 @@ import math
 
 from kivy.core.window import Window
 from kivy.graphics import Color
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -288,7 +287,6 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         self.app.ringled.clear()
 
     def on_format_selected(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         format_idx = obj.format_idx
         Logger.info(f'SelectFormatScreen: on_format_selected({format_idx}).')
         self._start_format(format_idx)

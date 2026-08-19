@@ -1,7 +1,6 @@
 """The maintenance screen: something needs an operator."""
 
 from kivy.core.window import Window
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -122,12 +121,10 @@ class ErrorScreen(ColorScreen):
         Logger.info('ErrorScreen: on_exit().')
 
     def on_click(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ErrorScreen: on_click().')
         self.app.transition_to(ScreenNames.START)
 
     def on_restart(self, obj):
-        if not isinstance(obj.last_touch, MouseMotionEvent): return
         Logger.info('ErrorScreen: on_restart().')
         self.app.request_restart()
 

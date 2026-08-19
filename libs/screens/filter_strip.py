@@ -10,7 +10,6 @@ import cv2
 from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
 from kivy.graphics.texture import Texture
-from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
@@ -153,7 +152,6 @@ class FilterStrip(AnchorLayout):
         self.opacity = 1.0 if self._enabled else 0.35
 
     def _card_released(self, card):
-        if not isinstance(card.last_touch, MouseMotionEvent): return
         if not self._enabled:
             return
         Logger.info('FilterStrip: %s selected.', card.filter_key)
