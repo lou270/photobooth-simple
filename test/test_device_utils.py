@@ -28,10 +28,12 @@ class FakePrinter:
     def __init__(self):
         self.file_path = None
         self.print_params = None
+        self.jobs = []
 
     def print(self, file_path, print_params):
         self.file_path = file_path
         self.print_params = print_params
+        self.jobs.append((file_path, dict(print_params)))
         return 123
 
 
@@ -89,7 +91,7 @@ def test_trigger_print_ignores_stale_print_collage_for_fullpage(tmp_path):
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
 
-    assert app.trigger_print(1, format=0) == 123
+    assert app.trigger_print(1, format=0) == [123]
     assert printer.file_path == str(collage)
     assert printer.print_params == {'PageSize': 'w288h432', 'copies': '1'}
 
@@ -110,6 +112,29 @@ def test_trigger_print_uses_print_collage_for_duplicated_strip(tmp_path):
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
 
-    assert app.trigger_print(1, format=0) == 123
+    assert app.trigger_print(1, format=0) == [123]
     assert printer.file_path == str(print_collage)
     assert printer.print_params == {'PageSize': 'w288h432-div2', 'copies': '1'}
+
+
+def test_three_copies_are_three_single_copy_jobs(tmp_path):
+    """The dye-sub driver never duplicates a sheet, so the booth queues each one.
+
+    A single job asking for three copies came out as one photo: the Gutenprint
+    PPD says the device counts copies and the usb backend does not.
+    """
+    printer = FakePrinter()
+    collage = tmp_path / 'collage.jpg'
+    collage.write_bytes(b'fullpage')
+
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.devices = printer
+    app.print_formats = [FakePrintFormat({'PageSize': 'w288h432'}, uses_print_version=False)]
+    app.storage = FakeStorage(str(tmp_path / 'missing_print.jpg'))
+    app.stats_store = UnlimitedPrints()
+    app.get_collage = lambda: str(collage)
+    app.get_saved_collage = lambda: None
+    app.has_printer = lambda: True
+
+    assert app.trigger_print(3, format=0) == [123, 123, 123]
+    assert printer.jobs == [(str(collage), {'PageSize': 'w288h432', 'copies': '1'})] * 3

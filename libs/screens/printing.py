@@ -81,7 +81,7 @@ class PrintingScreen(ColorScreen):
         self._started_at = time.monotonic()
         self._print_started = False
         self._print_counted = False
-        self._print_task_id = None
+        self._print_task_ids = []
         self._printer_wait_started_at = None
         self._can_leave = False
         self._timeout = getattr(self.app, 'PRINTER_WAIT_TIMEOUT', 45)
@@ -159,12 +159,13 @@ class PrintingScreen(ColorScreen):
         if not self._print_started:
             self.message.text = t('printing.sending')
             try:
-                print_task_id = self.app.trigger_print(self._copies, self._current_format)
-                if print_task_id is None:
+                # One task per sheet: the booth queues the copies itself, so
+                # the screen is only done once every one of them is through.
+                self._print_task_ids = list(self.app.trigger_print(self._copies, self._current_format) or [])
+                if not self._print_task_ids:
                     raise RuntimeError('Printer did not return a task id')
-                self._print_task_id = print_task_id
                 self._print_started = True
-                Logger.info('PrintingScreen: print started task=%s copies=%s', self._print_task_id, self._copies)
+                Logger.info('PrintingScreen: print started tasks=%s copies=%s', self._print_task_ids, self._copies)
             except Exception as exc:
                 self._fail(t('printing.print_failed'), str(exc))
                 return
@@ -187,13 +188,13 @@ class PrintingScreen(ColorScreen):
             self._printer_wait_started_at = None
 
         try:
-            status = self.app.devices.get_print_status(self._print_task_id)
+            statuses = [self.app.devices.get_print_status(task_id) for task_id in self._print_task_ids]
         except Exception as exc:
             self._fail(t('printing.print_failed'), str(exc))
             return
 
-        Logger.info('PrintingScreen: print status task=%s status=%s', self._print_task_id, status)
-        if status == 'done':
+        Logger.info('PrintingScreen: print status tasks=%s statuses=%s', self._print_task_ids, statuses)
+        if all(status == 'done' for status in statuses):
             if not self._print_counted:
                 self.app.track_print_sent(self._copies)
                 self._print_counted = True

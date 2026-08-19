@@ -539,26 +539,42 @@ class PhotoboothApp(App):
         self.stats_store.track_print(copies)
 
     def trigger_print(self, copies, format=0):
+        """Queue one job per sheet and return their task ids.
+
+        One job asking for several copies is the obvious way to do this, and it
+        is the way that comes out as a single photo: the Gutenprint dye-sub PPD
+        declares cupsManualCopies False, which tells CUPS the device counts the
+        copies itself, and the plain usb backend the queue is registered on
+        never does. Nobody duplicates the sheet and the guest is handed one
+        photo out of the three they asked for. Sheets the booth queues itself
+        come out whatever the driver believes about copies, and each job asks
+        for exactly one so a queue default cannot double them either.
+        """
         Logger.info('PhotoboothApp: trigger_print().')
         if not self.has_printer():
             raise RuntimeError('Printer is not available')
         if not self.stats_store.can_print():
             raise RuntimeError('Print limit reached')
+        copies = max(1, int(copies))
         options = self.print_formats[format].get_print_params()
-        options['copies'] = str(copies)
+        options['copies'] = '1'
         Logger.info('PhotoboothApp: print request format=%s copies=%s printer_available=%s', format, copies, self.has_printer())
         self.storage.log_disk_usage('before_print')
-        
+
         # Use duplicated print output only for templates that generate one.
         print_collage = self.storage.get_print_collage()
         if self.print_formats[format].uses_print_version() and os.path.exists(print_collage):
             Logger.info(f'PhotoboothApp: Using print version: {print_collage}')
-            return self.devices.print(print_collage, options)
+            to_print = print_collage
+        else:
+            collage = self.get_collage() if os.path.exists(self.get_collage()) else self.get_saved_collage()
+            if collage is None:
+                raise FileNotFoundError('No collage available to print')
+            to_print = collage
 
-        collage = self.get_collage() if os.path.exists(self.get_collage()) else self.get_saved_collage()
-        if collage is None:
-            raise FileNotFoundError('No collage available to print')
-        return self.devices.print(collage, options)
+        task_ids = [self.devices.print(to_print, options) for _ in range(copies)]
+        Logger.info('PhotoboothApp: print jobs queued tasks=%s', task_ids)
+        return task_ids
 
     def start_photo_task(self, target, *args):
         def run_target():

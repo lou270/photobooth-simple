@@ -27,8 +27,10 @@ from libs.screens import printing as printing_module
 class FakeDevices:
     def __init__(self, status='done'):
         self.status = status
+        self.asked = []
 
     def get_print_status(self, task_id):
+        self.asked.append(task_id)
         return self.status
 
 
@@ -55,7 +57,7 @@ class FakeApp:
 
     def trigger_print(self, copies, format_idx):
         self.printed.append((copies, format_idx))
-        return 7
+        return list(range(7, 7 + copies))  # one task per sheet
 
     def track_print_sent(self, copies=1):
         self.counted += copies
@@ -79,7 +81,7 @@ class Printing:
         self._started_at = time.monotonic()
         self._print_started = False
         self._print_counted = False
-        self._print_task_id = None
+        self._print_task_ids = []
         self._printer_wait_started_at = None
         self._can_leave = False
         self._timeout = app.PRINTER_WAIT_TIMEOUT
@@ -121,6 +123,28 @@ def test_a_job_of_three_copies_is_sent_and_counted_as_three(quick_exit):
 
     assert app.printed == [(3, 0)]
     assert app.counted == 3
+
+
+def test_every_sheet_of_a_three_copy_job_is_waited_for(quick_exit):
+    """Three sheets are three printer tasks, and the guest waits for them all."""
+    app = FakeApp()
+    screen = Printing(app, copies=3)
+
+    screen._tick(None)
+
+    assert screen._print_task_ids == [7, 8, 9]
+    assert app.devices.asked == [7, 8, 9]
+
+
+def test_a_job_is_not_done_while_one_of_its_sheets_is_still_printing(quick_exit):
+    app = FakeApp()
+    app.devices.get_print_status = lambda task_id: 'done' if task_id == 7 else 'pending'
+    screen = Printing(app, copies=2)
+
+    screen._tick(None)
+
+    assert app.counted == 0
+    assert app.transitions == []
 
 
 def test_a_job_still_running_keeps_the_guest_informed():
