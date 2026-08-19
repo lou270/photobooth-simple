@@ -707,6 +707,31 @@ Builder.load_string("""
 class IconTextButton(FeedbackButtonBehavior, BoxLayout):
     background_color = ListProperty([1, 1, 1, 1])
 
+# An icon and a short label side by side need a wide button; below this they
+# stop reading as one thing.
+ICON_TEXT_MIN_RATIO = 2.5
+
+
+def icon_text_button_size(parent_size, size_hint, min_ratio=ICON_TEXT_MIN_RATIO):
+    """The size a labelled icon button takes inside a FloatLayout of that size.
+
+    None means the caller sized the button itself and this has nothing to say:
+    a size_hint with a None in it used to be multiplied by the parent anyway,
+    which is not an error Python lets pass.
+    """
+    if size_hint[0] is None or size_hint[1] is None:
+        return None
+
+    parent_width, parent_height = parent_size
+    width = parent_width * size_hint[0]
+    height = min(max(parent_height * size_hint[1], dp(48)), parent_height)
+    width = max(width, height * min_ratio)
+    if width > parent_width:
+        width = parent_width
+        height = min(height, width / min_ratio)
+    return width, height
+
+
 def make_icon_text_button(icon, text, size_hint=(0.25, 0.09), pos_hint={}, icon_font='Roboto', text_font='Roboto', icon_font_size=sp(50), icon_font_size_fraction=0, text_font_size=sp(30), text_font_size_fraction=0, bgcolor=(1,1,1,1), on_release=None):
     """
     Create a horizontal button with icon on left and text on right.
@@ -721,16 +746,11 @@ def make_icon_text_button(icon, text, size_hint=(0.25, 0.09), pos_hint={}, icon_
         if not button.parent:
             return
         if isinstance(button.parent, FloatLayout):
-            button.size_hint = (None, None)
-            width = button.parent.width * size_hint[0]
-            height = min(max(button.parent.height * size_hint[1], dp(48)), button.parent.height)
-            # ponytail: icon + short label need a minimum aspect ratio; longer labels need a larger size_hint.
-            min_ratio = 2.5
-            width = max(width, height * min_ratio)
-            if width > button.parent.width:
-                width = button.parent.width
-                height = min(height, width / min_ratio)
-            button.size = (width, height)
+            size = icon_text_button_size(button.parent.size, size_hint)
+            if size is not None:
+                button.size_hint = (None, None)
+                button.size = size
+        # Even a button the caller sized keeps its padding in step with it.
         margin = min(dp(15), max(dp(3), button.height * 0.12))
         button.padding = (margin, margin, margin, margin)
         button.spacing = margin
