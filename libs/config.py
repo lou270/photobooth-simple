@@ -40,10 +40,27 @@ class Config:
             )
 
     def _get_value(self, getter_name, sections, option, fallback=None):
+        """Read the first section that carries `option`, falling back on nonsense.
+
+        configparser raises on a value it cannot coerce, and a raise here is a
+        booth that will not start: the same file is rewritten by the admin form
+        on site, so a stray letter in a port or a countdown is one typo away.
+        The options that had been bitten already - ROTATION, MAX_PRINTS,
+        CALIBRATION, the window sides - each grew their own guard; this puts it
+        under all of them.
+        """
         getter = getattr(self.config, getter_name)
         for section in sections:
-            if self.config.has_option(section, option):
+            if not self.config.has_option(section, option):
+                continue
+            try:
                 return getter(section, option)
+            except ValueError:
+                Logger.warning(
+                    'Config: invalid %s=%r in [%s], using %r',
+                    option, self.config.get(section, option, fallback=''), section, fallback,
+                )
+                return fallback
         return fallback
 
     def _get_string(self, sections, option, fallback=''):

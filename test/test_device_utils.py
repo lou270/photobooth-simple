@@ -9,7 +9,7 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from libs.device_utils import Cv2Camera, DeviceUtils, Gphoto2Camera, Picamera2Camera
-from libs.hardware import FakeCamera
+from libs.hardware import Camera, FakeCamera
 from libs.kivywidgets import KivyCamera
 from photoboothapp import PhotoboothApp
 
@@ -144,6 +144,87 @@ def test_three_copies_are_three_single_copy_jobs(tmp_path):
 
     assert app.trigger_print(3, format=0) == [123, 123, 123]
     assert printer.jobs == [(str(collage), {'PageSize': 'w288h432', 'copies': '1'})] * 3
+
+
+# --- what a finished capture has to leave on disk --------------------------
+
+def test_a_capture_is_not_done_until_its_small_copy_is_written(tmp_path):
+    """Nothing tracks the small copy, so it has to be there when capture returns.
+
+    It used to be written by a thread of its own. The capture job was finished
+    the moment _write_capture returned, so the confirm screen went looking for
+    a file still being written — and it reads a missing preview as "nothing to
+    show", leaving the previous shot on screen for the guest to keep or retake.
+    """
+    from libs.file_utils import FileUtils
+    from libs.hardware import Camera
+
+    output = tmp_path / 'capture-0.jpg'
+    Camera()._write_capture(str(output), np.zeros((900, 1600, 3), dtype=np.uint8))
+
+    assert output.exists()
+    assert Path(FileUtils.get_small_path(str(output))).exists()
+
+
+# --- releasing a camera nothing else is inside -----------------------------
+
+def test_a_camera_whose_preview_thread_will_not_stop_is_not_freed():
+    """Freeing a handle a thread is blocked inside segfaults instead of raising.
+
+    PhotoboothApp already waits for the abandoned capture thread for this
+    reason. The preview thread is just as stuck when the camera is what stopped
+    answering, and close() used to free the device after a one second join
+    whatever the answer.
+    """
+    camera = Camera()
+    camera._preview_stop = False
+    camera.PREVIEW_RELEASE_TIMEOUT_SECONDS = 0.1
+
+    stuck = threading.Event()
+    camera._preview_thread = threading.Thread(target=stuck.wait, daemon=True)
+    camera._preview_thread.start()
+    try:
+        assert camera._release_preview_thread() is False
+    finally:
+        stuck.set()
+
+
+def test_a_camera_that_lets_go_is_freed():
+    camera = Camera()
+    camera._preview_stop = False
+    camera._preview_thread = threading.Thread(target=lambda: None, daemon=True)
+    camera._preview_thread.start()
+    camera._preview_thread.join()
+
+    assert camera._release_preview_thread() is True
+    assert camera._preview_stop is True
+
+
+def test_one_camera_serving_both_roles_is_closed_once():
+    """preview and capture are the same object on every rig that is not hybrid."""
+    closed = []
+
+    class OneCamera:
+        def close(self):
+            closed.append(1)
+            return True
+
+    devices = DeviceUtils.__new__(DeviceUtils)
+    devices._preview = devices._capture = OneCamera()
+
+    assert devices.close() is True
+    assert closed == [1]
+
+
+def test_a_device_that_cannot_be_released_is_reported():
+    class StuckCamera:
+        def close(self):
+            return False
+
+    devices = DeviceUtils.__new__(DeviceUtils)
+    devices._preview = devices._capture = StuckCamera()
+
+    assert devices.close() is False
 
 
 # --- the preview contract every backend owes the widget --------------------

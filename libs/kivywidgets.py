@@ -12,11 +12,65 @@ from kivy.metrics import dp, sp
 from kivy.logger import Logger
 from kivy.core.window import Window
 import time
+import weakref
 import numpy as np
 import cv2
 
 
 from libs.file_utils import FileUtils
+
+
+class _WindowSizeRegistry:
+    """Widgets that resize themselves with the window, held weakly and pruned.
+
+    Every one of these used to call Window.bind(size=...) for itself. Kivy holds
+    the bound method weakly, so the widget is still collected — but the dead
+    entry stays on Window's observer list for the life of the process, and
+    nothing ever takes it off, a resize included. Screens that rebuild their
+    widgets rather than relabel them (the queue of photos from phones rebuilds
+    every card each time it changes, once every five seconds) therefore grew
+    that list without bound over an evening.
+
+    One binding on Window, one list here, and the dead are dropped both as the
+    list is walked and, for a booth in kiosk mode that never resizes at all, on
+    a counter as entries are added.
+    """
+
+    PRUNE_AFTER_ADDS = 64
+
+    def __init__(self):
+        self._entries = []
+        self._adds_since_prune = 0
+
+    def add(self, widget, apply):
+        """Call apply(widget) on every window resize, while `widget` lives.
+
+        `apply` takes the widget as its argument and must not close over it,
+        or the weak reference here would be pointless.
+        """
+        self._entries.append((weakref.ref(widget), apply))
+        self._adds_since_prune += 1
+        if self._adds_since_prune >= self.PRUNE_AFTER_ADDS:
+            self._adds_since_prune = 0
+            self._entries = [entry for entry in self._entries if entry[0]() is not None]
+
+    def dispatch(self, *args):
+        survivors = []
+        for reference, apply in self._entries:
+            widget = reference()
+            if widget is None:
+                continue
+            survivors.append((reference, apply))
+            apply(widget)
+        self._entries = survivors
+        self._adds_since_prune = 0
+
+    def __len__(self):
+        return len(self._entries)
+
+
+window_size_registry = _WindowSizeRegistry()
+Window.bind(size=window_size_registry.dispatch)
 
 
 def short_side(fraction=1.0):
@@ -332,7 +386,7 @@ class ResizeLabel(Label):
         super().__init__(**kwargs)
         if self.wh_fraction:
             self.max_font_size = min(Window.size) * self.wh_fraction
-            Window.bind(size=self._update_max_font)
+            window_size_registry.add(self, lambda widget: widget._update_max_font())
 
     def _update_max_font(self, *args):
         if self.wh_fraction:
@@ -383,7 +437,7 @@ class SquareFloatLayout(FloatLayout):
         super(SquareFloatLayout, self).__init__(**kwargs)
         if not use_parent_size:
             self._update_size()
-            Window.bind(size=self._on_window_resize)
+            window_size_registry.add(self, lambda widget: widget._on_window_resize(None, None))
         else:
             self.bind(parent=self._on_parent_change)
     
@@ -470,8 +524,12 @@ class BreezyBorderedLabel(Label):
         self.start_breeze()
 
     def on_size(self, *args):
+        # Same guard ResizeLabel has: an empty caption is a division by zero,
+        # and a missing translation key is one edit away from producing one.
+        if not self.text:
+            return
         self.font_size = self.width / len(self.text) * 1.5
-    
+
     def start_breeze(self):
         if self._animation_event is None:
             self._animation_event = Clock.schedule_interval(self._update_breeze, 1/30.0)
@@ -606,7 +664,7 @@ class CircularProgressCounter(FloatLayout):
         )
         self.add_widget(self.label)
         self.bind(circle_size=self._update_label_size)
-        Window.bind(size=self._on_window_resize)
+        window_size_registry.add(self, lambda widget: widget._on_window_resize())
         Clock.schedule_once(self._update_responsive_size, 0)
 
     def _on_window_resize(self, *args):

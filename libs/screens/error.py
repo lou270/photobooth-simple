@@ -1,5 +1,6 @@
 """The maintenance screen: something needs an operator."""
 
+from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.metrics import dp
@@ -9,7 +10,10 @@ from kivy.uix.label import Label
 from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, RoundedButton
 from libs.screens.names import ScreenNames
-from libs.screens.theme import CONFIRM_COLOR, HOME_COLOR, ICON_ERROR, ICON_TTF, LARGE_FONT, SMALL_FONT, wh_bind
+from libs.screens.theme import (
+    CONFIRM_COLOR, ERROR_HOME_TIMEOUT_SECONDS, HOME_COLOR, ICON_ERROR, ICON_TTF,
+    LARGE_FONT, SMALL_FONT, wh_bind,
+)
 from libs.screens.base import ColorScreen
 
 
@@ -27,6 +31,7 @@ class ErrorScreen(ColorScreen):
         self.app = app
         self._show_continue = True
         self._show_restart = False
+        self._home_timeout_clock = None
 
         layout = BoxLayout(orientation='vertical', padding=(0, dp(12), 0, dp(24)), spacing=dp(12))
 
@@ -116,9 +121,34 @@ class ErrorScreen(ColorScreen):
         self.btn_restart.opacity = 1 if self._show_restart else 0
         self.btn_restart.disabled = not self._show_restart
         self.actions.opacity = 1 if (self._show_continue or self._show_restart) else 0
+        self._start_home_timeout()
+
+    def _start_home_timeout(self):
+        """Take the booth home from an error the next guest need not read.
+
+        Only where continuing is offered: an error with nothing but a restart
+        button is a booth waiting for an operator, and walking it back to the
+        welcome screen would send the next guest straight into the same wall.
+        """
+        self._stop_home_timeout()
+        if not self._show_continue:
+            return
+        self._home_timeout_clock = Clock.schedule_once(
+            self._home_timeout_event, ERROR_HOME_TIMEOUT_SECONDS)
+
+    def _stop_home_timeout(self):
+        if self._home_timeout_clock:
+            Clock.unschedule(self._home_timeout_clock)
+            self._home_timeout_clock = None
+
+    def _home_timeout_event(self, dt):
+        Logger.info('ErrorScreen: home timeout, returning to start.')
+        self._home_timeout_clock = None
+        self.app.transition_to(ScreenNames.START)
 
     def on_exit(self, kwargs={}):
         Logger.info('ErrorScreen: on_exit().')
+        self._stop_home_timeout()
 
     def on_click(self, obj):
         Logger.info('ErrorScreen: on_click().')

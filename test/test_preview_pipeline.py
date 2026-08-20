@@ -19,6 +19,21 @@ def frame(height=1080, width=1440):
     return np.random.randint(0, 255, (height, width, 3), dtype=np.uint8)
 
 
+def test_blurry_borders_honours_return_cache_on_a_degenerate_frame():
+    """The live preview unpacks a pair from every call.
+
+    The guard for a frame with no pixels returned the array on its own, so a
+    camera handing back an empty buffer turned into "not enough values to
+    unpack" rather than a skipped frame.
+    """
+    empty = np.zeros((0, 640, 3), dtype=np.uint8)
+
+    result, cache = FileUtils.blurry_borders(empty, (800, 600), return_cache=True)
+
+    assert result is empty
+    assert cache is None
+
+
 @pytest.mark.parametrize('widget_size', [(800, 480), (480, 800), (1024, 1024)])
 def test_blurry_borders_fills_the_requested_widget_size(widget_size):
     result = FileUtils.blurry_borders(frame(), widget_size)

@@ -622,9 +622,19 @@ class PhotoboothApp(App):
             self.request_restart()
             return False
 
+        # The capture thread is not the only one holding the camera: each
+        # backend runs a preview thread of its own, and it is just as stuck as
+        # the capture when the device is the thing that stopped answering.
+        # close() refuses to free a handle a thread is still inside, for exactly
+        # the reason above, and says so by returning False.
         try:
-            if getattr(self, 'devices', None):
-                self.devices.close()
+            if getattr(self, 'devices', None) and not self.devices.close():
+                Logger.error(
+                    'PhotoboothApp: the camera could not be released, restarting the '
+                    'application rather than reopening a device still held by a thread'
+                )
+                self.request_restart()
+                return False
         except Exception as exc:
             Logger.warning('PhotoboothApp: device close during reset failed: %s', exc)
 

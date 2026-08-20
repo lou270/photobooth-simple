@@ -125,12 +125,12 @@ class Cv2Camera(Camera):
         self._write_capture(output_name, im)
     
     def close(self):
-        self._preview_stop = True
-        if self._preview_thread is not None and self._preview_thread.is_alive():
-            self._preview_thread.join(timeout=1)
+        if not self._release_preview_thread():
+            return False
         if self._instance is not None:
             self._instance.release()
             self._instance = None
+        return True
 
 class Gphoto2Camera(Camera):
     def __init__(self, dslr_liveview_params=None, dslr_capture_params=None):
@@ -364,15 +364,15 @@ class Gphoto2Camera(Camera):
 
 
     def close(self):
-        self._preview_stop = True
-        if self._preview_thread is not None and self._preview_thread.is_alive():
-            self._preview_thread.join(timeout=1)
+        if not self._release_preview_thread():
+            return False
         if self._instance is not None:
             try:
                 self._instance.close()
             except Exception as e:
                 Logger.warning('Gphoto2Camera: could not close camera cleanly: %s', e)
             self._instance = None
+        return True
 
 class Picamera2Camera(Camera):
     def __init__(self, port=0):
@@ -415,6 +415,10 @@ class Picamera2Camera(Camera):
                 time.sleep(1.0 / self._preview_fps)
             except Exception as e:
                 Logger.debug('Picamera2Camera preview thread: %s', e)
+                # Sleep here too, like the other two backends: an error that
+                # persists - the camera busy across a switch_mode, say - turned
+                # this into a spin that ate a whole core of the Pi.
+                time.sleep(1.0 / self._preview_fps)
 
     def _start_preview_thread(self):
         if self._preview_thread is not None and self._preview_thread.is_alive():
@@ -457,9 +461,8 @@ class Picamera2Camera(Camera):
         self._write_capture(output_name, im)
     
     def close(self):
-        self._preview_stop = True
-        if self._preview_thread is not None and self._preview_thread.is_alive():
-            self._preview_thread.join(timeout=1)
+        if not self._release_preview_thread():
+            return False
         if self._instance is not None:
             try:
                 self._instance.stop()
@@ -470,6 +473,7 @@ class Picamera2Camera(Camera):
             except Exception:
                 pass
             self._instance = None
+        return True
 
 class CupsPrinter(PrintDevice):
     _name = None
@@ -686,10 +690,22 @@ class DeviceUtils:
         return self._printer.get_print_status(task_id)
 
     def close(self):
-        for device in (self._preview, self._capture):
-            if device is None:
-                continue
+        """Release every device. False when one of them could not be freed.
+
+        A False here is not a tidy-up failure to log and move past: it means a
+        thread is still inside the driver, and the caller must restart the
+        process rather than carry on with a device it cannot reopen.
+        """
+        # dict.fromkeys dedupes by identity: preview and capture are the same
+        # object on every rig that is not a hybrid, and closing twice made the
+        # second call work on a handle the first had already dropped.
+        devices = dict.fromkeys(d for d in (self._preview, self._capture) if d is not None)
+        released = True
+        for device in devices:
             try:
-                device.close()
+                if not device.close():
+                    released = False
             except Exception as e:
                 Logger.warning('DeviceUtils: could not close device cleanly: %s', e)
+                released = False
+        return released
