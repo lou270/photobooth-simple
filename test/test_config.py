@@ -159,6 +159,33 @@ def test_max_copies_is_clamped_to_something_a_guest_could_want(tmp_path, monkeyp
     assert config.get_max_copies() == 10
 
 
+def test_countdown_defaults_to_five(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+    """)
+
+    assert config.get_countdown() == 5
+
+
+def test_a_countdown_of_zero_is_kept(tmp_path, monkeypatch):
+    """It is the minimum the admin form offers, and it means "shoot on demand"."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+        COUNTDOWN = 0
+    """)
+
+    assert config.get_countdown() == 0
+
+
+def test_a_negative_countdown_is_floored_at_zero(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+        COUNTDOWN = -3
+    """)
+
+    assert config.get_countdown() == 0
+
+
 def test_window_size_defaults_to_the_reference_panel(tmp_path, monkeypatch):
     config = write_config(tmp_path, monkeypatch, """
         [Global]

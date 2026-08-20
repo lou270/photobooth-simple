@@ -60,6 +60,12 @@ PRINT_DONE_SECONDS = 1.5
 # ...and a floor under the whole screen, because a printer that answers at once
 # would otherwise leave nothing on screen long enough to read. A touch skips it.
 PRINT_MIN_SECONDS = 6.0
+# Ceiling on the printing itself, per sheet. PRINTER_WAIT_TIMEOUT is what an
+# operator sets for a printer that went away, and used to bound this too, which
+# meant a dye-sub taking its usual minute a sheet was reported to the guest as a
+# failure while the prints were coming out. This is only a safety net against a
+# job CUPS never finishes, so it is generous.
+PRINT_SHEET_TIMEOUT_SECONDS = 180
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90

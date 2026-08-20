@@ -145,7 +145,7 @@ class Gphoto2Camera(Camera):
                 self._preview_lock = threading.Lock()
                 self._camera_lock = threading.Lock()
                 self._preview_frame = None
-                self._preview_frame_back = None
+                self._preview_frame_id = 0
                 self._preview_thread = None
                 self._preview_stop = False
                 self._preview_fps = 15  # DSLR preview limited by USB throughput
@@ -287,7 +287,8 @@ class Gphoto2Camera(Camera):
                     self._preview_failures = 0
                     im = cv2.rotate(im, cv2.ROTATE_180)
                     with self._preview_lock:
-                        self._preview_frame, self._preview_frame_back = im, self._preview_frame
+                        self._preview_frame = im
+                        self._preview_frame_id += 1
                 time.sleep(1.0 / self._preview_fps)
             except Exception as e:
                 self._preview_failures += 1
@@ -310,6 +311,16 @@ class Gphoto2Camera(Camera):
     def get_preview_fps(self):
         """Recommended FPS for preview (DSLR limited by USB throughput)."""
         return self._preview_fps
+
+    def get_preview_frame_id(self):
+        """Counter the preview widget uses to skip frames it has already drawn.
+
+        Without it this class inherited Camera's constant 0, and KivyCamera read
+        that as "no new frame" for every frame after the first: a booth whose
+        only camera is the DSLR showed a still image for the whole countdown.
+        """
+        with self._preview_lock:
+            return self._preview_frame_id
 
     def get_preview(self, aspect_ratio=None, zoom=None):
         self._start_preview_thread()

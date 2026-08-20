@@ -194,7 +194,8 @@ class Config:
         return max(0, self._get_int(('Remote',), 'REMOTE_MIN_UPLOAD_INTERVAL', fallback=3))
 
     def get_countdown(self):
-        return self._get_int(('Capture', 'Picture'), 'COUNTDOWN', fallback=5)
+        """Seconds of countdown before the shot; 0 fires as soon as it is asked for."""
+        return max(0, self._get_int(('Capture', 'Picture'), 'COUNTDOWN', fallback=5))
 
     def get_dcim_directory(self):
         dcim_directory = self._get_string(('Storage', 'Picture'), 'DCIM_DIRECTORY', fallback='./DCIM')
