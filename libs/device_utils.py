@@ -379,6 +379,7 @@ class Picamera2Camera(Camera):
         self._preview_lock = threading.Lock()
         self._camera_lock = threading.Lock()
         self._preview_frame = None
+        self._preview_frame_id = 0
         self._preview_thread = None
         self._preview_stop = False
         self._preview_fps = 30
@@ -412,6 +413,7 @@ class Picamera2Camera(Camera):
                     im = self._instance.capture_array()
                 with self._preview_lock:
                     self._preview_frame = im
+                    self._preview_frame_id += 1
                 time.sleep(1.0 / self._preview_fps)
             except Exception as e:
                 Logger.debug('Picamera2Camera preview thread: %s', e)
@@ -431,8 +433,15 @@ class Picamera2Camera(Camera):
         return self._preview_fps
 
     def get_preview_frame_id(self):
+        """A counter, like the other backends, not the frame's address.
+
+        id() looks like a free frame counter and is not one: nothing here holds
+        the previous array, so CPython is free to hand the next capture_array()
+        the address the last one just vacated. A genuinely new frame then
+        compares equal to the one already drawn and the widget skips it.
+        """
         with self._preview_lock:
-            return id(self._preview_frame)
+            return self._preview_frame_id
 
     def get_preview(self, aspect_ratio=None, zoom=None):
         self._start_preview_thread()

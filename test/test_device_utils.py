@@ -285,6 +285,41 @@ def test_the_dslr_preview_loop_advances_its_frame_id():
     assert camera.get_preview_frame_id() == 3
 
 
+def test_the_pi_preview_loop_counts_captures_not_addresses():
+    """id() of the frame looks like a free counter and is not one.
+
+    Nothing holds the previous array, so CPython may hand the next
+    capture_array() the address the last one just vacated — and the widget then
+    skips a frame that really is new. Feeding the same array back is the
+    deterministic version of that collision: the id has to move anyway, because
+    what it counts is captures.
+    """
+    camera = Picamera2Camera.__new__(Picamera2Camera)
+    camera._preview_lock = threading.Lock()
+    camera._camera_lock = threading.Lock()
+    camera._preview_frame = None
+    camera._preview_frame_id = 0
+    camera._preview_stop = False
+    camera._capturing = False
+    camera._preview_fps = 1000                    # do not sleep through the test
+
+    same_frame = np.zeros((32, 48, 3), dtype=np.uint8)
+    frames_left = [3]
+
+    class FakeInstance:
+        def capture_array(self):
+            if frames_left[0] <= 0:
+                camera._preview_stop = True
+                raise RuntimeError('the camera stopped answering')
+            frames_left[0] -= 1
+            return same_frame                     # always the same object
+
+    camera._instance = FakeInstance()
+    camera._preview_loop()
+
+    assert camera.get_preview_frame_id() == 3
+
+
 def test_a_frame_id_that_never_moves_stops_the_preview():
     """Why the rule above exists, stated as the behaviour it protects."""
     reads = []
