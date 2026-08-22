@@ -50,7 +50,7 @@
   },
   "remote_gallery": {
     "title": "PHOTOS DES TÉLÉPHONES",
-    "empty": "Rien pour l'instant.\nScannez le QR code sur l'écran d'accueil\npour envoyer une photo depuis votre téléphone.",
+    "empty": "Plus aucune photo n'attend.\nElle a pu être retirée depuis le téléphone qui l'a envoyée.\nScannez le QR code de l'écran d'accueil pour en renvoyer une.",
     "delete": {
       "title": "SUPPRIMER CETTE PHOTO ?",
       "message": "Elle sera retirée de la borne.\nCette action est définitive."
