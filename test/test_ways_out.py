@@ -21,12 +21,15 @@ os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.uix.widget import Widget
 
 from libs import i18n
+from libs.i18n import t
 from libs.screens import review
 from libs.screens import ReviewScreen, ScreenMgr, StartScreen
 from libs.screens.names import ScreenNames
+from libs.screens.start import CornerTab
 from libs.screens.popups import QRCodePopup
 from libs.screens.theme import QR_POPUP_TIMEOUT_SECONDS
 from photoboothapp import PhotoboothApp
@@ -431,3 +434,141 @@ def test_a_second_press_does_not_stack_two_questions(leaving):
     screen.home_event(None)
 
     assert screen.confirm_popup is first
+
+
+# --- naming the two buttons in the corners -----------------------------------
+
+
+class WelcomeApp:
+    SHARE = True
+    remote_url = 'http://192.168.4.1:8080/remote'
+    gallery_url = 'http://192.168.4.1:8080'
+
+    def __init__(self, pending=0):
+        self.pending = pending
+        self.transitions = []
+        self.ringled = SimpleNamespace(start_rainbow=lambda: None, clear=lambda: None)
+
+    def has_remote_capture(self):
+        return True
+
+    def get_qr_invitation(self, url):
+        return [(url, '')], 'title', url
+
+    def get_remote_pending_count(self):
+        return self.pending
+
+    def get_current_screen_name(self):
+        return ScreenNames.START
+
+    def transition_to(self, screen, **kwargs):
+        self.transitions.append(screen)
+
+
+def welcome(width=1024, height=600, pending=0):
+    Window.size = (width, height)
+    Clock.tick()
+    screen = StartScreen(WelcomeApp(pending), name=f'welcome-{width}x{height}-{pending}')
+    if pending:
+        screen._apply_pending_count(pending)
+    screen.overlay_layout.size = (width, height)
+    screen.overlay_layout.pos = (0, 0)
+    screen._layout_corners()
+    return screen
+
+
+def test_each_corner_button_says_what_it_does():
+    """Two unlabelled circles carried the whole phone feature; a guest who did
+    not decode them never learned it existed."""
+    screen = welcome(pending=3)
+
+    assert screen.tab_remote_qr.caption.text == t('start.send_photo')
+    assert screen.tab_remote_queue.caption.text == t('start.photos_waiting')
+
+
+def test_the_tab_does_what_the_button_on_it_does():
+    """Every other pixel of this screen starts a photo session. A tab that let
+    touches through would be a place a guest presses "send a photo" and gets
+    the camera counting down at them instead."""
+    screen = welcome(pending=3)
+
+    screen.tab_remote_queue.dispatch('on_release')
+
+    assert screen.app.transitions == [ScreenNames.REMOTE_GALLERY]
+
+
+def test_the_queue_corner_appears_only_with_something_in_it():
+    """This corner means nothing while the queue is empty, and that is also
+    exactly when nobody is looking for it."""
+    empty = welcome(pending=0)
+    assert empty.tab_remote_queue is None
+    assert empty.btn_remote_queue is None
+
+    filled = welcome(pending=2)
+    assert filled.tab_remote_queue is not None
+    assert filled.btn_remote_queue is not None
+
+
+def test_a_queue_that_empties_takes_its_corner_with_it():
+    screen = welcome(pending=2)
+
+    screen._apply_pending_count(0)
+
+    assert screen.tab_remote_queue is None
+    assert screen.btn_remote_queue is None
+
+
+@pytest.mark.parametrize('width,height', [(1024, 600), (600, 1024), (800, 480)])
+def test_the_two_corners_never_meet(width, height):
+    """Sized off the short side alone, two tabs met in the middle of a panel
+    turned upright, and ran under the touch icon on the way."""
+    screen = welcome(width, height, pending=3)
+    left, right = screen.tab_remote_queue, screen.tab_remote_qr
+
+    assert left.right <= right.x
+    # The touch icon sits at x 0.42..0.57 of the width.
+    assert left.right <= width * 0.42
+    assert right.x >= width * 0.57
+
+
+@pytest.mark.parametrize('width,height', [(1024, 600), (600, 1024), (800, 480)])
+def test_each_button_sits_on_its_own_tab(width, height):
+    """Measured in pixels off the short side: a pos_hint y is a fraction of the
+    height, so a square button pinned that way drifts off its tab when the
+    panel is turned."""
+    screen = welcome(width, height, pending=3)
+
+    for tab, button in ((screen.tab_remote_queue, screen.btn_remote_queue),
+                        (screen.tab_remote_qr, screen.btn_remote_qr)):
+        assert tab.x <= button.x
+        assert button.x + button.width <= tab.right
+        assert tab.y <= button.y
+        assert button.y + button.height <= tab.top
+
+
+def _relative_luminance(rgb):
+    """WCAG relative luminance, gamma applied. The naive weighted sum of the raw
+    channels is a different number answering a different question."""
+    def channel(value):
+        return value / 12.92 if value <= 0.04045 else ((value + 0.055) / 1.055) ** 2.4
+    red, green, blue = (channel(v) for v in rgb)
+    return 0.2126 * red + 0.7152 * green + 0.0722 * blue
+
+
+def _contrast(foreground, background):
+    lighter, darker = sorted((_relative_luminance(foreground),
+                              _relative_luminance(background)), reverse=True)
+    return (lighter + 0.05) / (darker + 0.05)
+
+
+def test_the_caption_is_readable_against_its_own_ground():
+    """The tab brings its own ground because the screen behind it is a
+    photograph the operator can replace. On the shipped one the bare corners
+    measure 148 and 191 in luminance, where white text falls to a contrast of
+    1.8 and the button's own colour to 1.2 — both unreadable at caption size."""
+    screen = welcome(pending=3)
+
+    for tab in (screen.tab_remote_qr, screen.tab_remote_queue):
+        red, green, blue, alpha = tab._color.rgba
+        assert alpha > 0.85, 'a ground the photo shows through is not a ground'
+        assert _contrast((1, 1, 1), (red, green, blue)) >= 4.5

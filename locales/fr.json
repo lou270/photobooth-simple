@@ -1,7 +1,9 @@
 {
   "start": {
     "title": "PHOTO BOOTH",
-    "version": "Version {version}"
+    "version": "Version {version}",
+    "send_photo": "ENVOYER UNE PHOTO",
+    "photos_waiting": "PHOTOS REÇUES"
   },
   "select_format": {
     "photo_count_singular": "{count} photo",

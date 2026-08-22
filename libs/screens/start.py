@@ -4,19 +4,76 @@ import threading
 
 from kivy.animation import Animation
 from kivy.clock import Clock
+from kivy.core.window import Window
+from kivy.graphics import Color, RoundedRectangle
 from kivy.logger import Logger
+from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 
 from libs.i18n import t
-from libs.kivywidgets import BreezyBorderedLabel, LayoutButton, make_icon_button, ResizeLabel, short_side
+from libs.kivywidgets import (
+    BreezyBorderedLabel, FeedbackButtonBehavior, LayoutButton, make_icon_button,
+    ResizeLabel, short_side,
+)
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
-    BADGE_COLOR, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
+    BADGE_COLOR, darken_rgba, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
     QR_POPUP_TIMEOUT_SECONDS, REMOTE_COLOR, SHARE_COLOR, TINY_FONT, wh_bind,
 )
 from libs.screens.base import BackgroundScreen
 from libs.screens.popups import QRCodePopup
+
+
+class CornerTab(FeedbackButtonBehavior, FloatLayout):
+    """A coloured tab in a bottom corner, naming the round button that sits on it.
+
+    The welcome screen is a photograph, so a caption laid straight onto it is
+    only as readable as whatever the operator put there. On the shipped
+    background the two bottom corners measure 148 and 191 in luminance, where
+    white text falls to a contrast of 1.8 and the button's own colour to 1.2 —
+    unreadable at caption size. The tab brings its own ground instead, a
+    darkened cousin of the button's colour, so the words hold on any photo.
+
+    It answers touches itself, and does what the button on it does. Every other
+    pixel of this screen starts a photo session, so a tab that let touches
+    through would be a place a guest presses the words "send a photo" and gets
+    the camera counting down at them.
+    """
+
+    def __init__(self, text, color, flush_right=False, **kwargs):
+        super(CornerTab, self).__init__(size_hint=(None, None), **kwargs)
+        self.flush_right = flush_right
+
+        with self.canvas.before:
+            self._color = Color(*color)
+            self._plate = RoundedRectangle(pos=self.pos, size=self.size)
+        self.bind(pos=self._redraw, size=self._redraw)
+
+        # A plain Label, not a ResizeLabel: this one has to wrap onto a second
+        # line on a screen turned upright, and ResizeLabel sizes its font from
+        # the character count of the whole string, newline included.
+        self.caption = Label(
+            text=text,
+            bold=True,
+            halign='center',
+            valign='middle',
+            size_hint=(None, None),
+        )
+        self.caption.bind(size=self.caption.setter('text_size'))
+        self.add_widget(self.caption)
+
+    def _redraw(self, *args):
+        self._plate.pos = self.pos
+        self._plate.size = self.size
+        # A half-circle on the end facing into the screen, square against the
+        # two screen edges: the tab reads as growing out of the corner rather
+        # than floating near it.
+        radius = self.height / 2.0
+        if self.flush_right:
+            self._plate.radius = [radius, 0, 0, radius]
+        else:
+            self._plate.radius = [0, radius, radius, 0]
 
 
 class StartScreen(BackgroundScreen):
@@ -75,15 +132,25 @@ class StartScreen(BackgroundScreen):
         # has actually sent something.
         self.btn_remote_qr = None
         self.btn_remote_queue = None
+        self.tab_remote_qr = None
+        self.tab_remote_queue = None
         self.qr_popup = None
         self._queue_clock = None
         self._pending_count = 0
 
         if self.app.has_remote_capture():
+            self.tab_remote_qr = CornerTab(
+                t('start.send_photo'),
+                darken_rgba(SHARE_COLOR, 0.25)[:3] + (0.92,),
+                flush_right=True,
+                on_release=self.remote_qr_event,
+            )
+            overlay_layout.add_widget(self.tab_remote_qr)
+
+            # Added after the tab so it draws on top of it.
             self.btn_remote_qr = make_icon_button(
                 ICON_QRCODE,
                 size=0.13,
-                pos_hint={'right': 0.98, 'y': 0.03},
                 font=ICON_TTF,
                 font_size_fraction=0.06,
                 bgcolor=SHARE_COLOR,
@@ -95,6 +162,54 @@ class StartScreen(BackgroundScreen):
         self.overlay_layout = overlay_layout
 
         self.add_widget(overlay_layout)
+
+        overlay_layout.bind(size=self._layout_corners)
+        Window.bind(size=self._layout_corners)
+        Clock.schedule_once(self._layout_corners, 0)
+
+    # --- the two corners -------------------------------------------------
+
+    def _layout_corners(self, *args):
+        """Place each tab against its corner, with its button on the outer end.
+
+        In pixels rather than pos_hint, and measured against the short side, for
+        the reason the review screen's buttons are: a pos_hint y is a fraction
+        of the height, so a square button pinned that way sits at a different
+        distance from the edge depending on which way the panel is turned.
+        """
+        if not self.overlay_layout.width:
+            return
+
+        inset = short_side(0.028)
+        gap = short_side(0.016)
+        button = short_side(0.13)
+        height = button + 2 * inset
+        # Capped against the window as well as the short side: on a panel turned
+        # upright two tabs sized off the short side alone would meet in the
+        # middle, and run under the touch icon on the way.
+        width = min(short_side(0.46), self.overlay_layout.width * 0.40)
+
+        for tab, btn, flush_right in (
+            (self.tab_remote_queue, self.btn_remote_queue, False),
+            (self.tab_remote_qr, self.btn_remote_qr, True),
+        ):
+            if tab is None or tab.parent is None:
+                continue
+
+            tab.size = (width, height)
+            tab.x = self.overlay_layout.width - width if flush_right else 0
+            tab.y = 0
+
+            if btn is not None and btn.parent is not None:
+                btn.pos_hint = {}
+                btn.x = tab.right - inset - button if flush_right else tab.x + inset
+                btn.y = tab.y + inset
+
+            caption_width = width - button - 2 * inset - gap
+            tab.caption.size = (caption_width, height - 2 * inset)
+            tab.caption.x = tab.x + inset if flush_right else tab.x + inset + button + gap
+            tab.caption.y = tab.y + inset
+            tab.caption.font_size = short_side(0.028)
 
     def on_entry(self, kwargs={}):
         Logger.info('StartScreen: on_entry().')
@@ -146,16 +261,28 @@ class StartScreen(BackgroundScreen):
         if self.btn_remote_queue is not None:
             self.overlay_layout.remove_widget(self.btn_remote_queue)
             self.btn_remote_queue = None
+        if self.tab_remote_queue is not None:
+            self.overlay_layout.remove_widget(self.tab_remote_queue)
+            self.tab_remote_queue = None
 
         if count <= 0:
             return
+
+        # The tab comes and goes with the button: this corner only means
+        # anything while something is waiting in it, which is also exactly when
+        # the guest who sent a photo walks up looking for it.
+        self.tab_remote_queue = CornerTab(
+            t('start.photos_waiting'),
+            darken_rgba(REMOTE_COLOR, 0.25)[:3] + (0.92,),
+            on_release=self.remote_queue_event,
+        )
+        self.overlay_layout.add_widget(self.tab_remote_queue)
 
         # Rebuilt rather than relabelled: the badge is baked into the button by
         # make_icon_button, and there is at most one rebuild every five seconds.
         self.btn_remote_queue = make_icon_button(
             ICON_SHOT_TAKEN,
             size=0.13,
-            pos_hint={'x': 0.02, 'y': 0.03},
             font=ICON_TTF,
             font_size_fraction=0.06,
             bgcolor=REMOTE_COLOR,
@@ -165,6 +292,7 @@ class StartScreen(BackgroundScreen):
             on_release=self.remote_queue_event,
         )
         self.overlay_layout.add_widget(self.btn_remote_queue)
+        self._layout_corners()
 
     def remote_qr_event(self, obj):
         Logger.info('StartScreen: remote_qr_event().')
