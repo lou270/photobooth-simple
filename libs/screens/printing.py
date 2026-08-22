@@ -17,7 +17,10 @@ from kivy.uix.boxlayout import BoxLayout
 from libs.i18n import t
 from libs.kivywidgets import PaperFeedAnimation, ResizeLabel
 from libs.screens.names import ScreenNames
-from libs.screens.theme import ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, PRINT_MIN_SECONDS
+from libs.screens.theme import (
+    ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, PRINT_MIN_SECONDS,
+    PRINT_SHEET_TIMEOUT_SECONDS,
+)
 from libs.screens.base import ColorScreen
 
 
@@ -82,6 +85,7 @@ class PrintingScreen(ColorScreen):
         self._print_started = False
         self._print_counted = False
         self._print_task_ids = []
+        self._print_started_at = None
         self._printer_wait_started_at = None
         self._can_leave = False
         self._timeout = getattr(self.app, 'PRINTER_WAIT_TIMEOUT', 45)
@@ -129,6 +133,12 @@ class PrintingScreen(ColorScreen):
         self._clock = Clock.schedule_once(self._leave, delay)
 
     def _leave(self, *args):
+        # A guest tapping to skip the delay gets here with the timer _done() set
+        # still pending, and on_exit only unschedules what _clock still points
+        # at. Left behind, it fired seconds later and sent the *next* guest back
+        # to the welcome screen, mid-countdown.
+        if self._clock:
+            Clock.unschedule(self._clock)
         self._clock = None
         self.app.transition_to(ScreenNames.START)
 
@@ -152,11 +162,16 @@ class PrintingScreen(ColorScreen):
             self._fail(t('printing.save_failed'))
             return
 
-        if time.monotonic() - self._started_at >= self._timeout:
-            self._fail(t('printing.print_failed'), t('printing.timed_out'))
-            return
-
         if not self._print_started:
+            # PRINTER_WAIT_TIMEOUT bounds getting the job to the printer, which
+            # is what an operator sets it for. It used to bound the printing as
+            # well, and a dye-sub taking its usual minute a sheet was reported
+            # to the guest as a failure while the sheets were coming out — with
+            # the print quota left uncounted on top of it.
+            if time.monotonic() - self._started_at >= self._timeout:
+                self._fail(t('printing.print_failed'), t('printing.timed_out'))
+                return
+
             self.message.text = t('printing.sending')
             try:
                 # One task per sheet: the booth queues the copies itself, so
@@ -165,10 +180,18 @@ class PrintingScreen(ColorScreen):
                 if not self._print_task_ids:
                     raise RuntimeError('Printer did not return a task id')
                 self._print_started = True
+                self._print_started_at = time.monotonic()
                 Logger.info('PrintingScreen: print started tasks=%s copies=%s', self._print_task_ids, self._copies)
             except Exception as exc:
                 self._fail(t('printing.print_failed'), str(exc))
                 return
+
+        # A ceiling on the printing itself, budgeted per sheet. Only a safety
+        # net against a job CUPS never finishes; nobody should ever reach it.
+        printing_deadline = PRINT_SHEET_TIMEOUT_SECONDS * max(1, len(self._print_task_ids))
+        if time.monotonic() - self._print_started_at >= printing_deadline:
+            self._fail(t('printing.print_failed'), t('printing.timed_out'))
+            return
 
         if not self.app.has_printer():
             if self._printer_wait_started_at is None:

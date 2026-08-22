@@ -485,11 +485,13 @@ class WebServer:
             startup_state = {'error': None}
 
             def run_server():
+                server = None
                 try:
                     Logger.info(f'WebServer: Starting on {self.host}:{self.port}')
-                    self.server = make_server(self.host, self.port, self.app, threaded=True)
+                    server = make_server(self.host, self.port, self.app, threaded=True)
+                    self.server = server
                     startup_event.set()
-                    self.server.serve_forever()
+                    server.serve_forever()
                 except BaseException as e:
                     startup_state['error'] = e
                     if not startup_event.is_set():
@@ -506,7 +508,13 @@ class WebServer:
                     else:
                         Logger.error(f'WebServer: Failed to start on {self.host}:{self.port}: {e}')
                 finally:
-                    self.server = None
+                    # Only clear the slot if it still holds *this* server. On a
+                    # watchdog restart the outgoing thread ran its finally after
+                    # the replacement had already published itself, which left
+                    # stop() believing nothing was running and the new server
+                    # serving on with nobody able to shut it down.
+                    if self.server is server:
+                        self.server = None
 
             self.server_thread = threading.Thread(target=run_server, name='webserver-main', daemon=True)
             self.server_thread.start()

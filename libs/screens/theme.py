@@ -3,7 +3,7 @@
 from kivy.core.window import Window
 from kivy.metrics import dp
 
-from libs.kivywidgets import hex_to_rgba
+from libs.kivywidgets import hex_to_rgba, window_size_registry
 
 
 # Font sizes as fractions of min(Window.width, Window.height) — DPI-independent and
@@ -15,28 +15,19 @@ def NORMAL_FONT(): return min(Window.size) * 0.055
 def SMALL_FONT():  return min(Window.size) * 0.035
 def TINY_FONT():   return min(Window.size) * 0.018
 
-# Registry of (weakref, attr, fraction_fn) updated on every Window resize.
-# Call wh_bind(widget, 'font_size', LARGE_FONT) after creating a widget to keep it live.
-import weakref as _weakref
-_WH_BINDINGS = []  # [(weakref, attr, fn), ...]
-
 def wh_bind(widget, attr, fn):
-    """Register a widget attribute to be updated on Window resize."""
-    _WH_BINDINGS.append((_weakref.ref(widget), attr, fn))
+    """Keep widget.attr at fn() across window resizes.
 
-def _on_window_resize(instance, size):
-    dead = []
-    for entry in _WH_BINDINGS:
-        ref, attr, fn = entry
-        obj = ref()
-        if obj is None:
-            dead.append(entry)
-        else:
-            setattr(obj, attr, fn())
-    for d in dead:
-        _WH_BINDINGS.remove(d)
+    Call it after creating a widget: wh_bind(label, 'font_size', LARGE_FONT).
 
-Window.bind(size=_on_window_resize)
+    This kept its own weakref list, pruned only while a resize walked it — so on
+    a booth in kiosk mode, which never resizes, it only ever grew. The registry
+    it now shares with ResizeLabel and the round buttons prunes on both.
+    """
+    window_size_registry.add(
+        widget,
+        lambda target, attr=attr, fn=fn: setattr(target, attr, fn()),
+    )
 
 SHOT_TIMEOUT_SECONDS = 10
 REVIEW_HOME_TIMEOUT_SECONDS = 60
@@ -60,9 +51,21 @@ PRINT_DONE_SECONDS = 1.5
 # ...and a floor under the whole screen, because a printer that answers at once
 # would otherwise leave nothing on screen long enough to read. A touch skips it.
 PRINT_MIN_SECONDS = 6.0
+# Ceiling on the printing itself, per sheet. PRINTER_WAIT_TIMEOUT is what an
+# operator sets for a printer that went away, and used to bound this too, which
+# meant a dye-sub taking its usual minute a sheet was reported to the guest as a
+# failure while the prints were coming out. This is only a safety net against a
+# job CUPS never finishes, so it is generous.
+PRINT_SHEET_TIMEOUT_SECONDS = 180
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
+# An error a guest can walk away from — a print that failed, say — left the
+# booth showing their failure to everyone who came after them, because this is
+# the one interactive screen with no way back on its own. Only applied when
+# there is a continue button: a booth in maintenance is meant to stay there,
+# and sending it home would just walk it into the same wall again.
+ERROR_HOME_TIMEOUT_SECONDS = 90
 # The codes are the one overlay with nothing behind it that times out: the
 # welcome screen never leaves on its own, and the popup swallows every touch to
 # stop a tap on the card from starting a session. A guest who walked away from

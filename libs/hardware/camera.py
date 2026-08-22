@@ -1,5 +1,4 @@
 import logging
-import threading
 
 from libs.file_utils import FileUtils
 
@@ -46,7 +45,34 @@ class Camera:
         raise NotImplementedError
 
     def close(self):
-        pass
+        """Release the hardware. False when it could not be freed safely."""
+        return True
+
+    # How long a preview thread is given to leave its driver before close()
+    # gives up. Same reasoning as the capture thread in PhotoboothApp: freeing a
+    # handle a thread is blocked inside segfaults the process instead of
+    # raising, so a thread that does not come back means this device can never
+    # be released, only abandoned to a restart.
+    PREVIEW_RELEASE_TIMEOUT_SECONDS = 5
+
+    def _release_preview_thread(self):
+        """Stop the preview thread. False when it is still inside the driver."""
+        self._preview_stop = True
+        thread = getattr(self, '_preview_thread', None)
+        if thread is None or not thread.is_alive():
+            return True
+
+        thread.join(self.PREVIEW_RELEASE_TIMEOUT_SECONDS)
+        if thread.is_alive():
+            Logger.error(
+                '%s: preview thread still inside the driver after %ss, leaving the device '
+                'open rather than freeing it underneath a running call',
+                type(self).__name__, self.PREVIEW_RELEASE_TIMEOUT_SECONDS,
+            )
+            return False
+
+        self._preview_thread = None
+        return True
 
     # --- shared helpers --------------------------------------------------
 
@@ -92,14 +118,20 @@ class Camera:
         return FileUtils.zoom(image, (1.0 / zoom[0], zoom[1], zoom[2]))
 
     def _write_capture(self, output_name, image):
-        """Write the capture, then build its small preview off the capture path."""
+        """Write the capture and its small copy before reporting the shot done.
+
+        The small copy used to be written by a thread of its own, which nothing
+        tracked: the capture job was finished the moment this returned, and the
+        confirm screen went looking for a file that was still being written. It
+        reads a missing preview as "nothing to show" and leaves the texture
+        alone, so the guest was asked to keep or retake the previous shot.
+
+        This already runs on the capture thread, off the UI, and the screen that
+        needs the small copy is the very next one, so there is nothing to gain
+        by returning ahead of it.
+        """
         FileUtils.write_image(output_name, image)
-        threading.Thread(
-            target=self._write_small_preview,
-            args=(image.copy(), output_name),
-            name='photobooth-small-preview',
-            daemon=True,
-        ).start()
+        self._write_small_preview(image, output_name)
 
     def _write_small_preview(self, image, output_name):
         try:

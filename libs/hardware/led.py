@@ -82,6 +82,12 @@ class RingLed(Led):
     working ring or a NullLed instead of having to handle that here.
     """
 
+    # Every effect now waits on the stop flag rather than sleeping past it, so
+    # this only has to cover one SPI write. Reaching it means something is
+    # genuinely wedged, and starting a second effect on the bus would make it
+    # worse rather than better.
+    WORKER_STOP_TIMEOUT_SECONDS = 1
+
     def __init__(self, num_pixels=12):
         Logger.info('RingLed: __init__().')
         if spidev is None:
@@ -98,16 +104,26 @@ class RingLed(Led):
         self._leds = WS2812(spi, self._num_pixels)
 
     def _stop_worker(self):
+        """Stop the running effect. False when it would not let go.
+
+        A countdown checks the stop flag once per pixel, so a long one can take
+        several seconds to notice. Forgetting the thread anyway and starting the
+        next effect put two of them on the SPI bus at once, which is what turns
+        a ring light into confetti.
+        """
         if self._proc and self._proc.is_alive():
             self._stop.set()
-            self._proc.join(timeout=1)
+            self._proc.join(timeout=self.WORKER_STOP_TIMEOUT_SECONDS)
             if self._proc.is_alive():
-                Logger.warning('RingLed: worker thread did not stop cleanly')
+                Logger.warning('RingLed: worker thread did not stop cleanly, skipping this effect')
+                return False
         self._proc = None
+        return True
 
     def _start_worker(self, name, target, *args):
         with self._lock:
-            self._stop_worker()
+            if not self._stop_worker():
+                return
             self._stop.clear()
             self._proc = threading.Thread(target=target, args=args, name=f'ringled-{name}', daemon=True)
             self._proc.start()
@@ -149,10 +165,10 @@ class RingLed(Led):
     def _blink(self, color):
         while True:
             self._leds.fill(color)
-            time.sleep(0.1)
+            if self._stop.wait(0.1):
+                return
             self._leds.fill([0, 0, 0])
-            time.sleep(0.1)
-            if self._stop.is_set():
+            if self._stop.wait(0.1):
                 return
 
     def _wave(self, color):
@@ -167,7 +183,8 @@ class RingLed(Led):
                     self._leds.set(i, color, brightness=intensity)
                     if self._stop.is_set():
                         return
-                time.sleep(0.1)
+                if self._stop.wait(0.1):
+                    return
 
     def _countdown(self, time_seconds):
         time_between_pixels = time_seconds / self._num_pixels
@@ -178,8 +195,10 @@ class RingLed(Led):
         time.sleep(0.1)
         for i in [*p1, *p2]:
             self._leds.set(i, [0, 0, 0])
-            time.sleep(time_between_pixels)
-            if self._stop.is_set():
+            # Waiting on the flag rather than sleeping past it: a long countdown
+            # spaces these several seconds apart, and clear() was giving up on
+            # the thread before it looked.
+            if self._stop.wait(time_between_pixels):
                 return
 
     def _rainbow(self):
@@ -195,7 +214,8 @@ class RingLed(Led):
                     self._leds.set(i, rgb_scaled)
                     if self._stop.is_set():
                         return
-                time.sleep(0.1)
+                if self._stop.wait(0.1):
+                    return
 
 
 def create_led(enabled=True, num_pixels=12):

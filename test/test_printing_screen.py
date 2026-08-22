@@ -237,3 +237,66 @@ def test_a_guest_who_has_understood_can_skip_the_wait():
     screen._leave()
 
     assert app.transitions == [(ScreenMgr.START, {})]
+
+
+def test_skipping_the_wait_does_not_send_the_next_guest_home_too():
+    """_done() leaves a timer pending, and _leave() used to abandon it.
+
+    on_exit only unschedules what _clock still points at, and _leave had just
+    set it to None. The orphan fired seconds later, by which time the booth
+    belonged to somebody else: it yanked them out of the format screen or the
+    countdown and back to the welcome screen.
+    """
+    app = FakeApp()
+    screen = Printing(app)
+
+    screen._tick(None)          # printer is done, the delay before leaving starts
+    screen._leave()             # the guest taps to skip it
+    settle(0.05)                # ...and the delay runs out on the next guest
+
+    assert app.transitions == [(ScreenMgr.START, {})]
+
+
+# --- a printer that is simply slow -----------------------------------------
+
+def test_a_print_longer_than_the_wait_timeout_is_not_a_failure():
+    """PRINTER_WAIT_TIMEOUT is for a printer that went away, not for printing.
+
+    A dye-sub takes about a minute a sheet, so three copies always ran past the
+    45 second default. The guest was handed an error screen while the prints
+    were coming out, and the quota was never charged for them.
+    """
+    app = FakeApp(status='pending')
+    screen = Printing(app, copies=3)
+    screen._tick(None)                                  # jobs are queued
+
+    screen._started_at = time.monotonic() - 120         # two minutes in
+    screen._tick(None)
+
+    assert app.transitions == []
+    assert screen._print_task_ids == [7, 8, 9]
+
+
+def test_the_quota_is_charged_when_a_slow_print_finishes(quick_exit):
+    app = FakeApp(status='pending')
+    screen = Printing(app, copies=3)
+    screen._tick(None)
+
+    screen._started_at = time.monotonic() - 120
+    app.devices.status = 'done'                         # the sheets are out
+    screen._tick(None)
+
+    assert app.counted == 3
+    assert screen._can_leave
+
+
+def test_a_job_the_printer_never_finishes_still_gives_up_eventually():
+    """The ceiling above must not turn a stuck job into a screen with no exit."""
+    app = FakeApp(status='pending')
+    screen = Printing(app, copies=1)
+    screen._tick(None)
+
+    screen._print_started_at = time.monotonic() - (printing_module.PRINT_SHEET_TIMEOUT_SECONDS + 1)
+    screen._tick(None)
+
+    assert app.transitions[0][0] == ScreenMgr.ERROR

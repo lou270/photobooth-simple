@@ -159,6 +159,67 @@ def test_max_copies_is_clamped_to_something_a_guest_could_want(tmp_path, monkeyp
     assert config.get_max_copies() == 10
 
 
+@pytest.mark.parametrize('raw', ['abc', '', '5s', '1,5'])
+def test_a_malformed_number_falls_back_instead_of_raising(tmp_path, monkeypatch, raw):
+    """The admin form rewrites this file on site; a typo must not brick the booth.
+
+    ROTATION, MAX_PRINTS, CALIBRATION and the window sides each grew their own
+    guard after being bitten. Every other number went straight to configparser,
+    which raises, and the booth would not start at all.
+    """
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Capture]
+        COUNTDOWN = {raw}
+    """)
+
+    assert config.get_countdown() == 5
+
+
+def test_a_malformed_web_port_falls_back_too(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Web]
+        WEB_PORT = eighty
+    """)
+
+    assert config.get_web_port() == 5000
+
+
+def test_a_malformed_float_falls_back_too(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Storage]
+        DISK_MIN_FREE_GB = plenty
+    """)
+
+    assert config.get_disk_min_free_gb() == 2.0
+
+
+def test_countdown_defaults_to_five(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+    """)
+
+    assert config.get_countdown() == 5
+
+
+def test_a_countdown_of_zero_is_kept(tmp_path, monkeypatch):
+    """It is the minimum the admin form offers, and it means "shoot on demand"."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+        COUNTDOWN = 0
+    """)
+
+    assert config.get_countdown() == 0
+
+
+def test_a_negative_countdown_is_floored_at_zero(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Capture]
+        COUNTDOWN = -3
+    """)
+
+    assert config.get_countdown() == 0
+
+
 def test_window_size_defaults_to_the_reference_panel(tmp_path, monkeypatch):
     config = write_config(tmp_path, monkeypatch, """
         [Global]

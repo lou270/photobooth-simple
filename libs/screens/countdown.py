@@ -1,5 +1,7 @@
 """Live preview, countdown, and the capture itself."""
 
+import traceback
+
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.logger import Logger
@@ -162,6 +164,9 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self._cancel_autostart()
         self._stop_home_timeout()
         self.app.ringled.clear()
+        # Belt and braces with the error path in timer_event: whatever happened,
+        # this screen never leaves the flash behind for the next entry.
+        self._hide_flash()
         if self.loading_layout.parent:
             self.overlay_layout.remove_widget(self.loading_layout)
         if self.btn_home.parent:
@@ -172,20 +177,27 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
 
     def timer_progress(self, dt):
         """Update progress bar smoothly every 0.05 seconds"""
+        if self.total_countdown <= 0:
+            # COUNTDOWN = 0 means "shoot when the guest asks", so there is no
+            # ring to fill and nothing to divide by.
+            return
         elapsed_time = Clock.get_boottime() - self.start_time
         remaining_progress = max(0, 1.0 - (elapsed_time / self.total_countdown))
         self.circular_counter.set_progress(remaining_progress)
 
     def timer_event(self, obj):
         Logger.info('CountdownScreen: timer_event(%s)', obj)
-        
+
         # Check if timer is still active (not cancelled)
         if not self._timer_active:
             Logger.info('CountdownScreen: timer_event cancelled.')
             return
-        
+
         self.time_remaining -= 1
-        if self.time_remaining:
+        # Strictly positive: a bare truth test let a countdown configured at 0
+        # fall to -1, which is truthy, and then count down for ever without ever
+        # reaching the shot.
+        if self.time_remaining > 0:
             self.circular_counter.set_text(str(self.time_remaining))
             self._clock = Clock.schedule_once(self.timer_event, 1)
         else:
@@ -198,7 +210,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             # Trigger shot
             try:
                 # Make screen blink
-                self.layout.add_widget(self.color_background)
+                self._show_flash()
                 self.app.trigger_shot(self._current_shot, self._current_format)
                 self._clock_trigger = Clock.schedule_once(self.timer_trigger, 1.2)
                 Clock.schedule_once(self.timer_bg, 0.2)
@@ -208,13 +220,30 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
                 if self.btn_trigger.parent:
                     self.overlay_layout.remove_widget(self.btn_trigger)
                 self.overlay_layout.add_widget(self.loading_layout)
-            except:
+            except Exception as exc:
+                # The flash is only ever taken down by timer_bg, which is not
+                # scheduled yet on this path: left up, it stayed a child of the
+                # layout for the life of the process, and the next capture died
+                # in add_widget() before ever reaching the camera. The booth
+                # then answered every session with this same error screen, long
+                # after whatever caused the first one had been fixed.
+                self._hide_flash()
+                Logger.error('CountdownScreen: could not start the capture: %s', exc)
+                Logger.error(traceback.format_exc())
                 return self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_start_failed'))
+
+    def _show_flash(self):
+        if not self.color_background.parent:
+            self.layout.add_widget(self.color_background)
+
+    def _hide_flash(self):
+        if self.color_background.parent:
+            self.layout.remove_widget(self.color_background)
 
     def timer_bg(self, obj):
         self.camera.opacity = 0
         # Remove flash background
-        self.layout.remove_widget(self.color_background)
+        self._hide_flash()
 
     def timer_trigger(self, obj):
         if not(self.app.is_shot_completed(self._current_shot)):
@@ -298,10 +327,13 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self.circular_counter.set_text(str(self.time_remaining))
         self.circular_counter.set_progress(1.0)
         
-        # Start countdown
-        self._clock = Clock.schedule_once(self.timer_event, 1)
-        self._clock_progress = Clock.schedule_interval(self.timer_progress, 1/30.0)
-        self.app.ringled.start_countdown(self.time_remaining)
+        # Start countdown. Configured at 0 there is nothing to count, so the
+        # shot goes off on the next frame rather than after a second of a ring
+        # showing zero.
+        self._clock = Clock.schedule_once(self.timer_event, 1 if self.time_remaining > 0 else 0)
+        if self.time_remaining > 0:
+            self._clock_progress = Clock.schedule_interval(self.timer_progress, 1/30.0)
+            self.app.ringled.start_countdown(self.time_remaining)
 
     def cancel_countdown(self):
         Logger.info('CountdownScreen: cancel_countdown().')

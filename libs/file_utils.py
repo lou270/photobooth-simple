@@ -189,7 +189,9 @@ class FileUtils:
         im_height, im_width = im.shape[:2]
 
         if im_width <= 0 or im_height <= 0:
-            return im
+            # Honour return_cache like every other exit: the live preview
+            # unpacks a pair, and a bare array here raised ValueError instead.
+            return (im, blur_cache) if return_cache else im
 
         # Resize image to match screen
         scale_factor = min(height / im_height, width / im_width)
