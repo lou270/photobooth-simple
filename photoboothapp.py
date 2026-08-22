@@ -46,6 +46,7 @@ from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
 from libs import i18n
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import ScreenMgr
+from libs.screens.theme import ICON_ERROR_TRIGGER
 from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
 from libs.stats_store import StatsStore
@@ -638,13 +639,32 @@ class PhotoboothApp(App):
         self._log_runtime_snapshot('devices_reset')
         return True
 
-    def recover_devices_and_return_home(self, reason='unknown'):
+    def recover_devices_and_return_home(self, reason='unknown', message=None):
+        """Rebuild the camera after a failed capture, then tell the guest.
+
+        `message` is shown on the error screen once the devices are back, which
+        is why it is not displayed before: the guest presses continue and walks
+        into a booth that is ready again. Without it the booth used to reappear
+        at its welcome screen with no explanation, and a guest who had posed,
+        seen the flash and then found themselves back at the start had no way
+        to tell whether their photo existed, whether to try again, or whether
+        to fetch someone.
+        """
         def recover():
             try:
                 self.abandon_background_processes(kind='shot', reason=reason)
                 if not self.reset_devices(reason=reason):
                     return  # a restart is already on its way
-                self.request_transition_to(ScreenMgr.START)
+                if message:
+                    self.request_transition_to(
+                        ScreenMgr.ERROR,
+                        message=message,
+                        error=ICON_ERROR_TRIGGER,
+                        show_continue=True,
+                        show_restart=False,
+                    )
+                else:
+                    self.request_transition_to(ScreenMgr.START)
             except Exception as exc:
                 Logger.error('PhotoboothApp: device recovery failed: %s', exc)
                 Logger.error(traceback.format_exc())

@@ -13,7 +13,7 @@ from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
     BADGE_COLOR, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
-    REMOTE_COLOR, SHARE_COLOR, TINY_FONT, wh_bind,
+    QR_POPUP_TIMEOUT_SECONDS, REMOTE_COLOR, SHARE_COLOR, TINY_FONT, wh_bind,
 )
 from libs.screens.base import BackgroundScreen
 from libs.screens.popups import QRCodePopup
@@ -171,11 +171,15 @@ class StartScreen(BackgroundScreen):
         if getattr(self, 'qr_popup', None) is not None and self.qr_popup.parent:
             return
         steps, title, hint = self.app.get_qr_invitation(self.app.remote_url)
+        # This screen has no walk-away timeout of its own — it is where the
+        # booth waits — so the codes carry theirs, or a guest who left them
+        # open leaves the next one tapping an overlay that answers nothing.
         self.qr_popup = QRCodePopup(
             steps,
             on_dismiss=self._dismiss_qr_popup,
             title=title,
             hint=hint,
+            auto_dismiss_seconds=QR_POPUP_TIMEOUT_SECONDS,
         )
         self.add_widget(self.qr_popup)
 

@@ -7,6 +7,7 @@ admin session.
 """
 
 import io
+import re
 import sys
 from pathlib import Path
 
@@ -15,6 +16,7 @@ import numpy as np
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+from libs import i18n
 from libs.remote_store import RemoteStore
 from libs.webserver import WebServer
 
@@ -289,3 +291,91 @@ def test_an_upload_is_counted_in_the_statistics(tmp_path):
     send_photo(client)
 
     assert server.stats_store.load()['remote_uploads'] == 1
+
+
+# --- refusals a guest can read -----------------------------------------------
+
+REFUSAL_KEY = re.compile(r"RemoteSubmissionError\(\s*'([^']+)'")
+
+
+def test_every_refusal_names_a_key_that_exists_in_every_language():
+    """The store runs headless and has no language; the phone picks its own per
+    request. A sentence written in the store came out English on a page that was
+    otherwise entirely in the guest's language."""
+    source = (Path(__file__).resolve().parents[1] / 'libs' / 'remote_store.py').read_text(encoding='utf-8')
+    keys = set(REFUSAL_KEY.findall(source))
+
+    assert keys, 'no refusal found to check'
+    for lang in i18n.AVAILABLE_LANGUAGES:
+        for key in keys:
+            # translate() hands back the key itself when it knows no better.
+            assert i18n.translate(lang, key) != key, f'{key} missing from {lang}'
+
+
+def test_a_refusal_speaks_the_language_the_phone_asked_for(tmp_path):
+    server = make_server(tmp_path, max_per_sender=1)
+    phone = server.app.test_client()
+    phone.get('/remote', headers={'Accept-Language': 'fr'})
+    send_photo(phone)
+
+    response = phone.post(
+        '/remote/upload',
+        data={'photo': (io.BytesIO(jpeg_bytes()), 'IMG_2.jpg')},
+        content_type='multipart/form-data',
+        headers={'Accept-Language': 'fr'},
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()['error'] == i18n.translate('fr', 'web.remote.error.sender_quota', max_per_sender=1)
+
+
+def test_a_refusal_carries_the_number_it_is_about(tmp_path):
+    """A quota message without the quota in it explains nothing."""
+    server = make_server(tmp_path, max_per_sender=1)
+    phone = server.app.test_client()
+    phone.get('/remote')
+    send_photo(phone)
+
+    response = send_photo(phone)
+
+    assert '1' in response.get_json()['error']
+
+
+# --- telling a phone this network is fine ------------------------------------
+
+
+def keep_wifi_card(page):
+    """The opening tag of the release card, whatever else the page carries."""
+    match = re.search(r'<div id="keep-wifi-card"[^>]*>', page)
+    assert match, 'the release card is not on the page'
+    return match.group(0)
+
+
+def test_the_page_offers_a_way_out_of_the_portal(server):
+    """A guest who only came to fetch their own photo never uploads, so nothing
+    else on the page would ever release them: their phone keeps flagging the
+    network and can drop them onto mobile data mid-visit."""
+    page = server.app.test_client().get('/remote').get_data(as_text=True)
+
+    assert 'hidden' not in keep_wifi_card(page)
+    assert '/captive-portal/release' in page
+
+
+def test_the_button_releases_the_phone(server):
+    client = server.app.test_client()
+    client.get('/remote')
+
+    response = client.post('/captive-portal/release')
+
+    assert response.status_code == 200
+    assert client.get('/generate_204').status_code == 204
+
+
+def test_a_phone_already_through_the_portal_is_not_asked_again(server):
+    client = server.app.test_client()
+    client.get('/remote')
+    client.post('/captive-portal/release')
+
+    page = client.get('/remote').get_data(as_text=True)
+
+    assert 'hidden' in keep_wifi_card(page)

@@ -40,6 +40,8 @@ REMOTE_PAGE_JS_KEYS = {
     'withdraw_failed': 'web.remote.withdraw_failed',
     'remove': 'web.remote.remove',
     'photo_sent_at_alt': 'web.remote.photo_sent_at_alt',
+    'keep_wifi_done': 'web.remote.keep_wifi_done',
+    'keep_wifi_failed': 'web.remote.keep_wifi_failed',
 }
 
 # Same idea for admin/remote.html, the operator's moderation page.
@@ -119,6 +121,9 @@ def create_blueprint(server):
             # This page took over the captive portal landing, so it owes guests
             # the way back to the gallery, where they were meant to reach it.
             show_gallery_link=server.share_enabled,
+            # A phone already through the portal has nothing to release, and
+            # offering it the button again only invites a pointless tap.
+            released=server.captive_clients.is_released(server._client_key()),
             js_i18n=i18n.bundle(g.lang, REMOTE_PAGE_JS_KEYS),
         ))
         return attach_sender(response, sender_id() or new_sender_id())
@@ -146,8 +151,12 @@ def create_blueprint(server):
                 source_name=uploaded_file.filename,
             )
         except RemoteSubmissionError as exc:
-            Logger.info('WebServer: remote photo refused: %s', exc)
-            return jsonify({'error': str(exc)}), 400
+            # The store refuses in keys, not sentences: this is the only place
+            # that knows which language the phone asked for.
+            Logger.info('WebServer: remote photo refused: %s', exc.key)
+            return jsonify({
+                'error': i18n.translate(g.lang, exc.key, **exc.params),
+            }), 400
         except Exception as exc:
             Logger.error(f'WebServer: Error storing remote photo: {exc}')
             return jsonify({'error': i18n.translate(g.lang, 'web.remote.store_failed')}), 500

@@ -7,18 +7,23 @@ from kivy.clock import Clock
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.floatlayout import FloatLayout
+from kivy.uix.label import Label
 
+from libs.i18n import t
 from libs.imaging import DEFAULT_FILTER
-from libs.kivywidgets import BlurredImage, icon_button_label, make_icon_button, short_side
+from libs.kivywidgets import (
+    BackgroundBoxLayout, BlurredImage, icon_button_label, make_icon_button, short_side,
+)
 from libs.file_utils import FileUtils
 from libs.screens.filter_strip import FilterStrip, build_thumbnails
 from libs.screens.theme import (
     BORDER_THINKNESS, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_PRINT,
-    ICON_SHARE, ICON_TTF, REVIEW_HOME_TIMEOUT_SECONDS, SHARE_COLOR, STEPPER_COLOR,
+    ICON_SHARE, ICON_TTF, REVIEW_HOME_TIMEOUT_SECONDS, SHARE_COLOR, SMALL_FONT,
+    STEPPER_COLOR, wh_bind,
 )
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 from libs.screens.names import ScreenNames
-from libs.screens.popups import QRCodePopup
+from libs.screens.popups import ConfirmPopup, QRCodePopup
 
 
 class ReviewScreen(HomeTimeoutMixin, ColorScreen):
@@ -62,6 +67,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._copies = 1
         self._finalized = False
         self.lbl_copies = None
+        self.confirm_popup = None
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
         self.overlay_layout = FloatLayout()
         self.layout.add_widget(self.overlay_layout)
@@ -126,6 +132,27 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         )
         self.lbl_copies = icon_button_label(self.btn_copies)
 
+        # Why the print button is greyed out, or missing. A disabled control
+        # with nothing beside it reads as a broken booth: a guest tapped the
+        # grey printer over and over and left, when the honest answer was that
+        # the evening's quota was spent and an operator could refill it.
+        self.print_status = BackgroundBoxLayout(
+            orientation='vertical',
+            size_hint=(None, None),
+            pos_hint={},
+            padding=short_side(0.018),
+            background_color=(0, 0, 0, 0.55),
+        )
+        self.lbl_print_status = Label(
+            text='',
+            font_size=SMALL_FONT(),
+            halign='center',
+            valign='middle',
+        )
+        wh_bind(self.lbl_print_status, 'font_size', SMALL_FONT)
+        self.lbl_print_status.bind(size=self.lbl_print_status.setter('text_size'))
+        self.print_status.add_widget(self.lbl_print_status)
+
         self.btn_share = None
         if self.app.SHARE:
             self.btn_share = make_icon_button(
@@ -182,6 +209,17 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             self.btn_copies.x = self.btn_print.x - gap - self.btn_copies.width
             self.btn_copies.y = self.btn_print.y + (self.btn_print.height - self.btn_copies.height) / 2
 
+        if self.print_status.parent is not None:
+            # Left of the button column, on the print button's own line: the
+            # message explains that button, so it has to sit where the eye
+            # already is rather than at the top of the screen.
+            column = max((btn.width for btn in self._action_buttons()), default=0)
+            available = self.overlay_layout.width - margin - column - (gap if column else 0) - margin
+            self.print_status.x = margin
+            self.print_status.y = band + margin
+            self.print_status.width = max(short_side(0.35), available)
+            self.print_status.height = short_side(0.16)
+
         if self.filters is not None:
             # The buttons stack above the band, not beside it, so the strip has
             # the whole width. Reserving room for them squeezed it to a single
@@ -220,8 +258,32 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
         self.btn_print.disabled = not print_available
         self.btn_print.opacity = 1.0 if print_available else 0.45
+        self._sync_print_status(printer_available, print_available)
         self._sync_copies(printer_available and print_available)
         self._layout_action_buttons()
+
+    def _sync_print_status(self, printer_available, print_available):
+        """Say why printing is not on offer, but only where a guest expected it.
+
+        A booth configured without a printer is not missing anything, and
+        announcing an absent feature on every session is noise. A booth that has
+        one and cannot use it is a different story, and the guest standing in
+        front of a grey button is the person who needs to hear it.
+        """
+        if not self.app.PRINTER:
+            message = ''
+        elif not printer_available:
+            message = t('review.printer_unavailable')
+        elif not print_available:
+            message = t('review.print_limit_reached')
+        else:
+            message = ''
+
+        self.lbl_print_status.text = message
+        if message and self.print_status.parent is None:
+            self.overlay_layout.add_widget(self.print_status)
+        elif not message and self.print_status.parent is not None:
+            self.overlay_layout.remove_widget(self.print_status)
 
     # --- copies -----------------------------------------------------------
 
@@ -364,6 +426,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     def on_exit(self, kwargs={}):
         Logger.info('ReviewScreen: on_exit().')
         self._stop_home_timeout()
+        self._close_confirm_popup()
         self._finalize_once()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:
             self.layout.remove_widget(self.qr_popup)
@@ -371,6 +434,64 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
     def _reset_timeout(self):
         self._start_home_timeout()
+
+    # --- leaving without printing -----------------------------------------
+
+    def _printing_was_offered(self):
+        """Whether the guest could have printed, from the last probe's answer."""
+        if self._print_state is None:
+            return False
+        printer_available, print_available, _limit_info = self._print_state
+        return bool(printer_available and print_available)
+
+    def home_event(self, obj):
+        """Ask before walking away from a photo that could still be printed.
+
+        Leaving finalises the session: the collage is written as it stands, the
+        filter strip closes, and there is no route back to this screen. It is
+        also the one button on it a guest presses by mistake, reading the house
+        as "back". Every other irreversible action in the booth asks first —
+        taking a photo out of the phone queue does, with its thumbnail in the
+        question — and the one that throws away a print did not.
+
+        Only asked where printing was actually on offer and went unused: a booth
+        with no printer has nothing to warn about. The walk-away timeout does
+        not come through here at all, which is right — nobody is left to answer.
+        """
+        if self.confirm_popup is not None:
+            return
+        if not self._printing_was_offered():
+            return super(ReviewScreen, self).home_event(obj)
+
+        Logger.info('ReviewScreen: asking before leaving without printing.')
+        self._stop_home_timeout()
+        self.confirm_popup = ConfirmPopup(
+            title=t('review.leave.title'),
+            message=t('review.leave.message'),
+            icon=ICON_PRINT,
+            on_confirm=self._leave_without_printing,
+            on_dismiss=self._dismiss_confirm_popup,
+        )
+        self.layout.add_widget(self.confirm_popup)
+
+    def _leave_without_printing(self):
+        Logger.info('ReviewScreen: leaving without printing.')
+        super(ReviewScreen, self).home_event(None)
+
+    def _dismiss_confirm_popup(self):
+        self._close_confirm_popup()
+        # Confirming schedules this alongside the answer, so it also runs just
+        # after the screen has left. Restarting the timeout then would arm a
+        # clock that drags whatever screen came next back to the start.
+        if self.app.get_current_screen_name() == ScreenNames.REVIEW:
+            self._reset_timeout()
+
+    def _close_confirm_popup(self):
+        if self.confirm_popup is None:
+            return
+        if self.confirm_popup.parent is not None:
+            self.layout.remove_widget(self.confirm_popup)
+        self.confirm_popup = None
 
     def print_event(self, obj):
         Logger.info('ReviewScreen: print_event(copies=%s).', self._copies)
@@ -400,5 +521,8 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._reset_timeout()
 
     def on_keyboard_action(self):
+        if self.confirm_popup is not None:
+            self._dismiss_confirm_popup()
+            return True
         self.home_event(None)
         return True

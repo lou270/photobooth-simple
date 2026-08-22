@@ -112,12 +112,17 @@ class QRCodePopup(FloatLayout):
         for payload, _caption in steps:
             cls.preload_async(payload)
 
-    def __init__(self, steps, on_dismiss=None, title=None, hint='', **kwargs):
+    def __init__(self, steps, on_dismiss=None, title=None, hint='',
+                 auto_dismiss_seconds=0, **kwargs):
         """`steps` is [(payload, caption), ...], shown side by side in order.
 
         Two of them is the normal case on a booth with its own access point:
         joining the network and opening the page cannot be one code, and asking
         a guest to type an address in the dark is how a feature goes unused.
+
+        `auto_dismiss_seconds` closes the popup on its own. Screens that time
+        out on their own can leave it at zero; the welcome screen cannot, and
+        an overlay that swallows every touch is a booth nobody else can use.
         """
         super(QRCodePopup, self).__init__(**kwargs)
         self.on_dismiss = on_dismiss
@@ -125,6 +130,8 @@ class QRCodePopup(FloatLayout):
         if title is None:
             title = t('popups.qr.default_title')
         self._close_scheduled = False
+        self._auto_dismiss_seconds = auto_dismiss_seconds
+        self._auto_dismiss_clock = None
         
         # Semi-transparent overlay
         with self.canvas.before:
@@ -219,7 +226,36 @@ class QRCodePopup(FloatLayout):
 
         self.add_widget(self.card)
         self._generate_qr_code()
-    
+        self._arm_auto_dismiss()
+
+    # --- closing on its own ----------------------------------------------
+
+    def _arm_auto_dismiss(self):
+        """Start, or restart, the delay after which the codes close themselves.
+
+        Restarted by every touch: two scans and a phone joining a network take
+        longer than any fixed delay should assume, and a touch is what says
+        someone is still standing in front of the codes.
+        """
+        if not self._auto_dismiss_seconds:
+            return
+        self._cancel_auto_dismiss()
+        self._auto_dismiss_clock = Clock.schedule_once(
+            self._auto_dismiss_event, self._auto_dismiss_seconds)
+
+    def _cancel_auto_dismiss(self):
+        if self._auto_dismiss_clock is not None:
+            Clock.unschedule(self._auto_dismiss_clock)
+            self._auto_dismiss_clock = None
+
+    def _auto_dismiss_event(self, dt):
+        self._auto_dismiss_clock = None
+        # Taken off the screen by whoever owns it while the delay ran.
+        if self.parent is None:
+            return
+        Logger.info('QRCodePopup: closing on its own after %ss.', self._auto_dismiss_seconds)
+        self._close(None)
+
     def on_touch_down(self, touch):
         """Nothing under an overlay ever sees a touch, wherever it lands.
 
@@ -229,6 +265,7 @@ class QRCodePopup(FloatLayout):
         behind, where the welcome screen reads any touch as "start a session".
         Closing the codes started a photo session.
         """
+        self._arm_auto_dismiss()
         super(QRCodePopup, self).on_touch_down(touch)
         return True
 
@@ -261,6 +298,7 @@ class QRCodePopup(FloatLayout):
         if self._close_scheduled:
             return
         self._close_scheduled = True
+        self._cancel_auto_dismiss()
         if self.on_dismiss:
             Clock.schedule_once(lambda dt: self.on_dismiss(), 0)
 

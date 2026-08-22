@@ -63,6 +63,13 @@ PRINT_MIN_SECONDS = 6.0
 # Longer than the others: a guest browsing the photos phones sent is reading a
 # wall of faces, not answering a prompt.
 REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
+# The codes are the one overlay with nothing behind it that times out: the
+# welcome screen never leaves on its own, and the popup swallows every touch to
+# stop a tap on the card from starting a session. A guest who walked away from
+# it therefore left the booth unusable until someone found the close button.
+# Long enough for two scans and a phone joining a network, and every touch
+# gives the whole delay back.
+QR_POPUP_TIMEOUT_SECONDS = 45
 
 def lighten_rgba(color, amount=0.35):
     return (

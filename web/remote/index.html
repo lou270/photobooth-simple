@@ -241,6 +241,19 @@
             {{ t('web.remote.no_internet_hint') }}
             <strong>“{{ t('web.remote.no_internet_option') }}”</strong>
         </p>
+
+        <!-- Sending a photo already releases this phone from the portal, but a
+             guest who came only to fetch their own photo never sends one, so
+             nothing else here would ever quiet their connectivity probes. Their
+             phone keeps flagging the network and can move them onto mobile data
+             halfway through looking at it. This is the way out for them, and
+             the button the release route was written for. -->
+        <div id="keep-wifi-card" class="card{% if released %} hidden{% endif %}">
+            <button id="keep-wifi" type="button" class="btn btn-quiet btn-block">
+                {{ t('web.remote.keep_wifi') }}
+            </button>
+            <p class="hint">{{ t('web.remote.keep_wifi_hint') }}</p>
+        </div>
     </main>
 
     <canvas id="scratch" class="hidden"></canvas>
@@ -272,7 +285,9 @@
                 liveCancel: document.getElementById('live-cancel'),
                 list: document.getElementById('sent-list'),
                 empty: document.getElementById('sent-empty'),
-                canvas: document.getElementById('scratch')
+                canvas: document.getElementById('scratch'),
+                keepWifi: document.getElementById('keep-wifi'),
+                keepWifiCard: document.getElementById('keep-wifi-card')
             };
 
             var pendingBlob = null;
@@ -387,6 +402,9 @@
                         // The booth's WiFi carries no internet, so a guest who
                         // stays on it loses theirs without knowing why.
                         say(I18N.sent_success, true);
+                        // The upload released this phone server-side, so the
+                        // button that does the same thing has nothing left to do.
+                        hideKeepWifi();
                         pendingBlob = null;
                         releasePreview();
                         show('capture');
@@ -400,6 +418,33 @@
                         elements.send.textContent = I18N.send_to_booth;
                     });
             });
+
+            // --- telling the phone this network is fine -----------------------
+
+            function hideKeepWifi() {
+                if (elements.keepWifiCard) {
+                    elements.keepWifiCard.classList.add('hidden');
+                }
+            }
+
+            if (elements.keepWifi) {
+                elements.keepWifi.addEventListener('click', function () {
+                    elements.keepWifi.disabled = true;
+                    fetch('/captive-portal/release', { method: 'POST' })
+                        .then(function (response) {
+                            if (!response.ok) {
+                                throw new Error('release refused');
+                            }
+                            clearFeedback();
+                            say(I18N.keep_wifi_done, true);
+                            hideKeepWifi();
+                        })
+                        .catch(function () {
+                            say(I18N.keep_wifi_failed, false);
+                            elements.keepWifi.disabled = false;
+                        });
+                });
+            }
 
             // --- live camera, only where the browser allows it ----------------
 

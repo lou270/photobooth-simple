@@ -45,7 +45,21 @@ IMAGE_SIGNATURES = (
 
 
 class RemoteSubmissionError(Exception):
-    """A submission that was refused, carrying a message meant for the guest."""
+    """A submission that was refused, carrying a reason meant for the guest.
+
+    It carries a translation key and its parameters rather than a sentence.
+    This module runs headless and has no language of its own, while the phone
+    that will read the answer picks one per request from its own
+    Accept-Language — so the words can only be chosen where the response is
+    built. Sentences written here came out English on a page otherwise entirely
+    in the guest's language, which reads as a bug in the booth rather than as
+    the limit it is trying to explain.
+    """
+
+    def __init__(self, key, **params):
+        super().__init__(key)
+        self.key = key
+        self.params = params
 
 
 def new_sender_id():
@@ -179,17 +193,19 @@ class RemoteStore:
         Raises RemoteSubmissionError with a message the guest is meant to read.
         """
         if not is_valid_sender_id(sender_id):
-            raise RemoteSubmissionError('This device is not identified. Reload the page and try again.')
+            raise RemoteSubmissionError('web.remote.error.not_identified')
 
         if not image_bytes:
-            raise RemoteSubmissionError('The photo arrived empty. Try again.')
+            raise RemoteSubmissionError('web.remote.error.empty_photo')
 
         if len(image_bytes) > self.max_upload_bytes:
             megabytes = self.max_upload_bytes / (1024 * 1024)
-            raise RemoteSubmissionError(f'The photo is too large. The limit is {megabytes:.0f} MB.')
+            # Same key the 413 handler uses: a body over the server's own
+            # ceiling and one over the store's are the same refusal to a guest.
+            raise RemoteSubmissionError('web.remote.photo_too_large', limit_mb=f'{megabytes:.0f}')
 
         if not image_bytes.startswith(IMAGE_SIGNATURES):
-            raise RemoteSubmissionError('Only JPEG and PNG photos are accepted.')
+            raise RemoteSubmissionError('web.remote.error.bad_format')
 
         self._check_quota(sender_id)
 
@@ -217,7 +233,7 @@ class RemoteStore:
             # the pre-check at the same time and only one of them may fit.
             pending = sum(1 for item in index['entries'] if item.get('status') == self.STATUS_PENDING)
             if pending >= self.max_pending:
-                raise RemoteSubmissionError('The booth already has all the photos it can hold. Try again later.')
+                raise RemoteSubmissionError('web.remote.error.booth_full')
             index['entries'].append(entry)
             return dict(entry)
 
@@ -258,11 +274,11 @@ class RemoteStore:
                 last_from_sender = received_at
 
         if pending >= self.max_pending:
-            raise RemoteSubmissionError('The booth already has all the photos it can hold. Try again later.')
+            raise RemoteSubmissionError('web.remote.error.booth_full')
 
         if pending_from_sender >= self.max_per_sender:
             raise RemoteSubmissionError(
-                f'You have {self.max_per_sender} photos waiting. Print some at the booth to send more.'
+                'web.remote.error.sender_quota', max_per_sender=self.max_per_sender
             )
 
         if self.min_upload_interval and last_from_sender:
@@ -271,7 +287,7 @@ class RemoteStore:
             except ValueError:
                 elapsed = self.min_upload_interval
             if 0 <= elapsed < self.min_upload_interval:
-                raise RemoteSubmissionError('Sending too fast. Wait a moment and try again.')
+                raise RemoteSubmissionError('web.remote.error.too_fast')
 
     def _store_image(self, entry_id, image_bytes):
         """Write the photo and its thumbnail, upright and re-encoded.
@@ -291,7 +307,7 @@ class RemoteStore:
             FileUtils.remove_file(temp_path)
 
         if image is None:
-            raise RemoteSubmissionError('This file is not a photo the booth can read.')
+            raise RemoteSubmissionError('web.remote.error.unreadable')
 
         image = FileUtils.resize(image, max_height=self.max_image_pixels, max_width=self.max_image_pixels)
         photo_path = os.path.join(self.remote_directory, f'{entry_id}.jpg')

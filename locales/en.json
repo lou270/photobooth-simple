@@ -16,6 +16,14 @@
     "photo_failed": "Photo processing failed.",
     "collage_failed": "Collage creation failed."
   },
+  "review": {
+    "printer_unavailable": "Printer unavailable.\nPlease call an operator.",
+    "print_limit_reached": "No prints left.\nPlease call an operator.",
+    "leave": {
+      "title": "LEAVE WITHOUT PRINTING?",
+      "message": "Your photo will not be printed.\nThis screen cannot be reopened."
+    }
+  },
   "printing": {
     "title": "PRINTING",
     "saving": "Saving your photo...",
@@ -106,7 +114,20 @@
       "store_failed": "The booth could not store this photo. Try again.",
       "photo_too_large": "The photo is too large. The limit is {limit_mb} MB.",
       "device_not_identified": "This device is not identified.",
-      "photo_not_found": "Photo not found."
+      "photo_not_found": "Photo not found.",
+      "keep_wifi": "Keep this WiFi connected",
+      "keep_wifi_hint": "Your phone will stop offering to leave this network.",
+      "keep_wifi_done": "Done. Your phone should stop flagging this network.",
+      "keep_wifi_failed": "Could not reach the booth. Stay on its WiFi and try again.",
+      "error": {
+        "not_identified": "This device is not identified. Reload the page and try again.",
+        "empty_photo": "The photo arrived empty. Try again.",
+        "bad_format": "Only JPEG and PNG photos are accepted.",
+        "unreadable": "This file is not a photo the booth can read.",
+        "booth_full": "The booth already has all the photos it can hold. Try again later.",
+        "sender_quota": "You have {max_per_sender} photos waiting. Print some at the booth to send more.",
+        "too_fast": "Sending too fast. Wait a moment and try again."
+      }
     },
     "admin": {
       "eyebrow": "Administration",

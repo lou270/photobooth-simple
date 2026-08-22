@@ -16,6 +16,14 @@
     "photo_failed": "Le traitement de la photo a échoué.",
     "collage_failed": "La création du montage a échoué."
   },
+  "review": {
+    "printer_unavailable": "Imprimante indisponible.\nMerci d'appeler un opérateur.",
+    "print_limit_reached": "Plus de tirages disponibles.\nMerci d'appeler un opérateur.",
+    "leave": {
+      "title": "PARTIR SANS IMPRIMER ?",
+      "message": "Votre photo ne sera pas imprimée.\nCet écran ne peut pas être rouvert."
+    }
+  },
   "printing": {
     "title": "IMPRESSION",
     "saving": "Enregistrement de la photo...",
@@ -106,7 +114,20 @@
       "store_failed": "La borne n'a pas pu enregistrer cette photo. Réessayez.",
       "photo_too_large": "La photo est trop volumineuse. La limite est de {limit_mb} Mo.",
       "device_not_identified": "Cet appareil n'est pas identifié.",
-      "photo_not_found": "Photo introuvable."
+      "photo_not_found": "Photo introuvable.",
+      "keep_wifi": "Garder ce WiFi connecté",
+      "keep_wifi_hint": "Votre téléphone arrêtera de proposer de quitter ce réseau.",
+      "keep_wifi_done": "C'est noté. Votre téléphone ne devrait plus signaler ce réseau.",
+      "keep_wifi_failed": "Impossible de joindre la borne. Restez sur son WiFi et réessayez.",
+      "error": {
+        "not_identified": "Cet appareil n'est pas identifié. Rechargez la page et réessayez.",
+        "empty_photo": "La photo est arrivée vide. Réessayez.",
+        "bad_format": "Seules les photos JPEG et PNG sont acceptées.",
+        "unreadable": "Ce fichier n'est pas une photo que la borne sait lire.",
+        "booth_full": "La borne a déjà toutes les photos qu'elle peut garder. Réessayez plus tard.",
+        "sender_quota": "Vous avez {max_per_sender} photos en attente. Imprimez-en à la borne pour en envoyer d'autres.",
+        "too_fast": "Envoi trop rapide. Patientez un instant et réessayez."
+      }
     },
     "admin": {
       "eyebrow": "Administration",

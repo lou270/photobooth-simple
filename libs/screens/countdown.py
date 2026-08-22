@@ -220,10 +220,13 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         if not(self.app.is_shot_completed(self._current_shot)):
             if self.app.has_process_timed_out('shot', SHOT_TIMEOUT_SECONDS):
                 Logger.error('CountdownScreen: capture timed out after countdown.')
-                if hasattr(self.app, 'recover_devices_and_return_home'):
-                    self.app.recover_devices_and_return_home(reason='capture_timeout')
-                else:
-                    self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_timeout'))
+                # The message travels with the recovery rather than being shown
+                # here: it is only true once the camera is back, and the guest
+                # reading it is about to press continue and try again.
+                self.app.recover_devices_and_return_home(
+                    reason='capture_timeout',
+                    message=t('countdown.capture_timeout'),
+                )
             else:
                 # Retry after 1sec
                 self._clock_trigger = Clock.schedule_once(self.timer_trigger, 1)
@@ -232,10 +235,10 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             error_details = self.app.get_process_error('shot')
             if error_details:
                 Logger.error(error_details)
-            if hasattr(self.app, 'recover_devices_and_return_home'):
-                self.app.recover_devices_and_return_home(reason='capture_failure')
-            else:
-                self.app.transition_to(ScreenNames.ERROR, message=t('countdown.capture_failed'))
+            self.app.recover_devices_and_return_home(
+                reason='capture_failure',
+                message=t('countdown.capture_failed'),
+            )
         else:
             # Display photo for validation
             self.app.transition_to(ScreenNames.CONFIRM_CAPTURE, shot=self._current_shot, format=self._current_format)
