@@ -56,16 +56,41 @@ def create_blueprint(server):
 
         return render_template('gallery/collage.html', session=session)
 
+    @blueprint.route('/thumb/<session>')
+    def serve_thumbnail(session):
+        """The small copy the grid draws, or the full collage when there is none.
+
+        The fallback is what keeps sessions saved before the booth started
+        writing thumbnails visible: a heavy grid is a worse answer than a fast
+        one, and a grid of broken images is worse than both.
+        """
+        image_path = paths.safe_thumbnail_path(server.save_directory, session)
+
+        if image_path is None:
+            image_path = paths.safe_photo_path(server.save_directory, session, 'collage.jpg')
+
+        if image_path is None:
+            return "Not found", 404
+
+        return send_file(image_path, mimetype='image/jpeg')
+
     @blueprint.route('/image/<session>/<filename>')
     def serve_image(session, filename):
-        """Serve an image file."""
+        """Serve an image file.
+
+        Deliberately uncounted. This used to record an image_view, which took a
+        global lock, reread the whole stats file, rewrote it and renamed it —
+        per image served, for a counter no page has ever displayed. A gallery of
+        eighty tiles cost eighty of those, and the lock is the one the booth
+        takes to save a session, so a few phones browsing made the booth stutter
+        as a guest pressed print. Gallery and collage views are still counted:
+        they are shown, and they arrive once per page rather than per image.
+        """
         image_path = paths.safe_photo_path(server.save_directory, session, filename)
 
         if image_path is None:
             return "Not found", 404
 
-        if server.stats_store is not None:
-            server.stats_store.track_event('image_view')
         return send_file(image_path, mimetype='image/jpeg')
 
     @blueprint.route('/download/<session>/<filename>')

@@ -44,10 +44,36 @@ def test_saving_moves_originals_and_leaves_derived_files_behind(tmp_path):
     session_directory = Path(storage.save_directory, session_id)
     # One photo saved: the collage is assembled from it, not a photo of its own.
     assert photos == 1
-    assert sorted(p.name for p in session_directory.iterdir()) == ['capture-0.jpg', 'collage.jpg']
-    assert sorted(p.name for p in Path(storage.tmp_directory).iterdir()) == [
-        'capture-0_small.jpg', 'collage_print.jpg', 'collage_small.jpg',
+    # The collage's small copy travels with the session — it is what the gallery
+    # grid serves. Every other derived file stays behind.
+    assert sorted(p.name for p in session_directory.iterdir()) == [
+        'capture-0.jpg', 'collage.jpg', 'collage_small.jpg',
     ]
+    assert sorted(p.name for p in Path(storage.tmp_directory).iterdir()) == [
+        'capture-0_small.jpg', 'collage_print.jpg',
+    ]
+
+
+def test_a_session_saved_without_a_thumbnail_is_still_a_session(tmp_path):
+    """The gallery falls back to the full collage, so this must not fail."""
+    storage = make_storage(tmp_path)
+    write_working_files(storage, ['capture-0.jpg', 'collage.jpg'])
+
+    session_id, photos = storage.save_session()
+
+    session_directory = Path(storage.save_directory, session_id)
+    assert (session_id, photos) == (session_id, 1)
+    assert sorted(p.name for p in session_directory.iterdir()) == ['capture-0.jpg', 'collage.jpg']
+
+
+def test_a_stray_thumbnail_does_not_become_a_phantom_session(tmp_path):
+    """It is moved only once something real has been saved beside it; on its own
+    it would leave a gallery entry with a tile and nothing behind it."""
+    storage = make_storage(tmp_path)
+    write_working_files(storage, ['collage_small.jpg'])
+
+    assert storage.save_session() == (None, 0)
+    assert list(Path(storage.save_directory).iterdir()) == []
 
 
 def test_saving_an_empty_session_reports_nothing_saved(tmp_path):

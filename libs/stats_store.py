@@ -103,7 +103,10 @@ class StatsStore:
             'download': ('downloads', 'last_download_date'),
             'gallery_view': ('gallery_views', None),
             'collage_view': ('collage_views', None),
-            'image_view': ('image_views', None),
+            # No 'image_view': it was recorded per image served, which meant a
+            # locked read-modify-write of this file per tile of the gallery
+            # grid, for a number no page displays. An unknown event is ignored,
+            # so a caller left behind costs nothing.
             'remote_upload': ('remote_uploads', 'last_remote_upload_date'),
         }.get(event_type)
         if fields is None:

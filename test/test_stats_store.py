@@ -113,7 +113,7 @@ def test_concurrent_updates_are_not_lost(store):
 
 
 def test_the_file_stays_valid_json_under_concurrency(store):
-    threads = [threading.Thread(target=store.track_event, args=('image_view',)) for _ in range(20)]
+    threads = [threading.Thread(target=store.track_event, args=('collage_view',)) for _ in range(20)]
     for thread in threads:
         thread.start()
     for thread in threads:

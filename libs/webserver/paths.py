@@ -15,6 +15,11 @@ SESSION_PATTERN = re.compile(r'^\d{8}_\d{6}$')
 IMAGE_FILENAME_PATTERN = re.compile(r'^(?:collage|capture-\d+)\.jpg$', re.IGNORECASE)
 # A log file name carries no separator, so it cannot name another directory.
 LOG_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
+# The collage's small copy, saved beside it for the gallery grid. Deliberately
+# absent from IMAGE_FILENAME_PATTERN above: the grid reaches it through its own
+# route, so the downloads and the archive stay unaware it exists rather than
+# each having to learn to skip it.
+THUMBNAIL_FILENAME = 'collage_small.jpg'
 
 
 def is_valid_session(session):
@@ -37,6 +42,25 @@ def safe_photo_path(save_directory, session, filename):
 
     # realpath first, then compare: a symlink pointing out of the gallery must
     # not be served just because its name looked right.
+    if not requested_path.startswith(base_path + os.sep):
+        return None
+
+    if not os.path.isfile(requested_path):
+        return None
+
+    return requested_path
+
+
+def safe_thumbnail_path(save_directory, session):
+    """Resolve a session's grid thumbnail, or None when it has none."""
+    if not is_valid_session(session):
+        return None
+
+    base_path = os.path.realpath(save_directory)
+    requested_path = os.path.realpath(os.path.join(base_path, session, THUMBNAIL_FILENAME))
+
+    # Same order as safe_photo_path: resolve, then compare, so a symlink
+    # pointing out of the gallery is not served for having the right name.
     if not requested_path.startswith(base_path + os.sep):
         return None
 

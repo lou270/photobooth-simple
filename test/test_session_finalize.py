@@ -100,8 +100,11 @@ def test_the_session_is_filed_away(app):
     app.finalize_session(0, 'color')
 
     saved = Path(app.storage.last_saved_session_directory)
-    assert sorted(p.name for p in saved.iterdir()) == ['capture-0.jpg', 'collage.jpg']
-    # The small copies stay behind on purpose; the captures themselves moved.
+    # The collage's small copy comes along — the gallery grid serves it. The
+    # captures' own small copies stay behind, and the captures themselves moved.
+    assert sorted(p.name for p in saved.iterdir()) == [
+        'capture-0.jpg', 'collage.jpg', 'collage_small.jpg',
+    ]
     assert not Path(app.get_shot(0)).exists()
 
 

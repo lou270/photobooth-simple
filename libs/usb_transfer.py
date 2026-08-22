@@ -148,6 +148,11 @@ class UsbTransfer:
         for item in src_path.iterdir():
             if self._stop_event.is_set():
                 return copied_files
+            # The gallery's grid thumbnail lives in the session so the web page
+            # can serve something small. On a guest's USB stick it is only a
+            # second, worse copy of the collage beside the real one.
+            if '_small' in item.name:
+                continue
             s = src_path / item.name
             d = dest_path / item.name
             if s.is_dir():

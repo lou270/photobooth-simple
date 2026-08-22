@@ -19,6 +19,8 @@ class SessionStorage:
 
     SESSION_ID_FORMAT = '%Y%m%d_%H%M%S'
     SHOT_PREFIX = 'capture-'
+    # The one derived file a session keeps: what the gallery grid draws.
+    THUMBNAIL_NAME = 'collage_small.jpg'
 
     def __init__(self, dcim_directory, min_free_gb=2.0, max_used_percent=90.0):
         self.dcim_directory = dcim_directory
@@ -86,8 +88,11 @@ class SessionStorage:
     def save_session(self):
         """Move the working files into a timestamped session directory.
 
-        Small previews and print-only duplicates stay behind: they are derived
-        files that would only bloat the gallery and the USB export.
+        Derived files stay behind — they would only bloat the USB export — with
+        one exception: the collage's small copy, which is what the gallery grid
+        serves. Without it the grid asks every phone for the full-size collage
+        and leaves the browser to shrink 200 KB into a 260-pixel tile, eighty
+        times over on a page nobody scrolls to the end of.
 
         Returns (session_id, photos), where photos counts the captures only, not
         the collage that was assembled from them. session_id is None when
@@ -128,10 +133,31 @@ class SessionStorage:
                 pass
             return None, 0
 
+        # Only once something real has been saved. A thumbnail on its own is not
+        # a session, and moving it before this check would turn a directory of
+        # leftovers into a phantom entry in the gallery.
+        self._save_collage_thumbnail(destination)
+
         self.last_saved_session_directory = destination
         session_id = os.path.basename(destination)
         Logger.info('SessionStorage: saved session %s files=%s photos=%s', session_id, moved_files, saved_photos)
         return session_id, saved_photos
+
+    def _save_collage_thumbnail(self, destination):
+        """Move the collage's small copy in beside it, when one was made.
+
+        Never fatal: the gallery falls back to the full-size collage when a
+        session has no thumbnail, which is also how sessions saved before the
+        booth started keeping one still show up.
+        """
+        source_path = FileUtils.get_small_path(self.get_collage())
+        if not os.path.isfile(source_path):
+            return
+
+        try:
+            FileUtils.move_file(source_path, os.path.join(destination, self.THUMBNAIL_NAME))
+        except Exception as exc:
+            Logger.warning('SessionStorage: could not save the collage thumbnail: %s', exc)
 
     def purge_tmp(self):
         """Delete every working file, including the derived ones save_session left."""

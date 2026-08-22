@@ -57,7 +57,9 @@
                 {% for collage in collages %}
                 <article class="panel gallery-card">
                     <a href="/collage/{{ collage.session }}" style="display: block; text-decoration: none;">
-                        <img src="/image/{{ collage.session }}/collage.jpg" alt="{{ t('web.gallery.collage_alt') }} {{ collage.session }}">
+                        <img src="/thumb/{{ collage.session }}" loading="lazy" decoding="async"
+                             width="800" height="600"
+                             alt="{{ t('web.gallery.collage_alt') }} {{ collage.session }}">
                     </a>
                     <div class="gallery-card-body">
                         <h2>{{ collage.session }}</h2>
