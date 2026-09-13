@@ -6,7 +6,6 @@ assembled, printed and saved like any other. These tests cover that handover,
 which is the only place the two halves of the feature touch.
 """
 
-import ipaddress
 import os
 import sys
 import time
@@ -27,6 +26,7 @@ from kivy.core.window import Window
 from kivy.input.providers.mouse import MouseMotionEvent
 from kivy.uix.floatlayout import FloatLayout
 
+from libs import i18n
 from libs.core import SessionStorage
 from libs.file_utils import FileUtils
 from libs.kivywidgets import SquareFloatLayout
@@ -167,32 +167,58 @@ def test_a_card_is_labelled_with_the_time_the_photo_arrived(received_at, expecte
 
 
 def test_the_guest_is_given_two_codes_in_order(tmp_path):
-    """Joining and opening cannot be one code, and the network opens nothing itself."""
+    """Joining a network and opening a page cannot be one code."""
     app = make_app(tmp_path)
     app.wifi_payload = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
 
-    steps, _title, hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
+    steps, _title, hint = app.get_qr_invitation('http://192.168.8.20:5000/remote')
 
     assert [payload for payload, _caption in steps] == [
         app.wifi_payload,
-        'http://192.168.4.1:5000/remote',
+        'http://192.168.8.20:5000/remote',
     ]
     assert steps[0][1].startswith('1.') and steps[1][1].startswith('2.')
-    assert hint == 'http://192.168.4.1:5000/remote'
+    assert hint == 'http://192.168.8.20:5000/remote'
 
 
-def test_the_second_code_never_carries_a_name_to_resolve(tmp_path):
-    """With no default route here, a phone asks its cellular resolver instead."""
+def make_public_app(tmp_path, override=None):
     app = make_app(tmp_path)
-    app.wifi_payload = 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
+    app.WEB_PORT = 5000
+    app.WEB_HOST = '192.168.8.20'
+    app._public_url_override = override
+    app.wifi_payload = None
+    return app
 
-    steps, _title, _hint = app.get_qr_invitation('http://192.168.4.1:5000/remote')
 
-    host = steps[1][0].split('//', 1)[1].split(':', 1)[0]
-    ipaddress.ip_address(host)  # raises if the booth ever hands out a hostname
+def test_the_sharing_code_leads_to_the_guest_s_own_photo(tmp_path):
+    """The gallery of the whole evening is not where a guest finds their photo."""
+    app = make_public_app(tmp_path)
+
+    steps, title, _hint = app.get_share_invitation('20260913_214703')
+
+    assert steps == [('http://192.168.8.20:5000/collage/20260913_214703', '')]
+    assert title == i18n.t('app.qr_share_title')
 
 
-def test_without_an_access_point_a_single_code_carries_the_address(tmp_path):
+def test_every_code_follows_the_operator_s_address(tmp_path):
+    app = make_public_app(tmp_path, override='photobooth.local:8080')
+
+    assert app.get_remote_url() == 'http://photobooth.local:8080/remote'
+    assert app.get_photo_url('20260913_214703') == 'http://photobooth.local:8080/collage/20260913_214703'
+
+
+def test_reserving_a_session_tells_the_web_server_to_wait_for_it(tmp_path):
+    """A phone can open the link before the booth has finished writing."""
+    app = make_app(tmp_path)
+    app.web_server = Mock()
+
+    session_id = app.reserve_session_id()
+
+    app.web_server.expect_session.assert_called_once_with(session_id)
+    assert app.storage.reserved_session_id == session_id
+
+
+def test_without_a_guest_network_a_single_code_carries_the_address(tmp_path):
     """Nothing to join means the guest is already on a network of their own."""
     app = make_app(tmp_path)
     app.wifi_payload = None

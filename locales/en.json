@@ -65,6 +65,7 @@
     "qr_join_wifi": "1. JOIN THE WIFI",
     "qr_open_page": "2. OPEN THE PAGE",
     "qr_title": "SEND PHOTOS FROM YOUR PHONE",
+    "qr_share_title": "GET YOUR PHOTO ON YOUR PHONE",
     "camera_recovery_failed": "Camera recovery failed. Please call an operator.",
     "disk_full": "Photo storage is full. Please call an operator."
   },
@@ -77,7 +78,9 @@
       "collage_alt": "Collage",
       "collage_title": "Collage",
       "empty_title": "No collage available yet",
-      "empty_message": "The web gallery will appear here as soon as the first PhotoBooth session is saved."
+      "empty_message": "The web gallery will appear here as soon as the first PhotoBooth session is saved.",
+      "pending_title": "Your photo is on its way",
+      "pending_message": "The booth is finishing it. This page opens it by itself in a moment."
     },
     "remote": {
       "title": "Send a photo",
@@ -117,10 +120,6 @@
       "photo_too_large": "The photo is too large. The limit is {limit_mb} MB.",
       "device_not_identified": "This device is not identified.",
       "photo_not_found": "Photo not found.",
-      "keep_wifi": "Keep this WiFi connected",
-      "keep_wifi_hint": "Your phone will stop offering to leave this network.",
-      "keep_wifi_done": "Done. Your phone should stop flagging this network.",
-      "keep_wifi_failed": "Could not reach the booth. Stay on its WiFi and try again.",
       "error": {
         "not_identified": "This device is not identified. Reload the page and try again.",
         "empty_photo": "The photo arrived empty. Try again.",

@@ -220,7 +220,7 @@ class StartScreen(BackgroundScreen):
         self._purge_when_idle()
 
         if self.app.has_remote_capture():
-            QRCodePopup.preload_steps(self.app.get_qr_invitation(self.app.remote_url)[0])
+            QRCodePopup.preload_steps(self.app.get_qr_invitation(self.app.get_remote_url())[0])
             self._refresh_pending_count()
             self._queue_clock = Clock.schedule_interval(self._refresh_pending_count, 5)
 
@@ -232,8 +232,6 @@ class StartScreen(BackgroundScreen):
         else:
             self.app.clear_pending_photo_error()
             self.app.purge_tmp()
-            if self.app.SHARE:
-                QRCodePopup.preload_steps(self.app.get_qr_invitation(self.app.gallery_url)[0])
 
     def on_exit(self, kwargs={}):
         Logger.info('StartScreen: on_exit().')
@@ -298,7 +296,7 @@ class StartScreen(BackgroundScreen):
         Logger.info('StartScreen: remote_qr_event().')
         if getattr(self, 'qr_popup', None) is not None and self.qr_popup.parent:
             return
-        steps, title, hint = self.app.get_qr_invitation(self.app.remote_url)
+        steps, title, hint = self.app.get_qr_invitation(self.app.get_remote_url())
         # This screen has no walk-away timeout of its own — it is where the
         # booth waits — so the codes carry theirs, or a guest who left them
         # open leaves the next one tapping an overlay that answers nothing.

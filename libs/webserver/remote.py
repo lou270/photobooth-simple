@@ -4,8 +4,8 @@ The page these routes serve is opened by scanning the QR code on the welcome
 screen. A guest takes a photo wherever they are, sends it here, and walks to the
 booth to print it. Nothing about the capture happens in this process: the phone's
 own camera application takes the photo, which is what keeps this working over
-plain HTTP on a booth's access point, where the browser camera API is refused
-for want of a secure context.
+the plain HTTP a booth serves, where the browser camera API is refused for want
+of a secure context.
 
 The whole area answers 404 while remote capture is disabled, so a booth that
 does not offer the feature does not advertise it either.
@@ -40,8 +40,6 @@ REMOTE_PAGE_JS_KEYS = {
     'withdraw_failed': 'web.remote.withdraw_failed',
     'remove': 'web.remote.remove',
     'photo_sent_at_alt': 'web.remote.photo_sent_at_alt',
-    'keep_wifi_done': 'web.remote.keep_wifi_done',
-    'keep_wifi_failed': 'web.remote.keep_wifi_failed',
 }
 
 # Same idea for admin/remote.html, the operator's moderation page.
@@ -118,12 +116,9 @@ def create_blueprint(server):
             max_upload_mb=round(store.max_upload_bytes / (1024 * 1024)),
             max_per_sender=store.max_per_sender,
             max_image_pixels=store.max_image_pixels,
-            # This page took over the captive portal landing, so it owes guests
+            # This page took over the booth's root address, so it owes guests
             # the way back to the gallery, where they were meant to reach it.
             show_gallery_link=server.share_enabled,
-            # A phone already through the portal has nothing to release, and
-            # offering it the button again only invites a pointless tap.
-            released=server.captive_clients.is_released(server._client_key()),
             js_i18n=i18n.bundle(g.lang, REMOTE_PAGE_JS_KEYS),
         ))
         return attach_sender(response, sender_id() or new_sender_id())
@@ -163,11 +158,6 @@ def create_blueprint(server):
 
         if server.stats_store is not None:
             server.stats_store.track_event('remote_upload')
-
-        # A phone that just uploaded is plainly not stuck behind the portal, so
-        # its connectivity probes can start answering success and the operating
-        # system can stop offering to leave this network for mobile data.
-        server.captive_clients.release(server._client_key())
 
         return jsonify({'photo': public_entry(entry)}), 201
 

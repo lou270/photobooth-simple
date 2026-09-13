@@ -1,7 +1,7 @@
 import logging
 import os
 import shutil
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from libs.file_utils import FileUtils
 
@@ -29,6 +29,7 @@ class SessionStorage:
         self.min_free_gb = min_free_gb
         self.max_used_percent = max_used_percent
         self.last_saved_session_directory = None
+        self.reserved_session_id = None
 
         for directory in (self.dcim_directory, self.tmp_directory, self.save_directory):
             os.makedirs(directory, exist_ok=True)
@@ -85,6 +86,25 @@ class SessionStorage:
 
     # --- session lifecycle -----------------------------------------------
 
+    def reserve_session_id(self):
+        """Name the session in progress before it is saved.
+
+        The sharing QR code carries the guest's own session, and it has to be
+        drawn while the guest is still looking at the collage, before anything
+        is on disk. save_session() then files the session under this name.
+        A name already taken moves on by a second, so a reservation never
+        points at somebody else's photo.
+        """
+        moment = datetime.now()
+        while True:
+            candidate = moment.strftime(self.SESSION_ID_FORMAT)
+            if not os.path.exists(os.path.join(self.save_directory, candidate)):
+                break
+            moment += timedelta(seconds=1)
+
+        self.reserved_session_id = candidate
+        return candidate
+
     def save_session(self):
         """Move the working files into a timestamped session directory.
 
@@ -96,13 +116,17 @@ class SessionStorage:
 
         Returns (session_id, photos), where photos counts the captures only, not
         the collage that was assembled from them. session_id is None when
-        nothing was worth saving.
+        nothing was worth saving. The name is the one reserve_session_id()
+        handed out, when there is one, and is used up either way.
         """
+        session_name = self.reserved_session_id or datetime.now().strftime(self.SESSION_ID_FORMAT)
+        self.reserved_session_id = None
+
         working_files = os.listdir(self.tmp_directory)
         if not working_files:
             return None, 0
 
-        destination = os.path.join(self.save_directory, datetime.now().strftime(self.SESSION_ID_FORMAT))
+        destination = os.path.join(self.save_directory, session_name)
         os.makedirs(destination, exist_ok=True)
 
         moved_files = 0
@@ -161,6 +185,8 @@ class SessionStorage:
 
     def purge_tmp(self):
         """Delete every working file, including the derived ones save_session left."""
+        # A session abandoned before it was saved gives its name back with it.
+        self.reserved_session_id = None
         removed_files = 0
         for filename in os.listdir(self.tmp_directory):
             path = os.path.join(self.tmp_directory, filename)

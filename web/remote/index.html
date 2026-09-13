@@ -188,8 +188,8 @@
         <section class="card">
             <!-- Capture step: the phone's own camera application, opened by the
                  file input. The browser camera API needs a secure context, which
-                 a booth on its own access point cannot offer, so the live view
-                 below is only wired up when the page happens to have one. -->
+                 a booth serving plain HTTP cannot offer, so the live view below
+                 is only wired up when the page happens to have one. -->
             <div id="capture-step">
                 <label class="btn btn-capture btn-block" for="photo-input">{{ t('web.remote.take_photo') }}</label>
                 <input id="photo-input" type="file" accept="image/*" capture="environment" class="hidden">
@@ -231,29 +231,16 @@
             {% if show_gallery_link %}<br><a href="/gallery">{{ t('web.remote.gallery_link') }}</a>{% endif %}
         </p>
 
-        <!-- This network carries no internet, and Android says so with its own
-             notification rather than anything this page can dismiss. Sending a
-             photo quiets the connectivity probes on the server side, but the
-             notification itself is only cleared by the guest, from the system
-             tray. The option is named here in the phone's own language, which
-             is the only way a guest recognises it in their tray. -->
+        <!-- A booth is often reached over a network with no internet behind it,
+             and Android says so with its own notification rather than anything
+             this page can dismiss; left alone, it moves the phone back onto
+             mobile data and the booth stops answering. Only the guest can clear
+             it, from the system tray, so the option is named here in the
+             phone's own language, which is how they recognise it there. -->
         <p class="hint">
             {{ t('web.remote.no_internet_hint') }}
             <strong>“{{ t('web.remote.no_internet_option') }}”</strong>
         </p>
-
-        <!-- Sending a photo already releases this phone from the portal, but a
-             guest who came only to fetch their own photo never sends one, so
-             nothing else here would ever quiet their connectivity probes. Their
-             phone keeps flagging the network and can move them onto mobile data
-             halfway through looking at it. This is the way out for them, and
-             the button the release route was written for. -->
-        <div id="keep-wifi-card" class="card{% if released %} hidden{% endif %}">
-            <button id="keep-wifi" type="button" class="btn btn-quiet btn-block">
-                {{ t('web.remote.keep_wifi') }}
-            </button>
-            <p class="hint">{{ t('web.remote.keep_wifi_hint') }}</p>
-        </div>
     </main>
 
     <canvas id="scratch" class="hidden"></canvas>
@@ -285,9 +272,7 @@
                 liveCancel: document.getElementById('live-cancel'),
                 list: document.getElementById('sent-list'),
                 empty: document.getElementById('sent-empty'),
-                canvas: document.getElementById('scratch'),
-                keepWifi: document.getElementById('keep-wifi'),
-                keepWifiCard: document.getElementById('keep-wifi-card')
+                canvas: document.getElementById('scratch')
             };
 
             var pendingBlob = null;
@@ -399,12 +384,9 @@
                             say(result.body.error || I18N.refused, false);
                             return;
                         }
-                        // The booth's WiFi carries no internet, so a guest who
-                        // stays on it loses theirs without knowing why.
+                        // The booth's WiFi often carries no internet, so a guest
+                        // who stays on it loses theirs without knowing why.
                         say(I18N.sent_success, true);
-                        // The upload released this phone server-side, so the
-                        // button that does the same thing has nothing left to do.
-                        hideKeepWifi();
                         pendingBlob = null;
                         releasePreview();
                         show('capture');
@@ -418,33 +400,6 @@
                         elements.send.textContent = I18N.send_to_booth;
                     });
             });
-
-            // --- telling the phone this network is fine -----------------------
-
-            function hideKeepWifi() {
-                if (elements.keepWifiCard) {
-                    elements.keepWifiCard.classList.add('hidden');
-                }
-            }
-
-            if (elements.keepWifi) {
-                elements.keepWifi.addEventListener('click', function () {
-                    elements.keepWifi.disabled = true;
-                    fetch('/captive-portal/release', { method: 'POST' })
-                        .then(function (response) {
-                            if (!response.ok) {
-                                throw new Error('release refused');
-                            }
-                            clearFeedback();
-                            say(I18N.keep_wifi_done, true);
-                            hideKeepWifi();
-                        })
-                        .catch(function () {
-                            say(I18N.keep_wifi_failed, false);
-                            elements.keepWifi.disabled = false;
-                        });
-                });
-            }
 
             // --- live camera, only where the browser allows it ----------------
 

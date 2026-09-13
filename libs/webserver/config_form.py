@@ -67,13 +67,12 @@ CONFIG_FORM_SECTIONS = (
         ),
     },
     {
-        'title': 'WiFi access point',
-        'description': 'What the QR code tells a phone to join. Describes hostapd, does not configure it.',
+        'title': 'Guest WiFi',
+        'description': 'The network guests join to reach the booth, put in a QR code so nobody types it. The booth does not create this network.',
         'fields': (
-            {'section': 'WiFi', 'option': 'WIFI_SSID', 'label': 'Network name', 'control': 'text', 'placeholder': 'PhotoBooth', 'help': 'Must match ssid= in /etc/hostapd/hostapd.conf.'},
-            {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'label': 'Network password', 'control': 'text', 'placeholder': 'Open network', 'help': 'Leave empty for an open network, as install.sh configures it.'},
+            {'section': 'WiFi', 'option': 'WIFI_SSID', 'label': 'Network name', 'control': 'text', 'placeholder': 'No WiFi code', 'help': 'Leave empty to show only the address code, for guests already on the booth network.'},
+            {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'label': 'Network password', 'control': 'text', 'placeholder': 'Open network', 'help': 'Leave empty for an open network.'},
             {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'label': 'Hidden network', 'control': 'checkbox'},
-            {'section': 'WiFi', 'option': 'WIFI_AP_ADDRESS', 'label': 'Booth address on that network', 'control': 'text', 'placeholder': '192.168.4.1', 'help': 'What the QR code sends phones to. Empty to guess it from the system routes.'},
         ),
     },
     {
@@ -81,7 +80,7 @@ CONFIG_FORM_SECTIONS = (
         'description': 'Photos guests take with their own phone and send to the booth.',
         'fields': (
             {'section': 'Remote', 'option': 'REMOTE_CAPTURE', 'label': 'Phone camera', 'control': 'checkbox', 'help': 'Show the QR code on the welcome screen and accept photos from phones.'},
-            {'section': 'Remote', 'option': 'REMOTE_URL', 'label': 'Public address', 'control': 'text', 'placeholder': 'None', 'none_means_empty': True, 'help': 'Leave empty to derive it from the interface the booth answers on, or give the whole address, port included.'},
+            {'section': 'Remote', 'option': 'REMOTE_URL', 'label': 'Public address', 'control': 'text', 'placeholder': 'None', 'none_means_empty': True, 'help': 'Address every QR code carries. Leave empty to derive it from the interface the booth answers on, or give the whole address, port included.'},
             {'section': 'Remote', 'option': 'REMOTE_MAX_UPLOAD_MB', 'label': 'Maximum upload (MB)', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1},
             {'section': 'Remote', 'option': 'REMOTE_MAX_IMAGE_PIXELS', 'label': 'Longest side kept (pixels)', 'control': 'number', 'number_type': 'int', 'min': 640, 'step': 10},
             {'section': 'Remote', 'option': 'REMOTE_MAX_PER_SENDER', 'label': 'Photos per phone', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1},

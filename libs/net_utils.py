@@ -3,8 +3,9 @@
 The QR code on the welcome screen is the only instruction a guest ever gets, and
 it is shown on a screen in a room with no second chance to correct it. So the
 address is derived from the interface the booth actually answers on, and the
-operator can override it outright for the case this cannot know about: a captive
-portal hostname, or a booth behind a router that forwards the port.
+operator can override it outright for the cases this cannot know about: a booth
+with several connections, a fixed hostname, or a router that forwards the port.
+The booth never configures the network itself; it only describes it.
 """
 
 import logging
@@ -30,8 +31,8 @@ def get_local_ip():
     """
     probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     try:
-        # An address on the local AP subnet, chosen because it needs no DNS and
-        # no reachability: nothing is ever sent to it.
+        # A private address, chosen because it needs no DNS and no
+        # reachability: nothing is ever sent to it.
         probe.connect(('192.168.255.255', 9))
         return probe.getsockname()[0]
     except OSError as exc:
@@ -51,17 +52,15 @@ def _escape_wifi_value(value):
 
 
 def build_wifi_payload(ssid, password=None, hidden=False):
-    """The QR payload that makes a phone join the booth's access point.
+    """The QR payload that makes a phone join the network guests use.
 
     Scanning this joins the network; it cannot also open a page, because no
-    phone supports a payload that does both. What opens the page afterwards is
-    the captive portal: the booth's dnsmasq answers every name with its own
-    address, so the phone's own connectivity check lands on the booth.
+    phone supports a payload that does both, which is why a second code with
+    the address follows it.
 
-    An empty password means an open network, which is how install.sh sets the
-    access point up. The SSID is not guessed from the hardware: hostapd is
-    configured with a name this process never sees, so it comes from config.ini
-    and an operator who renames the network renames it in one place.
+    An empty password means an open network. The SSID is not guessed from the
+    hardware: the network belongs to a router this process knows nothing
+    about, so it comes from config.ini, as the operator described it.
     """
     ssid = (ssid or '').strip()
     if not ssid:

@@ -24,9 +24,10 @@ WINDOW_HEIGHT = 600
 # booth's own Linux host renders it correctly.
 ROTATION = 0
 
-# If set to True, the SHARE buttons and the WiFi QR code are displayed in the UI.
-# Leave it False when guests are not meant to reach the gallery during an event:
-# the booth then shows no QR code pointing at a server they cannot use.
+# If set to True, the review screen shows a SHARE button whose QR code leads the
+# guest to their own photo. Leave it False when guests are not meant to reach
+# the booth during an event: the booth then shows no QR code pointing at a
+# server they cannot use.
 SHARE = False
 
 # If set to True, RingLed will be enabled (requires spidev hardware)
@@ -49,26 +50,18 @@ WEB_PORT = 5000
 WEB_HOST = 0.0.0.0
 
 [WiFi]
-# The access point the booth runs, as it must appear in the QR code guests scan
-# to join it. This section is the source of truth: setup/apply-wifi.sh generates
-# /etc/hostapd/hostapd.conf from these values, so the network guests are told to
-# join and the one actually broadcast cannot drift apart. After changing
-# anything here, run ./setup/apply-wifi.sh to apply it.
-WIFI_SSID = PhotoBooth
+# The network guests join to reach the booth: a travel router next to it, or
+# the venue's WiFi. The booth does not create or configure this network, it
+# only puts its credentials in a QR code, shown before the one carrying the
+# address, so a phone joins without anyone typing. Leave WIFI_SSID empty to
+# show the address code alone, for guests who are on that network already.
+WIFI_SSID =
 
-# Empty for an open network, which is how the booth ships. Fill it in for WPA2
-# (8 to 63 characters) and re-run ./setup/apply-wifi.sh.
+# Empty for an open network
 WIFI_PASSWORD =
 
-# True only if hostapd is set to ignore_broadcast_ssid
+# True only if the network does not broadcast its name
 WIFI_HIDDEN = False
-
-# The booth's own address on that access point, and the one every QR code hands
-# to a phone. It cannot be guessed: the access point carries no default route on
-# purpose, so the interface the system would pick is the venue's network, not
-# the one guests are standing on. Must match the address install.sh gives wlan0.
-# Leave empty for a booth that sits on somebody else's WiFi instead.
-WIFI_AP_ADDRESS = 192.168.4.1
 
 [Remote]
 # Turn every guest phone into a camera for the booth: the welcome screen shows a
@@ -76,10 +69,11 @@ WIFI_AP_ADDRESS = 192.168.4.1
 # wait in a queue the booth displays, and a guest prints the one they want.
 REMOTE_CAPTURE = False
 
-# Address the QR code points at. None derives it from the interface the booth
-# answers on, which is what you want on its own access point. Set it by hand
-# when the booth sits behind a captive portal name or a port forward, and give
-# the whole address, port included: photobooth.local:5000
+# Address every QR code points at, this one and the sharing one. None derives
+# it from the interface the booth uses to reach its network, which is right for
+# a booth with a single connection. Set it by hand when the booth has several
+# (ethernet and WiFi), sits behind a port forward, or has a fixed name, and give
+# the whole address, port included: 192.168.8.20:5000
 REMOTE_URL = None
 
 # Largest upload accepted, in megabytes

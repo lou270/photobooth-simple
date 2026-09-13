@@ -1,6 +1,6 @@
 """What a guest can reach: the collages, and the page they land on first."""
 
-from flask import Blueprint, g, redirect, render_template, request, send_file, session
+from flask import Blueprint, g, make_response, redirect, render_template, request, send_file, session
 
 from libs import i18n
 from libs.webserver import paths
@@ -18,10 +18,9 @@ def create_blueprint(server):
     @blueprint.route('/')
     def index():
         """Main page - show gallery, or the capture page when phones may send."""
-        # Where a phone that just joined the WiFi arrives: the access point
-        # advertises this address as its captive portal, and it is also what the
-        # second QR code carries. Where the booth takes photos from phones, that
-        # is what the guest came for; the gallery stays one link away.
+        # The booth's bare address, which is what a guest types or bookmarks.
+        # Where the booth takes photos from phones, that is what the guest came
+        # for; the gallery stays one link away.
         if server.remote_enabled and server.remote_store is not None:
             return redirect('/remote')
 
@@ -45,10 +44,17 @@ def create_blueprint(server):
 
     @blueprint.route('/collage/<session>')
     def view_collage(session):
-        """View a single collage fullscreen."""
+        """View a single collage fullscreen: where the sharing QR code leads."""
         collage_path = paths.safe_photo_path(server.save_directory, session, 'collage.jpg')
 
         if collage_path is None:
+            if paths.is_valid_session(session) and server.is_session_expected(session):
+                # The code went on screen as the booth began writing the
+                # session. Wait here rather than send the guest to somebody
+                # else's photo, which is what the redirect below would show.
+                response = make_response(render_template('gallery/pending.html', session=session))
+                response.headers['Cache-Control'] = 'no-store'
+                return response
             return redirect('/')
 
         if server.stats_store is not None:

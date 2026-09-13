@@ -9,8 +9,8 @@ Any Debian-based Linux. A Raspberry Pi 5 (8 GB) on Raspberry Pi OS is the
 reference build, but a Pi 4 or a small x86 machine with an SSD works too: the
 installer decides what to do from what the host can actually do, not from which
 board it is. On a machine with no firmware config file, the device-tree steps
-(Pi camera, SPI, HDMI timings) are skipped and everything else - access point,
-printer, autostart - is installed normally.
+(Pi camera, SPI, HDMI timings) are skipped and everything else - printer,
+autostart - is installed normally.
 
 What varies per booth is described in `setup/booth.conf`, so the same repository
 builds a DSLR booth with a printer and a webcam booth without one.
@@ -81,7 +81,6 @@ one answer is safe.
 | DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
 | Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
 | LED ring | firmware config | Enables SPI, installs `spidev` |
-| Access point | a wireless interface | `hostapd` + `dnsmasq` + captive portal, generated from `config.ini` |
 | Autostart | systemd | `photobooth.service`, restarts on crash, starts at boot |
 
 ### The virtual environment
@@ -106,26 +105,41 @@ down. To choose your own, set it before running the installer, or edit
 `config.ini` afterwards; it must be at least 10 characters and not a well-known
 value.
 
-### The WiFi access point
+### The guest network
 
-The booth shows guests a QR code built from the `[WiFi]` section of
-`config.ini`, and `hostapd` broadcasts a network of its own. Those used to be
-two independent copies of the same name, with nothing keeping them in step.
+The installer sets up no network. Guests' phones reach the booth over a network
+it joins like any other machine: a travel router beside it (no internet needed)
+or the venue's WiFi, provided that one lets devices talk to each other. Connect
+the booth with the usual system tools, and give it a stable address, ideally a
+DHCP reservation on the router.
 
-Now `config.ini` is the source of truth and the access point is generated from
-it:
+To spare guests from typing the network's credentials, describe it in the
+`[WiFi]` section of `config.ini` (`WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_HIDDEN`):
+the booth then shows a code that joins it before the code that opens the page.
+These values describe the network, they do not configure it. See
+[Guest network and QR codes](README.md#guest-network-and-qr-codes).
+
+### Upgrading a booth that ran its own access point
+
+Earlier versions turned the booth into an access point with a captive portal.
+The application no longer answers that portal, so on a booth installed that way
+the old services hand phones a network that leads nowhere, and
+`./setup/doctor.sh` warns about each one still running. Remove them:
 
 ```bash
-./setup/apply-wifi.sh
+sudo systemctl disable --now photobooth-http-redirect.service photobooth-ap-network.service hostapd dnsmasq
+sudo rm -f /etc/systemd/system/photobooth-http-redirect.service /etc/systemd/system/photobooth-ap-network.service
+sudo rm -f /etc/systemd/system/hostapd.service.d/photobooth-ap.conf
+sudo rm -f /etc/NetworkManager/conf.d/photobooth-unmanaged.conf
+sudo systemctl daemon-reload
 ```
 
-Run that after changing the network name or passphrase, including when the
-change was made from the admin page. `./setup/doctor.sh` compares the two and
-reports a mismatch, because it is otherwise invisible until a guest scans the
-code and joins a network that is not there.
-
-For a passphrase-protected network, set `WIFI_PASSWORD` in `config.ini` to 8-63
-characters and re-run `apply-wifi.sh`; leave it empty for an open network.
+Stopping `photobooth-http-redirect.service` also removes its port 80 NAT rule.
+On a system without NetworkManager, delete the `photobooth:ap-address` block
+from `/etc/dhcpcd.conf` instead of the NetworkManager file. Then reboot, join the
+booth to its network, and drop the `WIFI_*` lines from `setup/booth.conf`: the
+installer no longer reads them. `sudo apt-get remove hostapd dnsmasq` is
+optional once the services are disabled.
 
 ### The printer
 
@@ -174,8 +188,9 @@ moving branch and run it as root unattended.
 It reports on the Python environment and imports, `config.ini` and the admin
 password, which camera backends are actually available, whether CUPS knows the
 printer named in the configuration, the SPI device, free disk space, the systemd
-units, the access point's address and NAT rule, and the SSID match described
-above. Exit code is 1 if anything required is missing.
+units (and any left from the old access point), whether the web server answers,
+and the address the QR codes will carry. Exit code is 1 if anything required is
+missing.
 
 What counts as required comes from `config.ini`: a booth with `PRINTER = None`
 is not missing a printer, and one with `RINGLED = False` is not missing an LED
@@ -194,13 +209,13 @@ gvfs handlers are back - the installer disables them.
 under the configured name and lists the ones it does have. A registered but
 paused queue: `cupsenable <name>`.
 
-**Access point does not come up.** `journalctl -xeu hostapd`. The usual cause is
-a wrong `WIFI_COUNTRY` in `setup/booth.conf`, which leaves the radio with no
-legal channel.
-
-**Guests join but nothing loads.** Check the NAT rule and the interface address,
-both reported by the doctor. Phones hold their old DHCP lease after a
-reconfiguration: ask them to forget the network and rejoin.
+**Guests scan the code but nothing loads.** Check the address the doctor reports:
+it is the one the codes carry, and the phone must be on that same network. On
+the venue's WiFi, client isolation is the usual cause; a travel router avoids
+it. A booth connected twice (ethernet and WiFi) may pick the wrong interface:
+set `REMOTE_URL` to the right address. On a network without internet, Android
+may quietly move the phone back onto mobile data - the capture page tells
+guests how to stay connected.
 
 **Screen resolution wrong.** For the Ingcool panel, confirm the
 `photobooth:screen-ingcool7` block is present in the firmware config. Other

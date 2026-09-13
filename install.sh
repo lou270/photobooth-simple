@@ -11,8 +11,11 @@
 #
 # What gets installed is decided by setup/booth.conf, not by which board this
 # is. A step is skipped only when the host genuinely cannot do it - no firmware
-# config to edit, no wireless interface, no SPI bus - which is why a mini PC
-# gets its access point and its autostart just like a Pi does.
+# config to edit, no SPI bus, no systemd - which is why a mini PC gets its
+# printer and its autostart just like a Pi does.
+#
+# The network is not installed here: guests reach the booth over a network it
+# joins, like any other machine. See INSTALLATION.md.
 
 set -euo pipefail
 
@@ -39,11 +42,6 @@ PRINTER_SETUP=ask
 PRINTER_URI=""
 PRINTER_PPD="doc/DS620.ppd"
 LED_RING=ask
-WIFI_AP=ask
-WIFI_COUNTRY=FR
-WIFI_CHANNEL=6
-WIFI_INTERFACE=""
-WIFI_LOG_QUERIES=yes
 AUTOSTART=ask
 
 PROFILE=""
@@ -51,7 +49,7 @@ ASSUME_YES=false
 NEED_REBOOT=false
 
 usage() {
-    sed -n '2,16p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -101,7 +99,7 @@ is_dry_run && print_warning "Dry run: nothing will be modified."
 
 resolve_unanswered() {
     local var
-    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING WIFI_AP AUTOSTART; do
+    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART; do
         if [ "${!var}" = "ask" ]; then
             printf -v "$var" 'no'
         fi
@@ -125,7 +123,6 @@ else
     ask_yes_no_var CAMERA_DSLR "Use a DSLR over USB (gPhoto2)?"
     ask_yes_no_var PRINTER_SETUP "Install printer support (CUPS)?"
     ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
-    ask_yes_no_var WIFI_AP "Run the WiFi access point for guest phones?"
     ask_yes_no_var AUTOSTART "Start the booth automatically on boot?"
 fi
 
@@ -133,7 +130,7 @@ fi
 # Step 1 - base packages
 # ---------------------------------------------------------------------------
 
-print_info "Step 1/9: base system packages"
+print_info "Step 1/8: base system packages"
 
 # gettext-base carries envsubst, which renders every template below.
 apt_ensure gcc make build-essential git scons swig \
@@ -144,7 +141,7 @@ apt_ensure gcc make build-essential git scons swig \
 # Step 2 - Python environment
 # ---------------------------------------------------------------------------
 
-print_info "Step 2/9: Python environment"
+print_info "Step 2/8: Python environment"
 
 # A virtual environment rather than pip --break-system-packages: the booth gets
 # its own dependency set instead of overwriting Debian's, which is what makes
@@ -174,7 +171,7 @@ run "$PHOTOBOOTH_PYTHON" -m pip install -r "$PHOTOBOOTH_DIR/requirements.txt"
 # Step 3 - config.ini
 # ---------------------------------------------------------------------------
 
-print_info "Step 3/9: application configuration"
+print_info "Step 3/8: application configuration"
 
 # config.ini holds the admin password and is deliberately not in the repository.
 # Without it the application refuses to start.
@@ -202,7 +199,7 @@ fi
 # Step 4 - kiosk mode
 # ---------------------------------------------------------------------------
 
-print_info "Step 4/9: kiosk mode"
+print_info "Step 4/8: kiosk mode"
 
 if enabled "$KIOSK"; then
     if has_wayfire; then
@@ -246,7 +243,7 @@ fi
 # Step 5 - screen
 # ---------------------------------------------------------------------------
 
-print_info "Step 5/9: screen"
+print_info "Step 5/8: screen"
 
 if [ "$SCREEN" = "ingcool7" ]; then
     if has_boot_config; then
@@ -271,7 +268,7 @@ fi
 # Step 6 - cameras
 # ---------------------------------------------------------------------------
 
-print_info "Step 6/9: cameras"
+print_info "Step 6/8: cameras"
 
 if enabled "$CAMERA_PICAMERA"; then
     if has_boot_config; then
@@ -324,7 +321,7 @@ fi
 # Step 7 - printer
 # ---------------------------------------------------------------------------
 
-print_info "Step 7/9: printer"
+print_info "Step 7/8: printer"
 
 if enabled "$PRINTER_SETUP"; then
     apt_ensure cups libcups2-dev python3-cups printer-driver-gutenprint
@@ -368,7 +365,7 @@ fi
 # Step 8 - LED ring
 # ---------------------------------------------------------------------------
 
-print_info "Step 8/9: LED ring"
+print_info "Step 8/8: LED ring"
 
 if enabled "$LED_RING"; then
     if has_boot_config; then
@@ -391,33 +388,6 @@ SPI_BLOCK
     fi
 else
     print_skip "LED ring not requested"
-fi
-
-# ---------------------------------------------------------------------------
-# Step 9 - WiFi access point
-# ---------------------------------------------------------------------------
-
-print_info "Step 9/9: WiFi access point"
-
-if enabled "$WIFI_AP"; then
-    if has_wlan; then
-        apt_ensure hostapd dnsmasq iptables rfkill
-
-        # The access point configuration is generated from config.ini, so that
-        # the SSID the booth puts in its QR code and the one hostapd broadcasts
-        # can no longer drift apart. apply-wifi.sh is also runnable on its own,
-        # after the network is renamed through the admin page.
-        export WIFI_COUNTRY WIFI_CHANNEL WIFI_INTERFACE WIFI_LOG_QUERIES
-        APPLY_WIFI_ARGS=()
-        is_dry_run && APPLY_WIFI_ARGS+=(--dry-run)
-        bash "$SETUP_DIR/apply-wifi.sh" "${APPLY_WIFI_ARGS[@]+"${APPLY_WIFI_ARGS[@]}"}"
-        NEED_REBOOT=true
-    else
-        print_warning "No wireless interface found; skipping the access point."
-        print_info "Set WIFI_INTERFACE in setup/booth.conf if the adapter is named differently."
-    fi
-else
-    print_skip "Access point not requested"
 fi
 
 # ---------------------------------------------------------------------------
@@ -478,11 +448,6 @@ PRINTER_SETUP=$PRINTER_SETUP
 PRINTER_URI=$PRINTER_URI
 PRINTER_PPD=$PRINTER_PPD
 LED_RING=$LED_RING
-WIFI_AP=$WIFI_AP
-WIFI_COUNTRY=$WIFI_COUNTRY
-WIFI_CHANNEL=$WIFI_CHANNEL
-WIFI_INTERFACE=$WIFI_INTERFACE
-WIFI_LOG_QUERIES=$WIFI_LOG_QUERIES
 AUTOSTART=$AUTOSTART
 PROFILE_OUT
     print_success "Saved your answers to setup/booth.conf"
@@ -499,7 +464,7 @@ print_info "Check the booth with:  ./setup/doctor.sh"
 
 if [ "$NEED_REBOOT" = "true" ]; then
     echo ""
-    print_warning "Firmware or network settings changed; a reboot is required."
+    print_warning "Firmware settings changed; a reboot is required."
     if [ "$ASSUME_YES" != "true" ] && ! is_dry_run; then
         if ask_yes_no "Reboot now?"; then
             run sudo reboot

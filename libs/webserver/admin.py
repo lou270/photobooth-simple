@@ -277,6 +277,4 @@ def create_blueprint(server):
             stats=stats,
         )
 
-    # Captive portal detection URLs
-
     return blueprint

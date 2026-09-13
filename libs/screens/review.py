@@ -66,6 +66,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self._preview_token = None
         self._copies = 1
         self._finalized = False
+        self._session_id = None
         self.lbl_copies = None
         self.confirm_popup = None
         self.layout = AnchorLayout(padding=BORDER_THINKNESS, anchor_x='center', anchor_y='top')
@@ -379,8 +380,9 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         """Write the session out, in the form the guest settled on.
 
         Deliberately late: saving on arrival would file away a collage they had
-        not finished choosing a look for. Whichever comes first — printing or
-        leaving — closes the choice, which is why the strip greys out here.
+        not finished choosing a look for. Whichever comes first — printing,
+        sharing or leaving — closes the choice, which is why the strip greys
+        out here.
         """
         if self._finalized:
             return
@@ -406,8 +408,12 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             self.filters.set_selected(DEFAULT_FILTER)
             self.filters.set_enabled(True)
             self._refresh_filter_thumbnails()
+        self._session_id = None
         if self.app.SHARE:
-            QRCodePopup.preload_steps(self.app.get_qr_invitation(self.app.gallery_url)[0])
+            # Named now, so the code for this guest's own photo is drawn while
+            # they look at it, instead of when they ask for it.
+            self._session_id = self.app.reserve_session_id()
+            QRCodePopup.preload_steps(self.app.get_share_invitation(self._session_id)[0])
 
     def _load_preview_async(self, path):
         def load_image():
@@ -507,11 +513,20 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         )
 
     def share_event(self, obj):
+        """Hand the guest a code for this collage, and save it so the code works.
+
+        The code leads to this session alone, so the session is written now, as
+        the guest chose it: the phone must receive the photo they are looking
+        at, not an earlier look they have since changed.
+        """
         Logger.info('ReviewScreen: share_event().')
         self._reset_timeout()
         if hasattr(self, 'qr_popup') and self.qr_popup.parent:
             return
-        steps, title, hint = self.app.get_qr_invitation(self.app.gallery_url)
+        if self._session_id is None:
+            return
+        self._finalize_once()
+        steps, title, hint = self.app.get_share_invitation(self._session_id)
         self.qr_popup = QRCodePopup(steps, on_dismiss=self._dismiss_qr_popup, title=title, hint=hint)
         self.layout.add_widget(self.qr_popup)
 

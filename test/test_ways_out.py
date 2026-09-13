@@ -149,7 +149,7 @@ class Welcome:
 
     def __init__(self):
         self.app = SimpleNamespace(
-            remote_url='http://192.168.4.1:8080/remote',
+            get_remote_url=lambda: 'http://192.168.8.20:8080/remote',
             get_qr_invitation=lambda url: ([(url, '')], 'title', url),
         )
         self.qr_popup = None
@@ -441,8 +441,6 @@ def test_a_second_press_does_not_stack_two_questions(leaving):
 
 class WelcomeApp:
     SHARE = True
-    remote_url = 'http://192.168.4.1:8080/remote'
-    gallery_url = 'http://192.168.4.1:8080'
 
     def __init__(self, pending=0):
         self.pending = pending
@@ -451,6 +449,9 @@ class WelcomeApp:
 
     def has_remote_capture(self):
         return True
+
+    def get_remote_url(self):
+        return 'http://192.168.8.20:8080/remote'
 
     def get_qr_invitation(self, url):
         return [(url, '')], 'title', url

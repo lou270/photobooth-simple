@@ -32,6 +32,37 @@ def test_working_paths_live_in_tmp(tmp_path):
     assert Path(storage.get_shot(0)).parent == Path(storage.tmp_directory)
 
 
+def test_a_reserved_name_is_the_one_the_session_is_saved_under(tmp_path):
+    """The sharing code carries this name before anything is on disk."""
+    storage = make_storage(tmp_path)
+    reserved = storage.reserve_session_id()
+    write_working_files(storage, ['capture-0.jpg', 'collage.jpg'])
+
+    session_id, _photos = storage.save_session()
+
+    assert session_id == reserved
+    assert Path(storage.save_directory, reserved, 'collage.jpg').is_file()
+    assert storage.reserved_session_id is None
+
+
+def test_a_reservation_never_names_a_session_already_saved(tmp_path):
+    """Two sessions in the same second must not share a link, nor a folder."""
+    storage = make_storage(tmp_path)
+    taken = storage.reserve_session_id()
+    Path(storage.save_directory, taken).mkdir()
+
+    assert storage.reserve_session_id() != taken
+
+
+def test_an_abandoned_session_gives_its_name_back(tmp_path):
+    storage = make_storage(tmp_path)
+    storage.reserve_session_id()
+
+    storage.purge_tmp()
+
+    assert storage.reserved_session_id is None
+
+
 def test_saving_moves_originals_and_leaves_derived_files_behind(tmp_path):
     storage = make_storage(tmp_path)
     write_working_files(storage, [

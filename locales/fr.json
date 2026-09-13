@@ -65,6 +65,7 @@
     "qr_join_wifi": "1. REJOINDRE LE WIFI",
     "qr_open_page": "2. OUVRIR LA PAGE",
     "qr_title": "ENVOYEZ DES PHOTOS DEPUIS VOTRE TÉLÉPHONE",
+    "qr_share_title": "RÉCUPÉREZ VOTRE PHOTO SUR VOTRE TÉLÉPHONE",
     "camera_recovery_failed": "Échec de la récupération de la caméra. Merci d'appeler un opérateur.",
     "disk_full": "Le stockage des photos est plein. Merci d'appeler un opérateur."
   },
@@ -77,7 +78,9 @@
       "collage_alt": "Montage",
       "collage_title": "Montage",
       "empty_title": "Aucun montage disponible pour l'instant",
-      "empty_message": "La galerie en ligne apparaîtra ici dès qu'une première session PhotoBooth sera enregistrée."
+      "empty_message": "La galerie en ligne apparaîtra ici dès qu'une première session PhotoBooth sera enregistrée.",
+      "pending_title": "Votre photo arrive",
+      "pending_message": "La borne la termine. Cette page l'affichera d'elle-même dans un instant."
     },
     "remote": {
       "title": "Envoyer une photo",
@@ -117,10 +120,6 @@
       "photo_too_large": "La photo est trop volumineuse. La limite est de {limit_mb} Mo.",
       "device_not_identified": "Cet appareil n'est pas identifié.",
       "photo_not_found": "Photo introuvable.",
-      "keep_wifi": "Garder ce WiFi connecté",
-      "keep_wifi_hint": "Votre téléphone arrêtera de proposer de quitter ce réseau.",
-      "keep_wifi_done": "C'est noté. Votre téléphone ne devrait plus signaler ce réseau.",
-      "keep_wifi_failed": "Impossible de joindre la borne. Restez sur son WiFi et réessayez.",
       "error": {
         "not_identified": "Cet appareil n'est pas identifié. Rechargez la page et réessayez.",
         "empty_photo": "La photo est arrivée vide. Réessayez.",

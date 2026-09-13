@@ -188,3 +188,54 @@ def test_a_plain_template_counts_one_for_one():
     screen._sync_copies()
 
     assert screen.lbl_copies.text == 'x1'
+
+
+# --- sharing ---------------------------------------------------------------
+
+class Sharing(Choosing):
+    share_event = ReviewScreen.share_event
+
+    def __init__(self, app, session_id='20260913_214703'):
+        super().__init__(app)
+        self._session_id = session_id
+        self.layout = FakeOverlay()
+
+    def _dismiss_qr_popup(self):
+        pass
+
+
+class RecordedPopup:
+    def __init__(self, steps, **kwargs):
+        self.steps = steps
+        self.parent = None
+
+
+def sharing_app():
+    app = FakeApp()
+    app.get_share_invitation = lambda session_id: (
+        [(f'http://booth/collage/{session_id}', '')], 'title', f'http://booth/collage/{session_id}',
+    )
+    return app
+
+
+def test_the_code_leads_to_the_collage_on_screen(monkeypatch):
+    monkeypatch.setattr('libs.screens.review.QRCodePopup', RecordedPopup)
+    screen = Sharing(sharing_app())
+
+    screen.share_event(None)
+
+    assert screen.qr_popup.steps == [('http://booth/collage/20260913_214703', '')]
+
+
+def test_sharing_writes_the_session_the_code_leads_to(monkeypatch):
+    """The link is useless until the collage behind it is on disk, and the
+    phone must get the look the guest chose, not one they change afterwards."""
+    monkeypatch.setattr('libs.screens.review.QRCodePopup', RecordedPopup)
+    app = sharing_app()
+    screen = Sharing(app)
+    screen.on_filter_selected('sepia')
+
+    screen.share_event(None)
+    screen.on_filter_selected('bw')
+
+    assert [args for _target, args in app.finalized] == [(0, 'sepia')]

@@ -15,7 +15,7 @@ from libs.net_utils import build_url, build_wifi_payload
 
 
 def test_an_open_network_is_advertised_as_such():
-    """install.sh sets the access point up without a password."""
+    """A travel router left open is the simplest guest network there is."""
     assert build_wifi_payload('PhotoBooth') == 'WIFI:T:nopass;S:PhotoBooth;P:;H:false;;'
 
 
@@ -53,7 +53,7 @@ def test_a_space_in_the_name_is_left_alone():
 
 @pytest.mark.parametrize('ssid', [None, '', '   '])
 def test_no_network_name_means_no_payload_at_all(ssid):
-    """Without an access point the QR code has to carry the address instead."""
+    """Without a guest network the QR code has to carry the address alone."""
     assert build_wifi_payload(ssid) is None
 
 

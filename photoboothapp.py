@@ -148,30 +148,20 @@ class PhotoboothApp(App):
             max_prints=self.MAX_PRINTS,
         )
 
-        # What every QR code the booth shows tells a phone to join. Built once:
-        # the access point does not change while the booth is running, and both
-        # the sharing popup and the remote camera popup hand out this same code.
+        # The network every QR code tells a phone to join, when the operator
+        # described one in [WiFi]. The booth does not run that network: it only
+        # hands out its credentials, so a guest joins it without typing them.
         self.wifi_payload = build_wifi_payload(
             config.get_wifi_ssid(),
             config.get_wifi_password(),
             hidden=config.get_wifi_hidden(),
         )
+        self._public_url_override = config.get_remote_url()
 
         # Photos guests take with their own phone, kept beside the sessions
         # rather than inside them: nothing here is a session until someone at the
         # booth picks it and prints it.
-        # Guests reach the booth over the access point it runs, which is not the
-        # interface the system would pick to reach anything else: that one has
-        # the default route, and this one deliberately has none.
-        qr_host = config.get_wifi_ap_address() or self.WEB_HOST
-        self.gallery_url = build_url(
-            self.WEB_PORT, '',
-            host=qr_host,
-            override=config.get_remote_url(),
-        )
-
         self.remote_store = None
-        self.remote_url = None
         if self.REMOTE_CAPTURE:
             self.remote_store = RemoteStore(
                 os.path.join(self.DCIM_DIRECTORY, 'remote'),
@@ -181,12 +171,7 @@ class PhotoboothApp(App):
                 max_image_pixels=config.get_remote_max_image_pixels(),
                 min_upload_interval=config.get_remote_min_upload_interval(),
             )
-            self.remote_url = build_url(
-                self.WEB_PORT, '/remote',
-                host=qr_host,
-                override=config.get_remote_url(),
-            )
-            Logger.info('PhotoboothApp: remote camera enabled, phones send photos to %s', self.remote_url)
+            Logger.info('PhotoboothApp: remote camera enabled, phones send photos to %s', self.get_remote_url())
 
         # Start USB transfer
         if self.USB_EXPORT:
@@ -335,18 +320,30 @@ class PhotoboothApp(App):
                 return format_idx
         return 0
 
-    def get_qr_invitation(self, url):
+    # --- addresses handed to phones ---------------------------------------
+
+    def get_public_url(self, path=''):
+        """Where a phone reaches `path` on this booth.
+
+        Worked out each time a code is drawn rather than once at startup: a
+        booth that joins its network after the application has started would
+        otherwise hand out the loopback address all evening.
+        """
+        return build_url(self.WEB_PORT, path, host=self.WEB_HOST, override=self._public_url_override)
+
+    def get_remote_url(self):
+        return self.get_public_url('/remote')
+
+    def get_photo_url(self, session_id):
+        """The guest's own collage, rather than the whole evening's gallery."""
+        return self.get_public_url(f'/collage/{session_id}')
+
+    def get_qr_invitation(self, url, title_key='app.qr_title'):
         """What the QR codes must carry so a phone ends up at `url`.
 
-        It takes two codes, because no phone reads one that both joins a network
-        and opens a page, and because the booth's access point deliberately
-        offers no route to the internet: nothing pops a page open by itself the
-        way a captive portal would. Two scans and no typing is the price of
-        letting guests keep their own mobile data while they send photos.
-
-        The second code carries a literal address, never a name. With no default
-        route on this network, phones send their lookups to the cellular
-        resolver, which has never heard of the booth.
+        Two codes when a network is described in [WiFi], because no phone reads
+        one that both joins a network and opens a page. One code carrying the
+        address otherwise, for guests who are on the booth's network already.
 
         Returns (steps, title, hint) for QRCodePopup.
         """
@@ -355,8 +352,24 @@ class PhotoboothApp(App):
                 (self.wifi_payload, i18n.t('app.qr_join_wifi')),
                 (url, i18n.t('app.qr_open_page')),
             ]
-            return steps, i18n.t('app.qr_title'), url
-        return [(url, '')], i18n.t('popups.qr.default_title'), url
+            return steps, i18n.t(title_key), url
+        return [(url, '')], i18n.t(title_key), url
+
+    def get_share_invitation(self, session_id):
+        """The codes that lead a guest to the photo they are looking at."""
+        return self.get_qr_invitation(self.get_photo_url(session_id), title_key='app.qr_share_title')
+
+    def reserve_session_id(self):
+        """Name the session on the review screen, so its link can be shown there.
+
+        The web server is told at the same time, so a phone that opens the link
+        while the booth is still writing the session waits for it.
+        """
+        session_id = self.storage.reserve_session_id()
+        web_server = getattr(self, 'web_server', None)
+        if web_server is not None:
+            web_server.expect_session(session_id)
+        return session_id
 
     # --- photos sent from phones -----------------------------------------
 

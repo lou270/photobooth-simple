@@ -2,9 +2,8 @@
 # Is this booth actually ready?
 #
 # The installer finishing without an error is not the same as a booth that
-# works: the access point can be configured and refuse to come up, the printer
-# can be registered and paused, the SSID in the QR code can have drifted from
-# the one hostapd broadcasts. This reports on each of those, so a booth built
+# works: the printer can be registered and paused, the camera library missing,
+# the web server not answering. This reports on each of those, so a booth built
 # an hour before an event can be trusted rather than hoped for.
 #
 #     ./setup/doctor.sh [--quiet]
@@ -105,16 +104,15 @@ check_unit() {
 
 if has_systemd; then
     check_unit photobooth.service "photobooth.service"
-    if enabled "${WIFI_AP:-no}"; then
-        check_unit hostapd.service "hostapd"
-        check_unit dnsmasq.service "dnsmasq"
-        check_unit photobooth-http-redirect.service "HTTP redirect 80 to 5000"
-        if has_networkmanager; then
-            check_unit photobooth-ap-network.service "AP static address"
+
+    # Earlier versions ran their own access point, and the booth no longer
+    # answers the portal those services send every phone to. Left running, they
+    # hand guests a network that leads nowhere.
+    for legacy_unit in hostapd.service dnsmasq.service photobooth-http-redirect.service photobooth-ap-network.service; do
+        if has_unit "$legacy_unit" && systemctl is-active --quiet "$legacy_unit"; then
+            warn "$legacy_unit" "left from the old access point; see INSTALLATION.md to remove it"
         fi
-    else
-        skip "Access point services" "WIFI_AP is not enabled in setup/booth.conf"
-    fi
+    done
 fi
 
 # ---------------------------------------------------------------------------
@@ -122,52 +120,6 @@ echo ""
 echo "Network"
 # ---------------------------------------------------------------------------
 
-if enabled "${WIFI_AP:-no}"; then
-    IFACE="$(wlan_interface 2>/dev/null || true)"
-    if [ -z "$IFACE" ]; then
-        bad "Wireless interface" "none found"
-    else
-        ok "Wireless interface" "$IFACE"
-
-        AP_ADDRESS="$(booth_config WIFI_AP_ADDRESS 2>/dev/null || true)"
-        if [ -n "$AP_ADDRESS" ]; then
-            if ip -4 addr show "$IFACE" 2>/dev/null | grep -q "inet ${AP_ADDRESS}/"; then
-                ok "AP address" "$AP_ADDRESS on $IFACE"
-            else
-                bad "AP address" "$AP_ADDRESS is not on $IFACE (ip addr show $IFACE)"
-            fi
-        fi
-
-        # The one failure that is invisible until a guest scans the code: the
-        # booth advertises the SSID from config.ini, hostapd broadcasts the one
-        # in its own file, and nothing else compares them.
-        CONFIG_SSID="$(booth_config WIFI_SSID 2>/dev/null || true)"
-        if [ -f /etc/hostapd/hostapd.conf ]; then
-            HOSTAPD_SSID="$(sudo grep -E '^ssid=' /etc/hostapd/hostapd.conf 2>/dev/null | head -1 | cut -d= -f2-)"
-            if [ -z "$HOSTAPD_SSID" ]; then
-                warn "SSID match" "could not read /etc/hostapd/hostapd.conf"
-            elif [ "$HOSTAPD_SSID" = "$CONFIG_SSID" ]; then
-                ok "SSID match" "'$CONFIG_SSID' in both config.ini and hostapd.conf"
-            else
-                bad "SSID match" "QR code says '$CONFIG_SSID', hostapd broadcasts '$HOSTAPD_SSID'; run ./setup/apply-wifi.sh"
-            fi
-        else
-            bad "hostapd.conf" "missing; run ./setup/apply-wifi.sh"
-        fi
-
-        WEB_PORT="$(booth_config WEB_PORT 2>/dev/null || echo 5000)"
-        if sudo iptables -t nat -C PREROUTING -i "$IFACE" -p tcp --dport 80 \
-            -j REDIRECT --to-ports "$WEB_PORT" 2>/dev/null; then
-            ok "HTTP redirect" "80 to $WEB_PORT on $IFACE"
-        else
-            bad "HTTP redirect" "NAT rule absent; guests reaching http://$AP_ADDRESS get nothing"
-        fi
-    fi
-else
-    skip "Access point" "WIFI_AP is not enabled in setup/booth.conf"
-fi
-
-# The booth answers on its own port whether or not the access point is up.
 WEB_PORT="$(booth_config WEB_PORT 2>/dev/null || echo 5000)"
 if command -v curl > /dev/null 2>&1; then
     if curl -fs -m 3 -o /dev/null "http://127.0.0.1:${WEB_PORT}/" 2>/dev/null; then
@@ -177,6 +129,18 @@ if command -v curl > /dev/null 2>&1; then
     fi
 else
     skip "Web server" "curl not installed"
+fi
+
+# The address the QR codes carry when REMOTE_URL is left empty: the one the
+# booth uses to reach its network. No address at all means no QR code works,
+# which only matters to a booth with SHARE or REMOTE_CAPTURE on.
+if command -v ip > /dev/null 2>&1; then
+    ROUTE_ADDRESS="$(ip -4 route get 192.168.255.255 2>/dev/null | sed -n 's/.* src \([0-9.]*\).*/\1/p' | head -1)"
+    if [ -n "$ROUTE_ADDRESS" ]; then
+        ok "Booth address" "$ROUTE_ADDRESS, phones must be on that network"
+    else
+        warn "Booth address" "no network; QR codes would carry 127.0.0.1"
+    fi
 fi
 
 # ---------------------------------------------------------------------------

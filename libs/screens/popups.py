@@ -28,8 +28,8 @@ class QRCodePopup(FloatLayout):
     """Popup overlay to show QR code.
 
     What goes in the code is decided by the caller, not here: joining the WiFi
-    and opening a page are different payloads, and which one a booth should hand
-    out depends on whether it runs its own access point. Codes are cached per
+    and opening a page are different payloads, and whether a booth hands out
+    the first depends on whether a guest network is configured. Codes are cached per
     payload rather than one at a time, because a booth may offer several and
     building one costs a visible fraction of a second on a Pi.
     """
@@ -116,7 +116,7 @@ class QRCodePopup(FloatLayout):
                  auto_dismiss_seconds=0, **kwargs):
         """`steps` is [(payload, caption), ...], shown side by side in order.
 
-        Two of them is the normal case on a booth with its own access point:
+        Two of them is the normal case on a booth with a guest network set:
         joining the network and opening the page cannot be one code, and asking
         a guest to type an address in the dark is how a feature goes unused.
 

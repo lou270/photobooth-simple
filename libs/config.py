@@ -157,40 +157,28 @@ class Config:
         return self._get_string(('Web',), 'WEB_HOST', fallback='0.0.0.0').strip() or '0.0.0.0'
 
     def get_wifi_ssid(self):
-        """Network name put in the QR code that joins the booth's access point.
+        """Name of the network guests join to reach the booth, for the QR code.
 
-        This setting is the source of truth for the network's identity:
-        setup/apply-wifi.sh generates hostapd.conf from it, rather than the
-        booth trying to read the access point's own configuration. Renaming the
-        network here and re-running that script keeps the QR code and the
-        broadcast network in step.
+        The booth does not create or configure that network; it only describes
+        it, so a phone can join without anyone typing. Empty means no network
+        code at all, for guests who are on the booth's network already.
         """
-        return self._get_string(('WiFi',), 'WIFI_SSID', fallback='PhotoBooth').strip()
+        return self._get_string(('WiFi',), 'WIFI_SSID', fallback='').strip()
 
     def get_wifi_password(self):
-        """Empty for an open network, which is how the access point ships."""
+        """Empty for an open network."""
         password = self._get_string(('WiFi',), 'WIFI_PASSWORD', fallback='').strip()
         return password if password and password.upper() != 'NONE' else ''
 
     def get_wifi_hidden(self):
         return self._get_boolean(('WiFi',), 'WIFI_HIDDEN', fallback=False)
 
-    def get_wifi_ap_address(self):
-        """The booth's own address on the access point it runs.
-
-        Guessing it does not work here: the access point deliberately carries no
-        default route, so the interface the system would pick to reach the
-        outside is the venue's network, not the one guests are standing on.
-        Empty falls back to that guess, for a booth on somebody else's WiFi.
-        """
-        return self._get_string(('WiFi',), 'WIFI_AP_ADDRESS', fallback='192.168.4.1').strip()
-
     def get_remote_capture(self):
         """Whether guests may send photos taken with their own phone."""
         return self._get_boolean(('Remote',), 'REMOTE_CAPTURE', fallback=False)
 
     def get_remote_url(self):
-        """Address printed in the QR code, or None to derive it from the booth."""
+        """Address every QR code carries, or None to derive it from the booth."""
         url = self._get_string(('Remote',), 'REMOTE_URL', fallback='').strip()
         return url if url and url.upper() != 'NONE' else None
 

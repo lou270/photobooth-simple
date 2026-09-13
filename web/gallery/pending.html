@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="{{ g.lang }}">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Reloading is the whole mechanism: the booth answers this address with
+         the collage as soon as it is saved, which takes a few seconds. -->
+    <meta http-equiv="refresh" content="2">
+    <title>PhotoBooth</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
+    <style>
+        .empty-shell {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .empty-card {
+            width: min(560px, 100%);
+            padding: 32px;
+            text-align: center;
+        }
+
+        .empty-icon {
+            font-size: 72px;
+            line-height: 1;
+            margin-bottom: 18px;
+        }
+
+        .empty-card p {
+            margin: 10px 0 0;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <main class="empty-shell">
+        <section class="panel empty-card">
+            <div class="empty-icon">⏳</div>
+            <span class="eyebrow">{{ t('web.gallery.collage_title') }}</span>
+            <h1>{{ t('web.gallery.pending_title') }}</h1>
+            <p>{{ t('web.gallery.pending_message') }}</p>
+        </section>
+    </main>
+</body>
+</html>

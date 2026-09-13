@@ -1,6 +1,6 @@
 # The booth is built on Linux from a repository edited on Windows. A shell
 # script that arrives with CRLF fails as "bad interpreter: /bin/bash^M", and a
-# systemd unit or hostapd.conf with CRLF is rejected just as unhelpfully. Pin
+# systemd unit with CRLF is rejected just as unhelpfully. Pin
 # the line endings for everything that the Pi reads as code or configuration,
 # so it no longer depends on each machine's core.autocrlf.
 *.sh            text eol=lf

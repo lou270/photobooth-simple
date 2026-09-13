@@ -124,22 +124,23 @@ def test_remote_limits_are_clamped_to_something_usable(tmp_path, monkeypatch):
     assert config.get_remote_min_upload_interval() == 0
 
 
-def test_the_booth_address_on_its_own_access_point_has_a_default(tmp_path, monkeypatch):
-    """It cannot be guessed: that network carries no default route on purpose."""
+def test_no_guest_network_is_described_by_default(tmp_path, monkeypatch):
+    """The booth creates no network, so it has none to name until told one."""
     config = write_config(tmp_path, monkeypatch, """
         [Global]
         SHARE = True
     """)
-    assert config.get_wifi_ap_address() == '192.168.4.1'
+    assert config.get_wifi_ssid() == ''
 
 
-def test_an_empty_booth_address_falls_back_to_guessing(tmp_path, monkeypatch):
-    """For a booth sitting on somebody else's WiFi rather than running its own."""
+def test_a_described_guest_network_is_returned(tmp_path, monkeypatch):
     config = write_config(tmp_path, monkeypatch, """
         [WiFi]
-        WIFI_AP_ADDRESS =
+        WIFI_SSID = Mariage Lou
+        WIFI_PASSWORD = unmotdepasse
     """)
-    assert config.get_wifi_ap_address() == ''
+    assert config.get_wifi_ssid() == 'Mariage Lou'
+    assert config.get_wifi_password() == 'unmotdepasse'
 
 
 def test_max_copies_defaults_to_three(tmp_path, monkeypatch):

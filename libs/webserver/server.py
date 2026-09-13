@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -12,7 +13,6 @@ from werkzeug.serving import make_server
 from kivy.logger import Logger
 
 from libs import i18n
-from libs.captive_portal import CaptivePortalClients
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
@@ -27,6 +27,12 @@ class WebServer:
     # outright rather than trusting the operator to have changed the default.
     # Poll interval, then the delay before each successive restart attempt.
     WATCHDOG_BACKOFF_SECONDS = (5, 5, 15, 60, 300)
+
+    # How long a session announced by the booth waits for its collage. Saving
+    # takes seconds; this only has to outlast a slow filter on a busy Pi, and
+    # then stop, so a session that was never saved does not wait forever.
+    EXPECTED_SESSION_SECONDS = 10 * 60
+    MAX_EXPECTED_SESSIONS = 64
 
     MIN_ADMIN_PASSWORD_LENGTH = 10
     FORBIDDEN_ADMIN_PASSWORDS = frozenset({
@@ -46,10 +52,10 @@ class WebServer:
         self.booth_language = booth_language if booth_language in i18n.AVAILABLE_LANGUAGES else i18n.DEFAULT_LANGUAGE
         self.admin_password = self._accept_admin_password(admin_password)
         self.login_throttle = LoginThrottle()
-        # Which phones have been through the portal. Held by the server rather
-        # than the portal blueprint: the remote camera releases a phone too, the
-        # moment it sends a photo, which is the clearest proof it is not stuck.
-        self.captive_clients = CaptivePortalClients()
+        # Sessions whose link a guest may already hold while the booth is still
+        # writing them: session id -> when it was announced.
+        self._expected_sessions = {}
+        self._expected_sessions_lock = threading.Lock()
         self.stats_store = stats_store
         self.restart_callback = restart_callback
         # The queue phones send photos to. Kept as a flag of its own rather than
@@ -321,6 +327,37 @@ class WebServer:
 
         return deleted_sessions
 
+    def expect_session(self, session_id):
+        """Say a session is on its way, so a link to it waits instead of failing.
+
+        The sharing QR code carries the guest's own session, and it goes on
+        screen as the booth starts writing that session: a phone quick enough
+        to open it first would otherwise be sent away from a photo that exists
+        a second later.
+        """
+        now = time.monotonic()
+        with self._expected_sessions_lock:
+            self._expected_sessions[session_id] = now
+            self._prune_expected_sessions(now)
+
+    def is_session_expected(self, session_id):
+        now = time.monotonic()
+        with self._expected_sessions_lock:
+            self._prune_expected_sessions(now)
+            return session_id in self._expected_sessions
+
+    def _prune_expected_sessions(self, now):
+        expired = [key for key, announced_at in self._expected_sessions.items()
+                   if now - announced_at > self.EXPECTED_SESSION_SECONDS]
+        for key in expired:
+            del self._expected_sessions[key]
+
+        overflow = len(self._expected_sessions) - self.MAX_EXPECTED_SESSIONS
+        if overflow > 0:
+            oldest = sorted(self._expected_sessions, key=self._expected_sessions.get)
+            for key in oldest[:overflow]:
+                del self._expected_sessions[key]
+
     def _load_config_text(self):
         """Return config.ini content as text."""
         try:
@@ -462,9 +499,9 @@ class WebServer:
         server is constructed the package is fully loaded, so the cycle only
         exists at import time and this sidesteps it.
         """
-        from libs.webserver import admin, api, captive, gallery, remote
+        from libs.webserver import admin, api, gallery, remote
 
-        for area in (gallery, admin, api, remote, captive):
+        for area in (gallery, admin, api, remote):
             self.app.register_blueprint(area.create_blueprint(self))
 
     def start(self, force_restart=False):

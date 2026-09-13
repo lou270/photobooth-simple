@@ -1,8 +1,8 @@
 """Read one resolved setting out of config.ini, for the provisioning scripts.
 
-The shell needs a handful of values from config.ini: the SSID to put in
-hostapd.conf, the printer name to hand to lpadmin, the port to probe when
-checking the booth is alive. Parsing the file in bash would mean a second
+The shell needs a handful of values from config.ini: the admin password to
+generate when none is set, the printer name to hand to lpadmin, the port to
+probe when checking the booth is alive. Parsing the file in bash would mean a second
 implementation of the fallbacks and of the "None means disabled" convention
 that libs/config.py already owns, and the two would drift. So this reads
 through Config instead, and prints a single plain value.
@@ -10,7 +10,7 @@ through Config instead, and prints a single plain value.
 Booleans print as true/false, a disabled setting prints as an empty line, so
 callers can test with [ -n "$value" ].
 
-    python3 tools/booth_config.py WIFI_SSID
+    python3 tools/booth_config.py PRINTER
     python3 tools/booth_config.py --all
 """
 
@@ -32,10 +32,6 @@ KEYS = {
     'RINGLED': 'get_ringled',
     'WEB_HOST': 'get_web_host',
     'WEB_PORT': 'get_web_port',
-    'WIFI_AP_ADDRESS': 'get_wifi_ap_address',
-    'WIFI_HIDDEN': 'get_wifi_hidden',
-    'WIFI_PASSWORD': 'get_wifi_password',
-    'WIFI_SSID': 'get_wifi_ssid',
 }
 
 

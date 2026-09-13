@@ -1,6 +1,6 @@
 """Application-level health check for a freshly built booth.
 
-setup/doctor.sh covers the host - services, addresses, firewall rules. This
+setup/doctor.sh covers the host - services, the web server, the address. This
 covers what only Python can see: whether the dependencies import, whether the
 camera backends the booth would pick are actually present, whether CUPS knows
 the printer named in config.ini.

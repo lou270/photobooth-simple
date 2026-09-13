@@ -182,30 +182,30 @@ def test_a_phone_can_withdraw_its_photo_but_not_another_one(server, phone):
     assert server.remote_store.count_pending() == 0
 
 
-@pytest.mark.parametrize('path', [
-    '/generate_204',        # what a phone probes to detect a captive portal
-    '/hotspot-detect.html',
-    '/',                    # what the access point advertises as its portal
-])
-def test_joining_the_wifi_lands_a_phone_on_the_capture_page(server, path):
-    """Every way a phone arrives after joining the WiFi has to end up here."""
-    response = server.app.test_client().get(path)
+def test_the_booth_address_lands_a_phone_on_the_capture_page(server):
+    """A guest who types or bookmarks the bare address came to send a photo."""
+    response = server.app.test_client().get('/')
 
     assert response.status_code == 302
     assert response.headers['Location'] == '/remote'
 
 
-@pytest.mark.parametrize('path', ['/generate_204', '/'])
-def test_without_the_feature_a_phone_still_lands_on_the_gallery(tmp_path, path):
+def test_without_the_feature_a_phone_still_lands_on_the_gallery(tmp_path):
     client = make_server(tmp_path, enabled=False).app.test_client()
 
-    response = client.get(path)
+    response = client.get('/')
 
     assert response.headers.get('Location') != '/remote'
 
 
+@pytest.mark.parametrize('path', ['/generate_204', '/hotspot-detect.html', '/captive-portal/api'])
+def test_the_booth_no_longer_plays_captive_portal(server, path):
+    """The network belongs to a router now; answering its probes would lie."""
+    assert server.app.test_client().get(path).status_code == 404
+
+
 def test_the_capture_page_offers_the_gallery_only_when_sharing_is_on(tmp_path):
-    """It took over the captive portal landing, so it owes guests the way back."""
+    """It took over the booth's root address, so it owes guests the way back."""
     shared = make_server(tmp_path / 'shared', share=True).app.test_client()
     private = make_server(tmp_path / 'private', share=False).app.test_client()
 
@@ -339,43 +339,3 @@ def test_a_refusal_carries_the_number_it_is_about(tmp_path):
     response = send_photo(phone)
 
     assert '1' in response.get_json()['error']
-
-
-# --- telling a phone this network is fine ------------------------------------
-
-
-def keep_wifi_card(page):
-    """The opening tag of the release card, whatever else the page carries."""
-    match = re.search(r'<div id="keep-wifi-card"[^>]*>', page)
-    assert match, 'the release card is not on the page'
-    return match.group(0)
-
-
-def test_the_page_offers_a_way_out_of_the_portal(server):
-    """A guest who only came to fetch their own photo never uploads, so nothing
-    else on the page would ever release them: their phone keeps flagging the
-    network and can drop them onto mobile data mid-visit."""
-    page = server.app.test_client().get('/remote').get_data(as_text=True)
-
-    assert 'hidden' not in keep_wifi_card(page)
-    assert '/captive-portal/release' in page
-
-
-def test_the_button_releases_the_phone(server):
-    client = server.app.test_client()
-    client.get('/remote')
-
-    response = client.post('/captive-portal/release')
-
-    assert response.status_code == 200
-    assert client.get('/generate_204').status_code == 204
-
-
-def test_a_phone_already_through_the_portal_is_not_asked_again(server):
-    client = server.app.test_client()
-    client.get('/remote')
-    client.post('/captive-portal/release')
-
-    page = client.get('/remote').get_data(as_text=True)
-
-    assert 'hidden' in keep_wifi_card(page)

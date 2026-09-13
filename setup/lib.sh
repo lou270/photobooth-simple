@@ -9,10 +9,10 @@
 # of appending, which makes running the installer twice a no-op.
 #
 # Capability detection: the old script gated half its steps on "is this a
-# Raspberry Pi", which meant a mini PC got no access point and no autostart even
-# though both work there. The has_* helpers below test for the thing actually
-# needed - a boot config file, a wireless interface, an SPI device - so each
-# step is skipped only when the host genuinely cannot do it.
+# Raspberry Pi", which meant a mini PC got no autostart even though it works
+# there. The has_* helpers below test for the thing actually needed - a boot
+# config file, systemd, an SPI device - so each step is skipped only when the
+# host genuinely cannot do it.
 
 # Colors, kept identical to the ones install.sh used.
 RED='\033[0;31m'
@@ -171,12 +171,12 @@ render() {
     fi
 
     # envsubst turns an undefined variable into an empty string without
-    # complaining, which is how an empty ssid= reaches /etc/hostapd. So the
+    # complaining, which is how an empty User= reaches /etc/systemd. So the
     # template states its own requirements: every ${NAME} it mentions must be
     # set and non-empty before anything is written.
     # `|| true` is load-bearing: a template with no placeholders at all makes
     # grep exit 1, which under `set -e` would abort the caller mid-way through
-    # writing the access point configuration.
+    # writing its configuration.
     local names
     names="$(grep -o '[$][{][A-Za-z_][A-Za-z0-9_]*[}]' "$template" \
         | tr -d '${}' | sort -u | tr '\n' ' ' || true)"
@@ -219,33 +219,6 @@ has_unit() {
     has_systemd || return 1
     systemctl list-unit-files 2>/dev/null | grep -q "^$1"
 }
-
-has_networkmanager() { has_unit 'NetworkManager.service'; }
-
-# Wireless interface to run the access point on. wlan0 on a Pi; a mini PC may
-# name it differently, so fall back to the first wireless device present.
-wlan_interface() {
-    if [ -n "${WIFI_INTERFACE:-}" ]; then
-        printf '%s' "$WIFI_INTERFACE"
-        return 0
-    fi
-    if ip link show wlan0 > /dev/null 2>&1; then
-        printf 'wlan0'
-        return 0
-    fi
-    local iface=""
-    local candidate
-    for candidate in /sys/class/net/*; do
-        if [ -d "$candidate/wireless" ]; then
-            iface="$(basename "$candidate")"
-            break
-        fi
-    done
-    [ -n "$iface" ] || return 1
-    printf '%s' "$iface"
-}
-
-has_wlan() { wlan_interface > /dev/null 2>&1; }
 
 has_spi_device() { ls /dev/spidev* > /dev/null 2>&1; }
 

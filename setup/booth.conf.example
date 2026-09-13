@@ -6,12 +6,14 @@
 #     ./install.sh --profile setup/booth.conf --yes
 #
 # An interactive run (./install.sh with no profile) writes its answers here at
-# the end, so the second booth costs one command instead of nine questions.
+# the end, so the second booth costs one command instead of seven questions.
 #
 # This file describes the HARDWARE and what to install. It deliberately holds no
-# network name, no password and no printer name: those live in config.ini, which
-# the application reads and the admin page rewrites, and the installer derives
-# hostapd.conf from it. One value, one place.
+# password and no printer name: those live in config.ini, which the application
+# reads and the admin page rewrites. One value, one place.
+#
+# Nothing here sets up a network either: the booth joins one like any other
+# machine, and guests reach it there. See INSTALLATION.md.
 
 # --- Screen and kiosk -------------------------------------------------------
 
@@ -58,27 +60,6 @@ PRINTER_PPD=doc/DS620.ppd
 # WS2812 ring on SPI0 (DIN to GPIO 10 / pin 19). Enables the SPI overlay and
 # installs spidev.
 LED_RING=yes
-
-# --- WiFi access point ------------------------------------------------------
-
-# Run hostapd + dnsmasq so guests join the booth's own network to see the
-# gallery. Works anywhere there is an AP-capable wireless interface, Pi or not.
-WIFI_AP=yes
-
-# Regulatory domain. Getting this wrong is how an access point comes up with no
-# usable channel, so set it to where the booth actually runs.
-WIFI_COUNTRY=FR
-
-# 2.4 GHz channel, 1-13.
-WIFI_CHANNEL=6
-
-# Interface to run the AP on. Empty auto-detects: wlan0 if present, otherwise
-# the first wireless interface the kernel reports.
-WIFI_INTERFACE=
-
-# dnsmasq logs every DNS query and DHCP exchange. Priceless while a phone
-# refuses to open the portal, noise on a booth that works.
-WIFI_LOG_QUERIES=yes
 
 # --- Autostart --------------------------------------------------------------
 

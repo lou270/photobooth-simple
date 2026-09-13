@@ -11,7 +11,7 @@ A simple and intuitive photobooth application designed to be easy to use, even f
 - **USB Photo Export:** Automatic photo dump to USB drives
 - **Multiple Photo Formats:** Support for different collage layouts
 - **Touch Screen Interface:** Optimized for 7" Ingcool touchscreen and above
-- **WiFi Sharing:** Share photos via WiFi network (QR code generation)
+- **Photo Sharing:** A QR code on the review screen opens the guest's own photo on their phone, ready to download
 - **Phone as a Remote Camera:** Guests photograph anywhere at the event from their own phone and print it at the booth
 
 ## Screenshots
@@ -94,9 +94,9 @@ picking one there joins the flow at the Processing Screen.
 - **Countdown Screen:** Live camera preview with countdown timer before capture. The first shot waits to be asked; the following ones start on their own, and the button under the preview cancels
 - **Confirm Capture Screen:** Keep the shot or take it again — nothing else. Keeping is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press
 - **Processing Screen:** Collage generation in progress
-- **Review Screen:** The finished collage and everything still open: the filter, applied to the whole collage and previewed live; the number of copies, on a button that cycles through them and counts the photos the guest will hold rather than the sheets the printer runs; print, share, or go home. The session is written to disk when the guest prints or leaves, so what is saved is what they chose. Sharing comes before printing, since printing is what ends the session
+- **Review Screen:** The finished collage and everything still open: the filter, applied to the whole collage and previewed live; the number of copies, on a button that cycles through them and counts the photos the guest will hold rather than the sheets the printer runs; print, share, or go home. The session is written to disk when the guest prints, shares or leaves, so what is saved is what they chose, and the filter is fixed from then on. Sharing comes before printing, since printing is what ends the session
 - **Printing Screen:** A sheet coming out of a printer for as long as the job takes, then back to the welcome screen on its own — pressing print ends the session, so the booth frees itself for the next guest. A failure goes to the Error screen instead, saying so, with the photo still saved
-- **QR Code Popup:** Shows the sharing QR code without leaving the review screen
+- **QR Code Popup:** Shows the sharing QR code without leaving the review screen. It opens this guest's collage, not the whole gallery (see [Guest network and QR codes](#guest-network-and-qr-codes))
 - **Remote Gallery Screen:** Photos guests sent from their phone, waiting to be printed (see [Phone as a remote camera](#phone-as-a-remote-camera))
 - **Error Screen:** Displayed when an error occurs during the process
 - **Maintenance Screen:** Displayed for operator intervention, such as storage, camera, web server, printer, or USB export issues
@@ -174,7 +174,7 @@ You can edit `config.ini` to change various parameters such as:
  - **FULLSCREEN:** Full screen window mode
  - **WINDOW_WIDTH / WINDOW_HEIGHT:** Size of the booth window in pixels, and the mode fullscreen runs at (1024 x 600 for the Ingcool 7" panel, 1920 x 1080 for a full HD monitor)
  - **ROTATION:** Quarter turn for a panel mounted on its side (0, 90, 180, 270), applied by the booth itself so no desktop or touchscreen configuration is needed
- - **SHARE:** Enable/disable share buttons using a QRCode
+ - **SHARE:** Enable/disable the share button, whose QR code opens the guest's own photo
  - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
  - **COUNTDOWN:** Countdown time before photo capture
@@ -201,6 +201,58 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 
 ![Template Editor](doc/template_editor.png)
 
+## Guest network and QR codes
+
+Both features that reach a guest's phone - sharing a photo and sending one from a phone - work over a
+network the booth **joins**, like any other machine. The booth does not create that network and
+configures nothing on it: `install.sh` installs no access point, no DHCP or DNS server and no captive
+portal.
+
+### Choosing the network
+
+- **A travel router beside the booth** (recommended). The booth joins it over ethernet or WiFi, guests
+  join its WiFi. It needs no internet: everything the phones open is served by the booth itself.
+- **The venue's WiFi**, when guests are on it anyway. Check that it lets two devices talk to each other:
+  many public networks isolate their clients, and the phones then never reach the booth.
+
+Either way, give the booth a stable address - a DHCP reservation on the router is the simplest - so the
+codes do not change during the evening.
+
+### What the codes carry
+
+| Code | Shown on | Opens |
+| --- | --- | --- |
+| Share | the review screen, when `SHARE = True` | `/collage/<session>`: this guest's collage, with a download button |
+| Send a photo | the welcome screen, when `REMOTE_CAPTURE = True` | `/remote`: the capture page |
+
+When `WIFI_SSID` is set, each popup shows two codes side by side: the first joins that network, the
+second opens the page. It takes two because no phone reads a payload that both joins a network and
+opens a page. When `WIFI_SSID` is empty, only the address code is shown, for guests who are on the
+network already.
+
+The address in the codes is derived, each time a code is drawn, from the interface the booth uses to
+reach its network. Set `REMOTE_URL` when that guess is wrong - a booth with both ethernet and WiFi, a
+fixed hostname, a port forward.
+
+Pressing share saves the session there and then, with the look the guest picked, so the photo their
+phone opens is the one on screen. A phone quick enough to open the link while the booth is still
+writing gets a page that waits and reloads until the collage is there.
+
+### Settings
+
+In the `[WiFi]` section of `config.ini`, and in the admin configuration form. They describe the network
+for the QR code; changing them changes nothing on the network itself.
+
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `WIFI_SSID` | *(empty)* | Network name put in the joining code. Empty shows the address code alone. |
+| `WIFI_PASSWORD` | *(empty)* | Empty for an open network. |
+| `WIFI_HIDDEN` | `False` | Only for a network that does not broadcast its name. |
+
+`REMOTE_URL`, in the `[Remote]` section, sets the address both codes carry (see below).
+
+`./setup/doctor.sh` reports the address the codes will carry, and warns when the booth has none.
+
 ## Phone as a remote camera
 
 The booth only sees what stands in front of it. With `REMOTE_CAPTURE = True`, every guest phone
@@ -209,24 +261,25 @@ photo to the booth, walks over and prints it.
 
 ### What a guest does
 
-1. Taps the QR button at the bottom right of the welcome screen, which shows two codes.
-2. Scans the first: it carries the booth's WiFi credentials, so the phone joins the access point.
-   The capture page usually opens by itself at that point, through the captive portal.
-3. Scans the second only if it did not: that code carries the booth's address.
-4. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
+1. Taps the QR button at the bottom right of the welcome screen.
+2. Scans the codes it shows: the network one first, if there is one, then the address one (see
+   [Guest network and QR codes](#guest-network-and-qr-codes)).
+3. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
    became of it, and lets the guest take a photo back before anyone prints it.
-5. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
+4. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
    it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
 
-It takes two codes because no phone reads a payload that both joins a network and opens a page. The
-second one carries a literal address rather than a name: phones do not reliably send their lookups
-to this network's resolver, and an address needs none. That address is `/`, so the capture page is
-what the booth serves at its root while the feature is on; the gallery stays at `/gallery`.
+The capture page is also what the booth serves at its root (`/`) while the feature is on; the
+gallery stays at `/gallery`.
 
 The capture itself is done by the phone's own camera application, through a file input, rather than
 by the browser. That is deliberate: `getUserMedia` is refused outside a secure context, and a booth
-serving plain HTTP from its own access point has no way to offer one. Where the page *is* served
-over HTTPS, it additionally offers a live viewfinder inside the page.
+serving plain HTTP has no way to offer one. Where the page *is* served over HTTPS, it additionally
+offers a live viewfinder inside the page.
+
+On a network with no internet, Android warns about it and may move the phone back onto mobile data,
+at which point the booth stops answering. The page tells guests which option to pick in that
+notification to stay connected.
 
 ### What the booth does with it
 
@@ -237,58 +290,6 @@ never reach the booth or the gallery.
 A photo picked at the booth is copied into the working directory as an ordinary capture, assembled
 with the first single-photo template, then printed, shared and saved like any other session. It
 appears in the gallery and in the USB export with the rest of the evening.
-
-### The network, and why it is a captive portal
-
-The booth's access point has no uplink to share, and that shapes everything. A phone joining it
-decides for itself whether the network is worth staying on, and it decides by fetching a known URL
-and comparing the answer byte for byte.
-
-Handing out **no default route** was tried first, on the theory that iOS and Android read a
-route-less network as local only, keep the cellular radio for the internet and use the WiFi for the
-booth alone. Both vendors describe that behaviour, and the first half works. The second half does
-not: with mobile data active, phones send the local traffic to the cellular interface as well, and
-the booth's own address simply times out in the browser. Apple's developer forums carry the same
-report, answered by their own engineer as "a bit like a bug", with disabling mobile data as the only
-workaround; the ESP32 community hit it identically. So the booth does the opposite of clever.
-
-`install.sh` gives the network a default route pointing at the booth, resolves every domain to it,
-and answers the connectivity probes as a real portal does:
-
-- A phone that has not been through the portal is redirected, which is what makes the sign-in sheet
-  open on the capture page by itself.
-- Once the guest has sent a photo — or tapped **Keep this WiFi connected** on the page — the same
-  probes start answering exactly what each operating system expects: a bare 204 for Android, Apple's
-  `Success` page, Microsoft's `Microsoft Connect Test`. The phone stops flagging the network and
-  stops offering to leave it for mobile data.
-
-The booth also serves the Captive Portal API of RFC 8908 at `/captive-portal/api`, advertised by the
-DHCP option of RFC 8910, which iOS 14 and Android 11 read before falling back to probing. That URI
-must be the API endpoint and not a web page: a phone that finds HTML there ignores the whole
-mechanism.
-
-What no configuration can fix: **while a guest is connected, they have no internet.** The booth has
-none to give. The page says so after each send, and the flow is built around a short visit rather
-than an evening spent connected. If a venue offers a spare ethernet port, or the Pi can carry a USB
-WiFi dongle onto the venue's own network, sharing a real uplink (NAT from `wlan0`) removes the
-trade-off entirely and makes the portal unnecessary.
-
-### Upgrading a booth that is already installed
-
-The access point configuration is generated from `config.ini`, so moving an existing booth onto it
-does not mean reinstalling anything:
-
-```bash
-./setup/apply-wifi.sh
-```
-
-That regenerates `/etc/hostapd/hostapd.conf`, `/etc/dnsmasq.conf` and the two helper units from the
-current `[WiFi]` section, then restarts the services. Run it any time the network name or
-passphrase changes — including when it was changed from the admin page, which writes `config.ini`
-just the same.
-
-Phones already connected keep their old lease, and its old routing, until it expires. Ask them to
-forget the network and rejoin rather than wondering why nothing changed.
 
 ### Moderating
 
@@ -303,7 +304,7 @@ All in the `[Remote]` section of `config.ini`, and in the admin configuration fo
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `REMOTE_CAPTURE` | `False` | Turns the whole feature on. While off, the routes answer 404 and no QR code is shown. |
-| `REMOTE_URL` | `None` | Address the QR code carries. Derived from the booth's own interface when left empty. |
+| `REMOTE_URL` | `None` | Address every QR code carries, the sharing one included. Derived from the booth's own interface when left empty. |
 | `REMOTE_MAX_UPLOAD_MB` | `12` | Largest upload accepted. |
 | `REMOTE_MAX_IMAGE_PIXELS` | `2400` | Longest side kept when the photo is re-encoded. |
 | `REMOTE_MAX_PER_SENDER` | `20` | Photos one phone may leave waiting. |
@@ -312,30 +313,6 @@ All in the `[Remote]` section of `config.ini`, and in the admin configuration fo
 
 The last four exist so that one guest, or one script within WiFi range, cannot fill the booth's disk
 on their own.
-
-The QR code itself is built from the `[WiFi]` section, which every QR code the booth shows now uses,
-the sharing one included:
-
-| Setting | Default | What it does |
-| --- | --- | --- |
-| `WIFI_SSID` | `PhotoBooth` | Network name put in the code, and the one `setup/apply-wifi.sh` writes into `hostapd.conf`. |
-| `WIFI_PASSWORD` | *(empty)* | Empty for an open network. Fill it in for WPA2 (8-63 characters) and re-run `setup/apply-wifi.sh`. |
-| `WIFI_HIDDEN` | `False` | Only if hostapd is set to `ignore_broadcast_ssid`. |
-| `WIFI_AP_ADDRESS` | `192.168.4.1` | The booth's address on that network, which the second code carries. |
-
-`WIFI_AP_ADDRESS` cannot be guessed and is not optional on a booth running its own access point:
-that network has no default route, so the address the system would pick for itself belongs to
-whatever else the Pi is plugged into. Leave it empty only for a booth sitting on somebody else's
-WiFi, where guessing is the right answer.
-
-This section configures hostapd, rather than merely describing it: `setup/apply-wifi.sh` generates
-`/etc/hostapd/hostapd.conf` from these values, so the network named in the QR code and the one
-actually broadcast are the same by construction. Change the name here, run that script, and both
-move together. `./setup/doctor.sh` compares them and reports a mismatch, which is otherwise
-invisible until a guest scans the code.
-
-Clearing `WIFI_SSID` says the booth has no access point of its own, and the QR codes then carry the
-booth's address directly instead.
 
 ## USB Photo Export
 
