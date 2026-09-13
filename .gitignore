@@ -12,3 +12,6 @@ config.ini
 # Machine profile: which hardware this particular booth has.
 # Start from setup/booth.conf.example.
 setup/booth.conf
+
+# Photos uploaded for one event from the admin page (welcome screen photo).
+event/

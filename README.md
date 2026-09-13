@@ -13,6 +13,8 @@ A simple and intuitive photobooth application designed to be easy to use, even f
 - **Touch Screen Interface:** Optimized for 7" Ingcool touchscreen and above
 - **Photo Sharing:** A QR code on the review screen opens the guest's own photo on their phone, ready to download
 - **Phone as a Remote Camera:** Guests photograph anywhere at the event from their own phone and print it at the booth
+- **Dressed for Each Event:** Welcome title, subtitle and photo set from the admin page, and the event name and date printed on every sheet
+- **Idle Slideshow (optional):** The evening's photos on the welcome screen while nobody is using the booth
 
 ## Screenshots
 
@@ -89,7 +91,7 @@ picking one there joins the flow at the Processing Screen.
 
 ### Screen Descriptions
 
-- **Start Screen:** Initial screen with "Press to begin" prompt
+- **Start Screen:** Initial screen with "Press to begin" prompt, under the event's own title, subtitle and photo when the operator set them. With `SLIDESHOW = True`, the evening's photos take over the screen after a while without a touch; a touch brings the welcome screen back rather than starting a session
 - **Select Format Screen:** Choose between different photo layouts/formats. Skipped when a single template is installed, since there is nothing to choose
 - **Countdown Screen:** Live camera preview with countdown timer before capture. The first shot waits to be asked; the following ones start on their own, and the button under the preview cancels
 - **Confirm Capture Screen:** Keep the shot or take it again — nothing else. Keeping is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press
@@ -176,6 +178,8 @@ You can edit `config.ini` to change various parameters such as:
  - **ROTATION:** Quarter turn for a panel mounted on its side (0, 90, 180, 270), applied by the booth itself so no desktop or touchscreen configuration is needed
  - **SHARE:** Enable/disable the share button, whose QR code opens the guest's own photo
  - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
+ - **WELCOME_TITLE / WELCOME_SUBTITLE / EVENT_NAME / DATE_FORMAT:** The event's words on the welcome screen and on the prints (see [Dressing the booth for an event](#dressing-the-booth-for-an-event))
+ - **SLIDESHOW:** Show the evening's photos on the welcome screen while nobody is using the booth
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
  - **COUNTDOWN:** Countdown time before photo capture
  - **DCIM_DIRECTORY:** Directory where photos and collages are stored
@@ -194,12 +198,56 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 - **Visual Canvas:** Interactive canvas with grid snapping for precise positioning
 - **Photo Frames:** Add, move, resize, and delete photo placeholders
 - **Background/Foreground Layers:** Import decorative backgrounds and overlay frames
+- **Text Boxes:** Printed text with `{event}`, `{date}` and `{time}` placeholders, previewed in the booth's own font with today's values
 - **Multiple Formats:** Support for various print formats (10x15 cm, 5x15 cm strips, custom sizes)
 - **Duplication Support:** Automatically duplicate templates horizontally or vertically for strip printing
 - **Import/Export:** Save templates as JSON files and import existing templates
 - **Live Preview:** Real-time preview with scaling and duplication visualization
 
 ![Template Editor](doc/template_editor.png)
+
+## Dressing the booth for an event
+
+Everything here is set on site from the admin page, and applied on the next start of the booth
+(**Restart app** on the same page).
+
+### The welcome screen
+
+- **Photo:** the *Welcome screen photo* card takes a JPEG, PNG or WebP. The booth re-encodes it as a
+  JPEG no wider than 3840 pixels and keeps it in `event/welcome_background.jpg`, outside the photo
+  directory, so deleting the evening's sessions leaves it in place. *Back to the booth's own photo*
+  removes it.
+- **Title and subtitle:** `WELCOME_TITLE` replaces "PHOTO BOOTH" when set; `WELCOME_SUBTITLE` adds a
+  line under it, outlined so it stays readable on any photo.
+
+### Text on the prints
+
+A template can carry text boxes, added in the template editor with **+ Add Text**. The text is sized
+to fill its box - a long event name shrinks instead of running off the sheet - and drawn over the
+foreground layer, in Roboto, the font Kivy already ships.
+
+| Placeholder | Prints as |
+| --- | --- |
+| `{event}` | `EVENT_NAME` from the `[Event]` section |
+| `{date}` | the day the photo is taken, formatted by `DATE_FORMAT` (`%d/%m/%Y` by default) |
+| `{time}` | the time the photo is taken, as hours:minutes |
+
+Anything else between braces prints as written. In a template file, a box looks like this:
+
+```json
+"texts": [
+  {"x": 600, "y": 1020, "width": 600, "height": 120,
+   "text": "{event}\n{date}", "color": "#a0522d", "align": "center", "bold": true}
+]
+```
+
+### The idle slideshow
+
+Off by default. With `SLIDESHOW = True` in the `[Slideshow]` section, the welcome screen shows the
+evening's collages, newest first, once nobody has touched it for `SLIDESHOW_IDLE_SECONDS` (60), each
+for `SLIDESHOW_PHOTO_SECONDS` (6). It waits while the phone codes are open, and does not start before
+the first photo of the evening exists. A touch brings the welcome screen back without starting a
+session; a physical button starts one directly.
 
 ## Guest network and QR codes
 

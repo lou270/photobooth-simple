@@ -12,7 +12,7 @@ from flask import Flask, g, jsonify, request, render_template, redirect, session
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
-from libs import i18n
+from libs import event, i18n
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
@@ -98,6 +98,8 @@ class WebServer:
         self.logs_directory = os.path.join(self.project_root, 'logs')
         self.templates_directory = os.path.join(self.project_root, 'templates')
         self.template_editor_path = os.path.join(self.web_directory, 'editor', 'template_editor.html')
+        # The photo behind the welcome screen, uploaded from the admin page.
+        self.welcome_background_path = str(event.WELCOME_BACKGROUND_PATH)
         self._setup_routes()
 
     def _watchdog_loop(self):
@@ -358,6 +360,17 @@ class WebServer:
             for key in oldest[:overflow]:
                 del self._expected_sessions[key]
 
+    def _event_text_values(self):
+        """Today's values for template placeholders, from config.ini as it stands."""
+        event_name, date_format = '', event.DEFAULT_DATE_FORMAT
+        try:
+            parser = config_form.load_parser(self._load_config_text())
+            event_name = parser.get('Event', 'EVENT_NAME', fallback='').strip()
+            date_format = parser.get('Event', 'DATE_FORMAT', fallback='').strip() or date_format
+        except Exception as exc:
+            Logger.warning(f'WebServer: event values unavailable for the editor: {exc}')
+        return event.text_values(event_name, date_format)
+
     def _load_config_text(self):
         """Return config.ini content as text."""
         try:
@@ -487,6 +500,7 @@ class WebServer:
             admin_enabled=admin_enabled,
             config_sections=config_sections,
             disk_usage=self._get_disk_usage_info(),
+            welcome_background_set=os.path.isfile(self.welcome_background_path),
             error_message=error_message,
             success_message=success_message,
         )

@@ -56,6 +56,9 @@
       "message": "Elle sera retirée de la borne.\nCette action est définitive."
     }
   },
+  "slideshow": {
+    "hint": "TOUCHEZ L'ÉCRAN POUR PRENDRE VOS PHOTOS"
+  },
   "popups": {
     "qr": {
       "default_title": "SCANNEZ-MOI"
@@ -204,6 +207,17 @@
       "templates_eyebrow": "Modèles",
       "edit_layouts": "Modifier les mises en page",
       "edit_layouts_hint": "Créez, dupliquez et enregistrez des modèles d'impression depuis l'éditeur visuel.",
+      "event_eyebrow": "Événement",
+      "welcome_background_title": "Photo de l'écran d'accueil",
+      "welcome_background_hint": "La photo derrière le titre que voient les invités pendant que la borne attend. Le titre, le sous-titre et le nom de l'événement imprimé sur les modèles se règlent dans la section Event de la configuration ci-dessous.",
+      "welcome_background_none": "Aucune photo envoyée : la borne affiche la sienne.",
+      "welcome_background_upload": "Envoyer la photo",
+      "welcome_background_remove": "Revenir à la photo de la borne",
+      "welcome_background_restart": "Appliqué au prochain démarrage de la borne.",
+      "welcome_background_invalid": "Ce fichier n'est pas une photo lisible par la borne. Utilisez une image JPEG, PNG ou WebP.",
+      "welcome_background_save_failed": "La photo d'accueil n'a pas pu être enregistrée.",
+      "welcome_background_saved": "Photo d'accueil enregistrée. Redémarrez l'application pour l'afficher.",
+      "welcome_background_removed": "Photo d'accueil retirée. Redémarrez l'application pour revenir à celle de la borne.",
       "open_template_editor": "Ouvrir l'éditeur de modèles",
       "maintenance_eyebrow": "Maintenance",
       "restart_or_clean": "Redémarrer ou nettoyer",

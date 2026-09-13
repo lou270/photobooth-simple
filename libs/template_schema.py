@@ -23,6 +23,10 @@ MAX_DESCRIPTION_LENGTH = 300
 MAX_PRINT_PARAMS = 20
 MAX_PRINT_PARAM_LENGTH = 120
 MAX_EMBEDDED_IMAGE_BYTES = 12 * 1024 * 1024
+MAX_TEXTS = 10
+MAX_TEXT_LENGTH = 200
+TEXT_ALIGNMENTS = ('left', 'center', 'right')
+COLOR_PATTERN = re.compile(r'^#[0-9a-fA-F]{6}$')
 
 DATA_URI_PATTERN = re.compile(r'^data:image/(png|jpeg|jpg|webp);base64,(.+)$', re.IGNORECASE | re.DOTALL)
 ASSET_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+\.(png|jpe?g|webp)$', re.IGNORECASE)
@@ -82,6 +86,58 @@ def _validate_photos(photos, page):
             raise TemplateValidationError(f'photos[{index}] does not fit inside the page')
 
         validated.append({'x': x, 'y': y, 'width': width, 'height': height})
+
+    return validated
+
+
+def _validate_texts(texts, page):
+    """Boxes of text drawn over the collage, placeholders included.
+
+    The text is fitted to its box when the collage is built, so a box carries a
+    place and a look but no font size: an event name twice as long as the one
+    the template was drawn for shrinks instead of running off the sheet.
+    """
+    if texts is None:
+        return []
+    if not isinstance(texts, list):
+        raise TemplateValidationError('texts must be a list')
+    if len(texts) > MAX_TEXTS:
+        raise TemplateValidationError(f'a template cannot hold more than {MAX_TEXTS} texts')
+
+    validated = []
+    for index, text in enumerate(texts):
+        field = f'texts[{index}]'
+        if not isinstance(text, dict):
+            raise TemplateValidationError(f'{field} must be an object')
+
+        x = _require_int(text.get('x'), f'{field}.x', minimum=0, maximum=page['width'])
+        y = _require_int(text.get('y'), f'{field}.y', minimum=0, maximum=page['height'])
+        width = _require_int(text.get('width'), f'{field}.width', minimum=1, maximum=page['width'])
+        height = _require_int(text.get('height'), f'{field}.height', minimum=1, maximum=page['height'])
+        if x + width > page['width'] or y + height > page['height']:
+            raise TemplateValidationError(f'{field} does not fit inside the page')
+
+        content = text.get('text', '')
+        if not isinstance(content, str):
+            raise TemplateValidationError(f'{field}.text must be a string')
+        if len(content) > MAX_TEXT_LENGTH:
+            raise TemplateValidationError(f'{field}.text must be at most {MAX_TEXT_LENGTH} characters')
+
+        color = text.get('color', '#000000')
+        if not isinstance(color, str) or not COLOR_PATTERN.match(color):
+            raise TemplateValidationError(f'{field}.color must be a #rrggbb colour')
+
+        align = text.get('align', 'center')
+        if align not in TEXT_ALIGNMENTS:
+            raise TemplateValidationError(f'{field}.align must be one of {", ".join(TEXT_ALIGNMENTS)}')
+
+        validated.append({
+            'x': x, 'y': y, 'width': width, 'height': height,
+            'text': content,
+            'color': color.lower(),
+            'align': align,
+            'bold': bool(text.get('bold', False)),
+        })
 
     return validated
 
@@ -176,6 +232,7 @@ def validate_template(data):
         'description': _validate_text(data.get('description'), 'description', MAX_DESCRIPTION_LENGTH),
         'page': page,
         'photos': _validate_photos(data.get('photos'), page),
+        'texts': _validate_texts(data.get('texts'), page),
         'print_params': _validate_print_params(data.get('print_params')),
         'margin_percent': margin_percent,
         'duplicate_horizontal': bool(data.get('duplicate_horizontal', False)),

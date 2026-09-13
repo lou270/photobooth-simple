@@ -5,7 +5,9 @@ import base64
 import logging
 import tempfile
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
+from libs import event
 from libs.file_utils import FileUtils
 from libs.template_schema import TemplateValidationError, validate_template
 
@@ -31,12 +33,18 @@ class TemplateCollage:
     Collage class that loads configuration from JSON template files.
     """
     
-    def __init__(self, template_path=None, template=None):
+    # Space between two lines of the same text, as a fraction of the font size.
+    LINE_SPACING = 0.15
+
+    def __init__(self, template_path=None, template=None, text_values=None):
         """
         Initialize the collage from a JSON template file.
-        
+
         Args:
             template_path: Path to the JSON template file
+            text_values: Callable returning what {event}, {date} and {time}
+                stand for. Called at each assembly, so the date is the day the
+                photo was taken rather than the day the booth started.
         """
         Logger.info('TemplateCollage: __init__(%s)', template_path or 'built-in')
 
@@ -65,6 +73,9 @@ class TemplateCollage:
         self._page_width = self._template['page']['width']
         self._page_height = self._template['page']['height']
         self._photos = self._template['photos']
+        self._texts = self._template['texts']
+        self._text_values = text_values or event.text_values
+        self._fonts = {}
         self._print_params = self._template.get('print_params', {})
         self._margin_percent = self._template.get('margin_percent', 5)
         self._duplicate_horizontal = self._template.get('duplicate_horizontal', False)
@@ -290,7 +301,11 @@ class TemplateCollage:
             if overlay is not None:
                 # _apply_overlay only reads the overlay, so the cache can be shared.
                 canvas = self._apply_overlay(canvas, overlay)
-        
+
+        # Step 4b: Texts, over the frame: a name printed under a decoration
+        # nobody can read is a name the guest never sees.
+        canvas = self._draw_texts(canvas)
+
         # Step 5: Save base collage (without duplication for web gallery)
         if output_path:
             FileUtils.write_image(output_path, canvas)
@@ -314,6 +329,83 @@ class TemplateCollage:
         
         return canvas
     
+    # --- texts --------------------------------------------------------------
+
+    def _font(self, size, bold):
+        key = (size, bold)
+        font = self._fonts.get(key)
+        if font is None:
+            path = event.font_path(bold)
+            font = ImageFont.truetype(str(path), size) if path else ImageFont.load_default(size)
+            self._fonts[key] = font
+        return font
+
+    def _text_block_size(self, lines, font, size):
+        ascent, descent = font.getmetrics()
+        line_height = ascent + descent
+        width = max(font.getlength(line) for line in lines)
+        height = line_height * len(lines) + int(size * self.LINE_SPACING) * (len(lines) - 1)
+        return width, height, line_height
+
+    def _fit_font(self, lines, box, bold):
+        """The largest font the lines fit in, searched rather than guessed.
+
+        Font metrics do not scale linearly at small sizes, so a size computed
+        from one measurement can overflow by a pixel or two; a bisection over
+        whole sizes cannot.
+        """
+        low, high = 1, max(1, box['height'])
+        while low < high:
+            size = (low + high + 1) // 2
+            width, height, _line = self._text_block_size(lines, self._font(size, bold), size)
+            if width <= box['width'] and height <= box['height']:
+                low = size
+            else:
+                high = size - 1
+        return low
+
+    def _draw_texts(self, canvas):
+        if not self._texts:
+            return canvas
+
+        try:
+            values = self._text_values()
+        except Exception as exc:
+            # A broken provider must not cost the guest their print.
+            Logger.error('TemplateCollage: text values unavailable: %s', exc)
+            values = event.text_values()
+
+        image = None
+        draw = None
+        for box in self._texts:
+            content = event.fill_placeholders(box['text'], values).strip()
+            if not content:
+                continue
+            lines = [line.strip() for line in content.splitlines()]
+
+            if image is None:
+                image = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
+                draw = ImageDraw.Draw(image)
+
+            size = self._fit_font(lines, box, box['bold'])
+            font = self._font(size, box['bold'])
+            _width, block_height, line_height = self._text_block_size(lines, font, size)
+            y = box['y'] + (box['height'] - block_height) // 2
+            for line in lines:
+                line_width = font.getlength(line)
+                if box['align'] == 'left':
+                    x = box['x']
+                elif box['align'] == 'right':
+                    x = box['x'] + box['width'] - line_width
+                else:
+                    x = box['x'] + (box['width'] - line_width) / 2
+                draw.text((x, y), line, font=font, fill=box['color'], anchor='la')
+                y += line_height + int(size * self.LINE_SPACING)
+
+        if image is None:
+            return canvas
+        return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
+
     def _apply_overlay(self, image, overlay):
         """
         Apply an overlay image on top of the base image.
@@ -339,13 +431,14 @@ class TemplateCollage:
         return image
 
 
-def load_templates(templates_dir='templates'):
+def load_templates(templates_dir='templates', text_values=None):
     """
     Load all template files from a directory.
-    
+
     Args:
         templates_dir: Directory containing template JSON files
-        
+        text_values: Callable handed to every template, see TemplateCollage
+
     Returns:
         List of TemplateCollage instances
     """
@@ -364,7 +457,7 @@ def load_templates(templates_dir='templates'):
         if filename.endswith('.json'):
             template_path = os.path.join(templates_path, filename)
             try:
-                template = TemplateCollage(template_path)
+                template = TemplateCollage(template_path, text_values=text_values)
                 templates.append(template)
                 Logger.info(f'Loaded template: {template.get_name()} from {filename}')
             except TemplateValidationError as e:
@@ -376,6 +469,6 @@ def load_templates(templates_dir='templates'):
     # empty list and the booth always starts.
     if not templates:
         Logger.warning('TemplateCollage: no usable template found, using the built-in fallback')
-        templates.append(TemplateCollage(template=DEFAULT_TEMPLATE))
+        templates.append(TemplateCollage(template=DEFAULT_TEMPLATE, text_values=text_values))
 
     return templates

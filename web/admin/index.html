@@ -41,6 +41,43 @@
             margin: 10px 0 18px;
         }
 
+        .welcome-background {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+            gap: 20px;
+            align-items: start;
+        }
+
+        .welcome-background-preview {
+            display: block;
+            width: 100%;
+            aspect-ratio: 16 / 10;
+            object-fit: cover;
+            border-radius: 12px;
+            border: 1px solid #eeeeee;
+        }
+
+        .welcome-background-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            text-align: center;
+            color: var(--text-muted);
+            background: var(--panel-muted);
+        }
+
+        .welcome-background-actions {
+            display: grid;
+            gap: 12px;
+        }
+
+        @media (max-width: 720px) {
+            .welcome-background {
+                grid-template-columns: 1fr;
+            }
+        }
+
         .disk-card {
             display: grid;
             gap: 14px;
@@ -362,6 +399,35 @@
             </section>
 
             <section class="admin-stack">
+                <article class="panel section-card" id="event-section">
+                    <span class="eyebrow">{{ t('web.admin.event_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.welcome_background_title') }}</h2>
+                    <p>{{ t('web.admin.welcome_background_hint') }}</p>
+                    <div class="welcome-background">
+                        {% if welcome_background_set %}
+                        <img class="welcome-background-preview" src="/admin/event/background" alt="{{ t('web.admin.welcome_background_title') }}">
+                        {% else %}
+                        <div class="welcome-background-preview welcome-background-empty">{{ t('web.admin.welcome_background_none') }}</div>
+                        {% endif %}
+                        <div class="welcome-background-actions">
+                            <form method="post" action="/admin/event/background" enctype="multipart/form-data">
+                                <input class="field-input" type="file" name="background" accept="image/jpeg,image/png,image/webp" required {% if not admin_enabled %}disabled{% endif %}>
+                                <div class="actions">
+                                    <button type="submit" class="btn btn-primary {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.welcome_background_upload') }}</button>
+                                </div>
+                            </form>
+                            {% if welcome_background_set %}
+                            <form method="post" action="/admin/event/background/delete">
+                                <div class="actions">
+                                    <button type="submit" class="btn btn-ghost {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.welcome_background_remove') }}</button>
+                                </div>
+                            </form>
+                            {% endif %}
+                            <p class="field-help">{{ t('web.admin.welcome_background_restart') }}</p>
+                        </div>
+                    </div>
+                </article>
+
                 <article class="panel section-card" id="config-section">
                     <span class="eyebrow">{{ t('web.admin.configuration_eyebrow') }}</span>
                     <h2>{{ t('web.admin.edit_config_ini') }}</h2>

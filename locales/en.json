@@ -56,6 +56,9 @@
       "message": "It will be removed from the booth.\nThis cannot be undone."
     }
   },
+  "slideshow": {
+    "hint": "TOUCH THE SCREEN TO TAKE YOUR PHOTOS"
+  },
   "popups": {
     "qr": {
       "default_title": "SCAN ME"
@@ -204,6 +207,17 @@
       "templates_eyebrow": "Templates",
       "edit_layouts": "Edit layouts",
       "edit_layouts_hint": "Create, duplicate and save print templates from the visual editor.",
+      "event_eyebrow": "Event",
+      "welcome_background_title": "Welcome screen photo",
+      "welcome_background_hint": "The photo behind the title guests see while the booth waits. The title, the subtitle and the event name printed on templates are in the Event section of the configuration below.",
+      "welcome_background_none": "No photo uploaded: the booth shows its own.",
+      "welcome_background_upload": "Upload the photo",
+      "welcome_background_remove": "Back to the booth's own photo",
+      "welcome_background_restart": "Applied on the next start of the booth.",
+      "welcome_background_invalid": "That file is not a photo the booth can read. Use a JPEG, PNG or WebP image.",
+      "welcome_background_save_failed": "The welcome photo could not be saved.",
+      "welcome_background_saved": "Welcome photo saved. Restart the application to show it.",
+      "welcome_background_removed": "Welcome photo removed. Restart the application to show the booth's own.",
       "open_template_editor": "Open template editor",
       "maintenance_eyebrow": "Maintenance",
       "restart_or_clean": "Restart or clean",

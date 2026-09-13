@@ -441,6 +441,11 @@ def test_a_second_press_does_not_stack_two_questions(leaving):
 
 class WelcomeApp:
     SHARE = True
+    WELCOME_TITLE = ''
+    WELCOME_SUBTITLE = ''
+    SLIDESHOW = False
+    SLIDESHOW_IDLE_SECONDS = 60
+    SLIDESHOW_PHOTO_SECONDS = 6
 
     def __init__(self, pending=0):
         self.pending = pending
@@ -573,3 +578,115 @@ def test_the_caption_is_readable_against_its_own_ground():
         red, green, blue, alpha = tab._color.rgba
         assert alpha > 0.85, 'a ground the photo shows through is not a ground'
         assert _contrast((1, 1, 1), (red, green, blue)) >= 4.5
+
+
+# --- the welcome screen, dressed for the event --------------------------------
+
+
+def dressed_welcome(photos=(), title='', subtitle=''):
+    app = WelcomeApp()
+    app.SLIDESHOW = True
+    app.WELCOME_TITLE = title
+    app.WELCOME_SUBTITLE = subtitle
+    app.get_slideshow_photos = lambda: list(photos)
+    app.has_remote_capture = lambda: False
+    Window.size = (1024, 600)
+    Clock.tick()
+    return StartScreen(app, name=f'dressed-{len(photos)}-{title}')
+
+
+def a_photo(tmp_path, name='collage.jpg'):
+    import cv2
+    import numpy as np
+    path = tmp_path / name
+    cv2.imwrite(str(path), np.full((120, 180, 3), (30, 90, 160), dtype=np.uint8))
+    return str(path)
+
+
+def test_the_operator_s_title_and_subtitle_replace_the_booth_s_own():
+    screen = dressed_welcome(title='Lou & Max', subtitle='13 septembre 2026')
+
+    assert screen.start_label.text == 'Lou & Max'
+    assert screen.subtitle_label.text == '13 septembre 2026'
+
+
+def test_without_a_subtitle_there_is_no_empty_line_on_the_photo():
+    screen = dressed_welcome()
+
+    assert screen.start_label.text == t('start.title')
+    assert screen.subtitle_label is None
+
+
+def test_the_evening_s_photos_cover_the_welcome_screen_while_nobody_is_there(tmp_path):
+    screen = dressed_welcome()
+
+    screen._show_slideshow([a_photo(tmp_path)])
+
+    assert screen.slideshow.parent is screen
+    assert screen.slideshow.running
+    screen._stop_slideshow(rearm=False)
+
+
+def test_before_the_first_photo_the_welcome_screen_stays(tmp_path):
+    screen = dressed_welcome()
+
+    screen._show_slideshow([])
+
+    assert screen.slideshow.parent is None
+    assert screen._slideshow_clock is not None, 'it must try again later'
+    screen._disarm_slideshow()
+
+
+def test_a_touch_on_the_slideshow_wakes_the_booth_without_starting_a_session(tmp_path):
+    """A guest who taps to see the booth expects the booth, not a countdown."""
+    from kivy.input.providers.mouse import MouseMotionEvent
+
+    screen = dressed_welcome()
+    screen.app.start_session = lambda: screen.app.transitions.append('session')
+    screen._show_slideshow([a_photo(tmp_path)])
+    screen.slideshow.size = (1024, 600)
+    screen.slideshow.pos = (0, 0)
+
+    touch = MouseMotionEvent('mouse', 'wake', (0.5, 0.5))
+    touch.pos = (512, 300)
+    screen.slideshow.on_touch_down(touch)
+
+    assert screen.slideshow.parent is None
+    assert screen.app.transitions == []
+    assert screen._slideshow_clock is not None, 'the idle count starts over'
+    screen._disarm_slideshow()
+
+
+def test_the_codes_on_screen_hold_the_slideshow_back(tmp_path):
+    screen = dressed_welcome()
+    screen.qr_popup = object()
+
+    screen._show_slideshow([a_photo(tmp_path)])
+
+    assert screen.slideshow.parent is None
+    screen.qr_popup = None
+    screen._disarm_slideshow()
+
+
+def test_the_slideshow_shows_the_newest_sessions_small_copy_first(tmp_path):
+    from libs.core import SessionStorage
+
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.storage = SessionStorage(str(tmp_path / 'DCIM'))
+    save = Path(app.storage.save_directory)
+    for session, names in (
+        ('20260913_200000', ['collage.jpg']),
+        ('20260913_210000', ['collage.jpg', 'collage_small.jpg']),
+        ('20260913_203000', []),
+    ):
+        (save / session).mkdir()
+        for name in names:
+            (save / session / name).write_bytes(b'x')
+    (save / '.stats.json').write_text('{}')
+
+    photos = app.get_slideshow_photos()
+
+    assert [Path(photo).parent.name + '/' + Path(photo).name for photo in photos] == [
+        '20260913_210000/collage_small.jpg',
+        '20260913_200000/collage.jpg',
+    ]

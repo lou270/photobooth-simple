@@ -57,6 +57,25 @@ CONFIG_FORM_SECTIONS = (
         ),
     },
     {
+        'title': 'Event',
+        'description': 'What makes the booth this evening’s booth. The welcome photo is uploaded in its own card above. Applied on the next start.',
+        'fields': (
+            {'section': 'Event', 'option': 'WELCOME_TITLE', 'label': 'Welcome title', 'control': 'text', 'placeholder': 'PHOTO BOOTH', 'help': 'The big words on the welcome screen. Leave empty to keep the booth’s own.'},
+            {'section': 'Event', 'option': 'WELCOME_SUBTITLE', 'label': 'Welcome subtitle', 'control': 'text', 'placeholder': 'Lou & Max, 13 September 2026', 'help': 'A line under the title, such as the names and the date. Leave empty for none.'},
+            {'section': 'Event', 'option': 'EVENT_NAME', 'label': 'Event name', 'control': 'text', 'placeholder': 'Lou & Max', 'help': 'Printed wherever a template text says {event}.'},
+            {'section': 'Event', 'option': 'DATE_FORMAT', 'label': 'Date format', 'control': 'text', 'placeholder': '%d/%m/%Y', 'help': 'How {date} prints: %d day, %m month, %Y year. Templates can also print {time}.'},
+        ),
+    },
+    {
+        'title': 'Slideshow',
+        'description': 'The evening’s photos on the welcome screen while nobody is using the booth.',
+        'fields': (
+            {'section': 'Slideshow', 'option': 'SLIDESHOW', 'label': 'Slideshow when idle', 'control': 'checkbox', 'help': 'A touch brings the welcome screen back.'},
+            {'section': 'Slideshow', 'option': 'SLIDESHOW_IDLE_SECONDS', 'label': 'Start after (seconds)', 'control': 'number', 'number_type': 'int', 'min': 10, 'step': 1},
+            {'section': 'Slideshow', 'option': 'SLIDESHOW_PHOTO_SECONDS', 'label': 'Seconds per photo', 'control': 'number', 'number_type': 'int', 'min': 2, 'step': 1},
+        ),
+    },
+    {
         'title': 'Web & Logs',
         'description': 'Web access and log retention settings.',
         'fields': (

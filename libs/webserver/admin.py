@@ -3,12 +3,19 @@
 import os
 import zipfile
 
-from flask import Blueprint, Response, g, redirect, render_template, request, session
+import cv2
+import numpy as np
+from flask import Blueprint, Response, g, redirect, render_template, request, send_file, session
 from kivy.logger import Logger
 
-from libs import i18n
+from libs import event, i18n
+from libs.file_utils import FileUtils
 from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
+
+# Longest side kept for the welcome photo: a 4K panel's width. Anything larger
+# is decoded by the booth at every start for pixels no screen shows.
+WELCOME_BACKGROUND_MAX_SIDE = 3840
 
 # Strings admin/logs.html's own script needs, handed over as JSON.
 LOGS_PAGE_JS_KEYS = {
@@ -41,6 +48,92 @@ def create_blueprint(server):
             return 'Template editor not found', 404
 
         return render_template('editor/template_editor.html')
+
+    @blueprint.route('/admin/editor/fonts/<variant>')
+    def editor_font(variant):
+        """The font printed text uses, so the editor previews it in the same one."""
+        auth_redirect = server._require_admin_auth()
+        if auth_redirect is not None:
+            return auth_redirect
+
+        if variant not in ('regular', 'bold'):
+            return 'Not found', 404
+        path = event.font_path(bold=variant == 'bold')
+        if path is None:
+            return 'Not found', 404
+        return send_file(str(path), mimetype='font/ttf', max_age=86400)
+
+    # --- the photo behind the welcome screen --------------------------------
+
+    def _refuse_without_password():
+        """The same gate every other admin write goes through."""
+        auth_redirect = server._require_admin_auth()
+        if auth_redirect is not None:
+            return auth_redirect
+        if server.admin_password is None:
+            session.clear()
+            return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.access_disabled')), 403
+        return None
+
+    @blueprint.route('/admin/event/background')
+    def welcome_background():
+        auth_redirect = server._require_admin_auth()
+        if auth_redirect is not None:
+            return auth_redirect
+        if not os.path.isfile(server.welcome_background_path):
+            return 'Not found', 404
+        response = send_file(server.welcome_background_path, mimetype='image/jpeg')
+        # Replaced under the same name: a cached copy would show the old one.
+        response.headers['Cache-Control'] = 'no-store'
+        return response
+
+    @blueprint.route('/admin/event/background', methods=['POST'])
+    def upload_welcome_background():
+        """Take a photo for the welcome screen, and store it the way the screen needs.
+
+        Re-encoded rather than stored as sent: whatever the operator's camera or
+        editing software produced, the booth gets a plain JPEG no larger than a
+        screen could use, and a file that does not decode is refused here rather
+        than on the booth at its next start.
+        """
+        refusal = _refuse_without_password()
+        if refusal is not None:
+            return refusal
+
+        uploaded = request.files.get('background')
+        data = uploaded.read() if uploaded is not None else b''
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if data else None
+        if image is None:
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.welcome_background_invalid')), 400
+
+        longest = max(image.shape[:2])
+        if longest > WELCOME_BACKGROUND_MAX_SIDE:
+            factor = WELCOME_BACKGROUND_MAX_SIDE / longest
+            image = cv2.resize(image, (round(image.shape[1] * factor), round(image.shape[0] * factor)), interpolation=cv2.INTER_AREA)
+
+        try:
+            os.makedirs(os.path.dirname(server.welcome_background_path), exist_ok=True)
+            FileUtils.write_image(server.welcome_background_path, image)
+        except Exception as exc:
+            Logger.error(f'WebServer: Error saving the welcome background: {exc}')
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.welcome_background_save_failed')), 500
+
+        return server._render_admin_page(success_message=i18n.translate(g.lang, 'web.admin.welcome_background_saved'))
+
+    @blueprint.route('/admin/event/background/delete', methods=['POST'])
+    def delete_welcome_background():
+        refusal = _refuse_without_password()
+        if refusal is not None:
+            return refusal
+
+        try:
+            if os.path.isfile(server.welcome_background_path):
+                os.remove(server.welcome_background_path)
+        except OSError as exc:
+            Logger.error(f'WebServer: Error removing the welcome background: {exc}')
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.welcome_background_save_failed')), 500
+
+        return server._render_admin_page(success_message=i18n.translate(g.lang, 'web.admin.welcome_background_removed'))
 
     @blueprint.route('/admin/logs')
     def admin_logs():

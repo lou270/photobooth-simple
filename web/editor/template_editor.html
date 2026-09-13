@@ -6,10 +6,47 @@
     <title>Photo Booth Template Editor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
+        /* The font the booth prints text in, served by the booth itself, so a
+           text box looks here the way it will on paper. */
+        @font-face {
+            font-family: 'PrintFont';
+            src: url('/admin/editor/fonts/regular') format('truetype');
+            font-weight: normal;
+        }
+
+        @font-face {
+            font-family: 'PrintFont';
+            src: url('/admin/editor/fonts/bold') format('truetype');
+            font-weight: bold;
+        }
+
         body {
             display: flex;
             height: 100vh;
             overflow: hidden;
+        }
+
+        .prop-group textarea {
+            width: 100%;
+            min-height: 60px;
+            padding: 8px;
+            font: inherit;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            resize: vertical;
+        }
+
+        .placeholder-buttons {
+            display: flex;
+            gap: 5px;
+            margin-top: 6px;
+        }
+
+        .placeholder-buttons .btn {
+            flex: 1;
+            padding: 4px 6px;
+            min-height: 30px;
+            font-size: 12px;
         }
 
         .sidebar {
@@ -485,6 +522,10 @@
         </div>
 
         <div class="prop-group">
+            <button class="btn btn-success" onclick="addTextBox()" style="width: 100%;">+ Add Text</button>
+        </div>
+
+        <div class="prop-group">
             <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="duplicateHorizontal" onchange="updateDuplication()" style="width: auto;">
                 Duplicate horizontally
@@ -515,6 +556,60 @@
             <div class="prop-group">
                 <label>Height:</label>
                 <input type="number" id="frameHeight" onchange="updateFrameProperties()">
+            </div>
+            <div class="prop-actions">
+                <button class="btn btn-danger" onclick="deleteSelectedFrame()">Delete</button>
+            </div>
+        </div>
+
+        <div id="textProperties" style="display: none;">
+            <h3 style="margin-top: 20px;">Selected Text</h3>
+            <div class="prop-group">
+                <label>Text:</label>
+                <textarea id="textContent" oninput="updateTextProperties()"></textarea>
+                <div class="placeholder-buttons">
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{event}')" title="Event name, from the admin configuration">{event}</button>
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{date}')" title="Day the photo is taken">{date}</button>
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{time}')" title="Time the photo is taken">{time}</button>
+                </div>
+            </div>
+            <div class="prop-group">
+                <label>Color:</label>
+                <input type="color" id="textColor" oninput="updateTextProperties()">
+            </div>
+            <div class="prop-group">
+                <label>Alignment:</label>
+                <select id="textAlign" onchange="updateTextProperties()">
+                    <option value="left">Left</option>
+                    <option value="center">Center</option>
+                    <option value="right">Right</option>
+                </select>
+            </div>
+            <div class="prop-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="textBold" onchange="updateTextProperties()" style="width: auto;">
+                    Bold
+                </label>
+            </div>
+            <div class="prop-group">
+                <label>X:</label>
+                <input type="number" id="textX" onchange="updateTextProperties()">
+            </div>
+            <div class="prop-group">
+                <label>Y:</label>
+                <input type="number" id="textY" onchange="updateTextProperties()">
+            </div>
+            <div class="prop-group">
+                <label>Width:</label>
+                <input type="number" id="textWidth" onchange="updateTextProperties()">
+            </div>
+            <div class="prop-group">
+                <label>Height:</label>
+                <input type="number" id="textHeight" onchange="updateTextProperties()">
+            </div>
+            <div class="info-text">
+                The text is sized to fill its box, so a longer event name shrinks instead of overflowing.
+                Placeholders are replaced when the photo is taken; the preview uses today's values.
             </div>
             <div class="prop-actions">
                 <button class="btn btn-danger" onclick="deleteSelectedFrame()">Delete</button>
@@ -561,6 +656,13 @@
         let templates = [];
         let currentTemplateIndex = -1;
         let selectedFrameIndex = -1;
+        // What selectedFrameIndex indexes into: 'photo' (template.photos) or
+        // 'text' (template.texts).
+        let selectedKind = 'photo';
+        // Today's {event}, {date} and {time}, sent by the booth with the templates.
+        let textValues = { event: 'Event name', date: '13/09/2026', time: '21:47' };
+        const TEXT_LINE_SPACING = 0.15;
+        const MIN_TEXT_BOX = 20;
         let gridSize = 30;
         let gridEnabled = true;
         let isDragging = false;
@@ -673,6 +775,9 @@
 
                 const payload = await response.json();
                 const serverTemplates = Array.isArray(payload.templates) ? payload.templates : [];
+                if (payload.text_values && typeof payload.text_values === 'object') {
+                    textValues = payload.text_values;
+                }
 
                 serverTemplates.forEach((entry) => {
                     if (!entry || typeof entry !== 'object' || !entry.template) {
@@ -723,6 +828,7 @@
         function selectTemplate(index) {
             currentTemplateIndex = index;
             selectedFrameIndex = -1;
+            selectedKind = 'photo';
             backgroundImage = null;
             foregroundImage = null;
             renderTemplateList();
@@ -917,18 +1023,182 @@
                 }
             }
 
-            if (selectedFrameIndex >= 0) {
-                const photo = template.photos[selectedFrameIndex];
-                drawResizeHandles(photo);
+            // Texts last, over the foreground, as the booth draws them. The
+            // copies are translated, not mirrored: printing duplicates the
+            // whole sheet as it is.
+            textsOf(template).forEach((box, index) => drawTextBox(box, index, 0, 0, false));
+            if (template.duplicate_horizontal || template.duplicate_vertical) {
+                ctx.save();
+                ctx.globalAlpha = 0.3;
+                const dx = template.duplicate_horizontal ? template.page.width : 0;
+                const dy = template.duplicate_vertical ? template.page.height : 0;
+                textsOf(template).forEach((box, index) => drawTextBox(box, index, dx, dy, true));
+                ctx.restore();
+            }
+
+            const selected = selectedBox();
+            if (selected) {
+                drawResizeHandles(selected);
             }
 
             updateFramePropertiesPanel();
         }
 
-        function drawPhotoFrame(photo, index, isDuplicate) {
-            ctx.strokeStyle = index === selectedFrameIndex && !isDuplicate ? '#ff6b6b' : '#007bff';
+        // --- texts ------------------------------------------------------------
+
+        function textsOf(template) {
+            if (!Array.isArray(template.texts)) {
+                template.texts = [];
+            }
+            return template.texts;
+        }
+
+        function boxesOfKind(template, kind) {
+            return kind === 'text' ? textsOf(template) : template.photos;
+        }
+
+        function selectedBox() {
+            if (selectedFrameIndex < 0 || currentTemplateIndex < 0) return null;
+            return boxesOfKind(templates[currentTemplateIndex], selectedKind)[selectedFrameIndex] || null;
+        }
+
+        function fillPlaceholders(text) {
+            return (text || '').replace(/\{(event|date|time)\}/g, (match, key) => textValues[key] || '');
+        }
+
+        function fontFor(size, bold) {
+            return `${bold ? 'bold ' : ''}${size}px PrintFont, sans-serif`;
+        }
+
+        function measureTextBlock(lines, size, bold) {
+            ctx.font = fontFor(size, bold);
+            let width = 0;
+            let ascent = size * 0.93;
+            let descent = size * 0.24;
+            lines.forEach(line => {
+                const metrics = ctx.measureText(line);
+                width = Math.max(width, metrics.width);
+                if (metrics.fontBoundingBoxAscent !== undefined) {
+                    ascent = metrics.fontBoundingBoxAscent;
+                    descent = metrics.fontBoundingBoxDescent;
+                }
+            });
+            const lineHeight = ascent + descent;
+            const spacing = Math.floor(size * TEXT_LINE_SPACING);
+            return { width, height: lineHeight * lines.length + spacing * (lines.length - 1), lineHeight, ascent, spacing };
+        }
+
+        // Same search the booth runs: the largest size the lines fit the box in.
+        function fitTextSize(lines, box) {
+            let low = 1;
+            let high = Math.max(1, box.height);
+            while (low < high) {
+                const size = Math.floor((low + high + 1) / 2);
+                const block = measureTextBlock(lines, size, box.bold);
+                if (block.width <= box.width && block.height <= box.height) {
+                    low = size;
+                } else {
+                    high = size - 1;
+                }
+            }
+            return low;
+        }
+
+        function drawTextBox(box, index, dx, dy, isDuplicate) {
+            const isSelected = selectedKind === 'text' && index === selectedFrameIndex && !isDuplicate;
+            const x = box.x + dx;
+            const y = box.y + dy;
+
+            ctx.save();
+            ctx.setLineDash([8, 4]);
+            ctx.strokeStyle = isSelected ? '#ff6b6b' : '#8a4fff';
             ctx.lineWidth = 2;
-            ctx.fillStyle = index === selectedFrameIndex && !isDuplicate ? 'rgba(255, 107, 107, 0.1)' : 'rgba(0, 123, 255, 0.1)';
+            ctx.strokeRect(x, y, box.width, box.height);
+            ctx.setLineDash([]);
+
+            const content = fillPlaceholders(box.text).trim();
+            if (content) {
+                const lines = content.split('\n').map(line => line.trim());
+                const size = fitTextSize(lines, box);
+                const block = measureTextBlock(lines, size, box.bold);
+                ctx.font = fontFor(size, box.bold);
+                ctx.fillStyle = box.color || '#000000';
+                ctx.textBaseline = 'alphabetic';
+                let lineTop = y + Math.floor((box.height - block.height) / 2);
+                lines.forEach(line => {
+                    const lineWidth = ctx.measureText(line).width;
+                    let lineX = x + (box.width - lineWidth) / 2;
+                    if (box.align === 'left') lineX = x;
+                    if (box.align === 'right') lineX = x + box.width - lineWidth;
+                    ctx.fillText(line, lineX, lineTop + block.ascent);
+                    lineTop += block.lineHeight + block.spacing;
+                });
+            }
+
+            if (!isDuplicate) {
+                ctx.fillStyle = 'rgba(138, 79, 255, 0.85)';
+                ctx.fillRect(x + 4, y + 4, 52, 18);
+                ctx.fillStyle = 'white';
+                ctx.font = '12px sans-serif';
+                ctx.fillText(`Text ${index + 1}`, x + 8, y + 17);
+            }
+            ctx.restore();
+        }
+
+        function addTextBox() {
+            if (currentTemplateIndex < 0) return;
+
+            const template = templates[currentTemplateIndex];
+            const width = Math.min(600, template.page.width);
+            const height = Math.min(120, template.page.height);
+            textsOf(template).push({
+                x: snapToGrid(Math.max(0, Math.floor((template.page.width - width) / 2))),
+                y: snapToGrid(Math.max(0, template.page.height - height - 60)),
+                width: width,
+                height: height,
+                text: '{event} - {date}',
+                color: '#000000',
+                align: 'center',
+                bold: false
+            });
+
+            selectedKind = 'text';
+            selectedFrameIndex = template.texts.length - 1;
+            renderCanvas();
+        }
+
+        function updateTextProperties() {
+            if (selectedKind !== 'text') return;
+            const box = selectedBox();
+            if (!box) return;
+
+            box.text = document.getElementById('textContent').value;
+            box.color = document.getElementById('textColor').value;
+            box.align = document.getElementById('textAlign').value;
+            box.bold = document.getElementById('textBold').checked;
+            box.x = parseInt(document.getElementById('textX').value) || 0;
+            box.y = parseInt(document.getElementById('textY').value) || 0;
+            box.width = Math.max(MIN_TEXT_BOX, parseInt(document.getElementById('textWidth').value) || MIN_TEXT_BOX);
+            box.height = Math.max(MIN_TEXT_BOX, parseInt(document.getElementById('textHeight').value) || MIN_TEXT_BOX);
+
+            renderCanvas();
+        }
+
+        function insertPlaceholder(placeholder) {
+            const field = document.getElementById('textContent');
+            const start = field.selectionStart ?? field.value.length;
+            const end = field.selectionEnd ?? field.value.length;
+            field.value = field.value.slice(0, start) + placeholder + field.value.slice(end);
+            field.focus();
+            field.selectionStart = field.selectionEnd = start + placeholder.length;
+            updateTextProperties();
+        }
+
+        function drawPhotoFrame(photo, index, isDuplicate) {
+            const isSelected = selectedKind === 'photo' && index === selectedFrameIndex && !isDuplicate;
+            ctx.strokeStyle = isSelected ? '#ff6b6b' : '#007bff';
+            ctx.lineWidth = 2;
+            ctx.fillStyle = isSelected ? 'rgba(255, 107, 107, 0.1)' : 'rgba(0, 123, 255, 0.1)';
 
             ctx.fillRect(photo.x, photo.y, photo.width, photo.height);
             ctx.strokeRect(photo.x, photo.y, photo.width, photo.height);
@@ -962,23 +1232,41 @@
 
         function updateFramePropertiesPanel() {
             const panel = document.getElementById('frameProperties');
+            const textPanel = document.getElementById('textProperties');
+            const box = selectedBox();
 
-            if (selectedFrameIndex >= 0 && currentTemplateIndex >= 0) {
-                const photo = templates[currentTemplateIndex].photos[selectedFrameIndex];
-                panel.style.display = 'block';
-                document.getElementById('frameX').value = photo.x;
-                document.getElementById('frameY').value = photo.y;
-                document.getElementById('frameWidth').value = photo.width;
-                document.getElementById('frameHeight').value = photo.height;
-            } else {
-                panel.style.display = 'none';
+            panel.style.display = box && selectedKind === 'photo' ? 'block' : 'none';
+            textPanel.style.display = box && selectedKind === 'text' ? 'block' : 'none';
+            if (!box) return;
+
+            if (selectedKind === 'photo') {
+                document.getElementById('frameX').value = box.x;
+                document.getElementById('frameY').value = box.y;
+                document.getElementById('frameWidth').value = box.width;
+                document.getElementById('frameHeight').value = box.height;
+                return;
             }
+
+            // Not while the operator types in it: rewriting the field under the
+            // caret on every keystroke would throw the caret to the end.
+            const content = document.getElementById('textContent');
+            if (document.activeElement !== content) {
+                content.value = box.text || '';
+            }
+            document.getElementById('textColor').value = box.color || '#000000';
+            document.getElementById('textAlign').value = box.align || 'center';
+            document.getElementById('textBold').checked = !!box.bold;
+            document.getElementById('textX').value = box.x;
+            document.getElementById('textY').value = box.y;
+            document.getElementById('textWidth').value = box.width;
+            document.getElementById('textHeight').value = box.height;
         }
 
         function updateFrameProperties() {
-            if (selectedFrameIndex < 0 || currentTemplateIndex < 0) return;
+            if (selectedKind !== 'photo') return;
+            const photo = selectedBox();
+            if (!photo) return;
 
-            const photo = templates[currentTemplateIndex].photos[selectedFrameIndex];
             photo.x = parseInt(document.getElementById('frameX').value) || 0;
             photo.y = parseInt(document.getElementById('frameY').value) || 0;
             photo.width = parseInt(document.getElementById('frameWidth').value) || 100;
@@ -1136,7 +1424,8 @@
             const pageWidth = template.page.width;
             const pageHeight = template.page.height;
 
-            template.photos.forEach(photo => {
+            // Texts too: the booth refuses a template whose boxes leave the page.
+            template.photos.concat(textsOf(template)).forEach(photo => {
                 if (photo.x + photo.width > pageWidth || photo.y + photo.height > pageHeight) {
                     if (photo.width > pageWidth) {
                         photo.width = pageWidth - 60;
@@ -1219,14 +1508,15 @@
                 height: 300
             });
 
+            selectedKind = 'photo';
             selectedFrameIndex = template.photos.length - 1;
             renderCanvas();
         }
 
         function deleteSelectedFrame() {
-            if (selectedFrameIndex < 0 || currentTemplateIndex < 0) return;
+            if (!selectedBox()) return;
 
-            templates[currentTemplateIndex].photos.splice(selectedFrameIndex, 1);
+            boxesOfKind(templates[currentTemplateIndex], selectedKind).splice(selectedFrameIndex, 1);
             selectedFrameIndex = -1;
             renderCanvas();
         }
@@ -1245,8 +1535,8 @@
 
             const template = templates[currentTemplateIndex];
 
-            if (selectedFrameIndex >= 0) {
-                const photo = template.photos[selectedFrameIndex];
+            const photo = selectedBox();
+            if (photo) {
                 const handleSize = 10;
                 const handles = [
                     { x: photo.x, y: photo.y, type: 'nw' },
@@ -1267,15 +1557,21 @@
                 }
             }
 
-            for (let i = template.photos.length - 1; i >= 0; i--) {
-                const photo = template.photos[i];
-                if (x >= photo.x && x <= photo.x + photo.width &&
-                    y >= photo.y && y <= photo.y + photo.height) {
-                    selectedFrameIndex = i;
-                    isDragging = true;
-                    dragStart = { x: x - photo.x, y: y - photo.y };
-                    renderCanvas();
-                    return;
+            // Texts first: they are drawn over the photos, so that is what the
+            // click landed on.
+            for (const kind of ['text', 'photo']) {
+                const boxes = boxesOfKind(template, kind);
+                for (let i = boxes.length - 1; i >= 0; i--) {
+                    const box = boxes[i];
+                    if (x >= box.x && x <= box.x + box.width &&
+                        y >= box.y && y <= box.y + box.height) {
+                        selectedKind = kind;
+                        selectedFrameIndex = i;
+                        isDragging = true;
+                        dragStart = { x: x - box.x, y: y - box.y };
+                        renderCanvas();
+                        return;
+                    }
                 }
             }
 
@@ -1291,7 +1587,8 @@
             const x = (e.clientX - rect.left) / scale;
             const y = (e.clientY - rect.top) / scale;
 
-            const photo = templates[currentTemplateIndex].photos[selectedFrameIndex];
+            const photo = selectedBox();
+            if (!photo) return;
 
             if (isResizing) {
                 const dx = x - dragStart.x;
@@ -1352,7 +1649,7 @@
 
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedFrameIndex >= 0 && document.activeElement.tagName !== 'INPUT') {
+                if (selectedFrameIndex >= 0 && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
                     e.preventDefault();
                     deleteSelectedFrame();
                 }
@@ -1452,6 +1749,7 @@
                 description: desc,
                 page: { width: width, height: height },
                 photos: [],
+                texts: [],
                 background: null,
                 foreground: null,
                 print_params: {
@@ -1593,6 +1891,14 @@
         }
 
         window.addEventListener('load', init);
+        // The print font arrives after the first draw; redraw once it is there,
+        // or every text is measured and shown in the fallback font.
+        if (document.fonts) {
+            Promise.all([
+                document.fonts.load('16px PrintFont'),
+                document.fonts.load('bold 16px PrintFont')
+            ]).then(() => renderCanvas()).catch(() => {});
+        }
     </script>
 </body>
 </html>

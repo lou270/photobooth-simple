@@ -43,7 +43,7 @@ from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
-from libs import i18n
+from libs import event, i18n
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import ScreenMgr
 from libs.screens.theme import ICON_ERROR_TRIGGER
@@ -104,6 +104,13 @@ class PhotoboothApp(App):
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
         self._dslr_capture_params = config.get_dslr_capture_params()
+        self.EVENT_NAME = config.get_event_name()
+        self.DATE_FORMAT = config.get_date_format()
+        self.WELCOME_TITLE = config.get_welcome_title()
+        self.WELCOME_SUBTITLE = config.get_welcome_subtitle()
+        self.SLIDESHOW = config.get_slideshow()
+        self.SLIDESHOW_IDLE_SECONDS = config.get_slideshow_idle_seconds()
+        self.SLIDESHOW_PHOTO_SECONDS = config.get_slideshow_photo_seconds()
         self._log_retention_days = config.get_log_retention_days()
         self._log_max_files = config.get_log_max_files()
 
@@ -133,7 +140,7 @@ class PhotoboothApp(App):
         
         # Always at least one format: load_templates() falls back to a built-in
         # template rather than returning an empty list.
-        self.print_formats = load_templates('templates')
+        self.print_formats = load_templates('templates', text_values=self.get_text_values)
 
         self.storage = SessionStorage(
             self.DCIM_DIRECTORY,
@@ -319,6 +326,37 @@ class PhotoboothApp(App):
             if print_format.get_photos_required() == 1:
                 return format_idx
         return 0
+
+    # --- the event ---------------------------------------------------------
+
+    def get_text_values(self):
+        """What a template's {event}, {date} and {time} print as, right now."""
+        return event.text_values(self.EVENT_NAME, self.DATE_FORMAT)
+
+    def get_slideshow_photos(self, limit=30):
+        """The evening's most recent collages, newest first, for the idle slideshow.
+
+        The small copy when there is one: the slideshow never shows a collage
+        bigger than the screen, and it reads one every few seconds all evening.
+        """
+        photos = []
+        save_directory = self.storage.save_directory
+        try:
+            sessions = sorted(os.listdir(save_directory), reverse=True)
+        except OSError as exc:
+            Logger.warning('PhotoboothApp: cannot list sessions for the slideshow: %s', exc)
+            return photos
+
+        for session in sessions:
+            directory = os.path.join(save_directory, session)
+            for name in ('collage_small.jpg', 'collage.jpg'):
+                path = os.path.join(directory, name)
+                if os.path.isfile(path):
+                    photos.append(path)
+                    break
+            if len(photos) >= limit:
+                break
+        return photos
 
     # --- addresses handed to phones ---------------------------------------
 

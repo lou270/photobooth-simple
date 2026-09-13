@@ -1,8 +1,10 @@
 import configparser
 import ast
 import logging
+from datetime import datetime
 from pathlib import Path
 
+from libs.event import DEFAULT_DATE_FORMAT
 from libs.i18n import AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -32,7 +34,9 @@ WINDOW_ROTATIONS = (0, 90, 180, 270)
 class Config:
     def __init__(self):
         self.config = configparser.ConfigParser()
-        loaded_files = self.config.read(CONFIG_PATH)
+        # UTF-8 whatever the locale: the admin form writes it that way, and an
+        # event called "Soirée" is exactly what an operator types into it.
+        loaded_files = self.config.read(CONFIG_PATH, encoding='utf-8')
         if not loaded_files:
             raise FileNotFoundError(
                 f'Cannot load configuration file: {CONFIG_PATH}. '
@@ -130,6 +134,51 @@ class Config:
 
     def get_ringled(self):
         return self._get_boolean(('Global',), 'RINGLED', fallback=False)
+
+    # --- the event --------------------------------------------------------
+
+    def _get_raw_string(self, section, option):
+        """A text the operator typed, read without interpolation.
+
+        configparser treats % as the start of a reference by default, and an
+        event called "100% fun" would stop the booth from starting.
+        """
+        try:
+            return self.config.get(section, option, raw=True, fallback='').strip()
+        except configparser.Error as exc:
+            Logger.warning('Config: unreadable %s in [%s]: %s', option, section, exc)
+            return ''
+
+    def get_event_name(self):
+        """What {event} prints as on a template."""
+        return self._get_raw_string('Event', 'EVENT_NAME')
+
+    def get_date_format(self):
+        """How {date} prints, as a strftime pattern. Nonsense falls back to dd/mm/yyyy."""
+        date_format = self._get_raw_string('Event', 'DATE_FORMAT') or DEFAULT_DATE_FORMAT
+        try:
+            datetime(2026, 9, 13).strftime(date_format)
+        except ValueError:
+            Logger.warning('Config: invalid DATE_FORMAT=%r, using %r', date_format, DEFAULT_DATE_FORMAT)
+            return DEFAULT_DATE_FORMAT
+        return date_format
+
+    def get_welcome_title(self):
+        """The big words on the welcome screen. Empty keeps the booth's own."""
+        return self._get_raw_string('Event', 'WELCOME_TITLE')
+
+    def get_welcome_subtitle(self):
+        return self._get_raw_string('Event', 'WELCOME_SUBTITLE')
+
+    def get_slideshow(self):
+        """Whether the welcome screen shows the evening's photos while nobody is there."""
+        return self._get_boolean(('Slideshow',), 'SLIDESHOW', fallback=False)
+
+    def get_slideshow_idle_seconds(self):
+        return max(10, self._get_int(('Slideshow',), 'SLIDESHOW_IDLE_SECONDS', fallback=60))
+
+    def get_slideshow_photo_seconds(self):
+        return max(2, self._get_int(('Slideshow',), 'SLIDESHOW_PHOTO_SECONDS', fallback=6))
 
     def get_language(self):
         """Interface language: the booth's screen, and the admin web pages."""

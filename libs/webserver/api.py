@@ -66,7 +66,12 @@ def create_blueprint(server):
         if auth_error is not None:
             return auth_error
 
-        return jsonify({'templates': server._load_template_definitions()})
+        return jsonify({
+            'templates': server._load_template_definitions(),
+            # What {event}, {date} and {time} print as today, so the editor
+            # previews a text the way the booth will print it.
+            'text_values': server._event_text_values(),
+        })
 
     @blueprint.route('/api/templates', methods=['POST'])
     def save_template():

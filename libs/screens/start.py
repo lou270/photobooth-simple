@@ -10,6 +10,7 @@ from kivy.logger import Logger
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
 
+from libs import event
 from libs.i18n import t
 from libs.kivywidgets import (
     BreezyBorderedLabel, FeedbackButtonBehavior, LayoutButton, make_icon_button,
@@ -23,6 +24,7 @@ from libs.screens.theme import (
 )
 from libs.screens.base import BackgroundScreen
 from libs.screens.popups import QRCodePopup
+from libs.screens.slideshow import Slideshow
 
 
 class CornerTab(FeedbackButtonBehavior, FloatLayout):
@@ -86,14 +88,15 @@ class StartScreen(BackgroundScreen):
     """
     def __init__(self, app, **kwargs):
         Logger.info('StartScreen: __init__().')
-        super(StartScreen, self).__init__(bg='./assets/backgrounds/bg_waiting.jpeg', **kwargs)
+        # The event's own photo when the operator uploaded one from the admin.
+        super(StartScreen, self).__init__(bg=str(event.welcome_background()), **kwargs)
 
         self.app = app
 
         overlay_layout = LayoutButton()
 
         start = BreezyBorderedLabel(
-            text=t('start.title'),
+            text=self.app.WELCOME_TITLE or t('start.title'),
             border_color=(1,1,1,1),
             border_width=short_side(0.006),
             size_hint=(0.7, 0.2),
@@ -103,6 +106,23 @@ class StartScreen(BackgroundScreen):
         # BreezyBorderedLabel.on_size() recomputes font_size from width — no wh_bind needed
         overlay_layout.add_widget(start)
         self.start_label = start
+
+        # A line under the title, only when the operator wrote one. Outlined:
+        # it sits straight on a photo the operator chose, whatever its colours.
+        self.subtitle_label = None
+        if self.app.WELCOME_SUBTITLE:
+            self.subtitle_label = Label(
+                text=self.app.WELCOME_SUBTITLE,
+                bold=True,
+                halign='center',
+                valign='middle',
+                size_hint=(0.8, 0.09),
+                pos_hint={'x': 0.1, 'y': 0.3},
+                outline_width=2,
+                outline_color=(0, 0, 0, 1),
+            )
+            self.subtitle_label.bind(size=self._fit_subtitle)
+            overlay_layout.add_widget(self.subtitle_label)
 
         # Touch icon
         icon = ResizeLabel(
@@ -163,6 +183,14 @@ class StartScreen(BackgroundScreen):
 
         self.add_widget(overlay_layout)
 
+        # Added to the screen rather than to the layout, and only while it
+        # runs: the queue button is rebuilt into the layout every few seconds,
+        # and would otherwise land on top of the photos.
+        self.slideshow = None
+        self._slideshow_clock = None
+        if self.app.SLIDESHOW:
+            self.slideshow = Slideshow(self.app.SLIDESHOW_PHOTO_SECONDS, on_dismiss=self._stop_slideshow)
+
         overlay_layout.bind(size=self._layout_corners)
         Window.bind(size=self._layout_corners)
         Clock.schedule_once(self._layout_corners, 0)
@@ -211,8 +239,68 @@ class StartScreen(BackgroundScreen):
             tab.caption.y = tab.y + inset
             tab.caption.font_size = short_side(0.028)
 
+    def _fit_subtitle(self, label, size):
+        if not label.text or not label.width:
+            return
+        label.text_size = size
+        label.font_size = min(label.height * 0.7, label.width / len(label.text) * 1.9)
+
+    # --- the slideshow ----------------------------------------------------
+
+    def _arm_slideshow(self, *args):
+        """Start counting the idle time again, from now."""
+        self._disarm_slideshow()
+        if self.slideshow is not None:
+            self._slideshow_clock = Clock.schedule_once(self._start_slideshow, self.app.SLIDESHOW_IDLE_SECONDS)
+
+    def _disarm_slideshow(self):
+        if self._slideshow_clock is not None:
+            Clock.unschedule(self._slideshow_clock)
+            self._slideshow_clock = None
+
+    def _start_slideshow(self, *args):
+        self._slideshow_clock = None
+        if self.slideshow is None or self.slideshow.running:
+            return
+        if self.app.get_current_screen_name() != ScreenNames.START:
+            return
+        if self.qr_popup is not None:
+            # A guest is reading the codes: try again once they have had time.
+            self._arm_slideshow()
+            return
+
+        def list_photos():
+            photos = self.app.get_slideshow_photos()
+            Clock.schedule_once(lambda dt: self._show_slideshow(photos), 0)
+
+        # A directory listing, off the UI thread like the queue count.
+        threading.Thread(target=list_photos, name='photobooth-slideshow-list', daemon=True).start()
+
+    def _show_slideshow(self, photos):
+        if self.app.get_current_screen_name() != ScreenNames.START or self.qr_popup is not None:
+            self._arm_slideshow()
+            return
+        if not photos:
+            # Nothing taken yet this evening: the welcome screen is the better
+            # thing to look at. Ask again later, once a session may exist.
+            self._arm_slideshow()
+            return
+        Logger.info('StartScreen: nobody around, showing %s photos.', len(photos))
+        self.add_widget(self.slideshow)
+        self.slideshow.start(photos)
+
+    def _stop_slideshow(self, rearm=True):
+        if self.slideshow is None:
+            return
+        self.slideshow.stop()
+        if self.slideshow.parent is not None:
+            self.remove_widget(self.slideshow)
+        if rearm:
+            self._arm_slideshow()
+
     def on_entry(self, kwargs={}):
         Logger.info('StartScreen: on_entry().')
+        self._arm_slideshow()
         if self._version_label is not None:
             Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
             self._version_label = None  # only the first time, at power-up
@@ -239,6 +327,9 @@ class StartScreen(BackgroundScreen):
             Clock.unschedule(self._queue_clock)
             self._queue_clock = None
         self._dismiss_qr_popup()
+        # After the popup, whose dismissal starts the idle count again.
+        self._stop_slideshow(rearm=False)
+        self._disarm_slideshow()
         self.app.ringled.clear()
 
     # --- photos waiting from phones --------------------------------------
@@ -314,6 +405,8 @@ class StartScreen(BackgroundScreen):
         if popup is not None and popup.parent:
             self.remove_widget(popup)
         self.qr_popup = None
+        # Somebody was here: the idle time starts over.
+        self._arm_slideshow()
 
     def remote_queue_event(self, obj):
         Logger.info('StartScreen: remote_queue_event().')
@@ -324,6 +417,7 @@ class StartScreen(BackgroundScreen):
         self.app.start_session()
 
     def on_keyboard_action(self):
+        """A physical button is pressed on purpose, slideshow or not: it starts."""
         Logger.info('StartScreen: on_keyboard_action().')
         self.app.start_session()
         return True
