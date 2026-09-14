@@ -38,10 +38,6 @@ SELECT_FORMAT_HOME_TIMEOUT_SECONDS = 30
 # screen somehow still waiting.
 CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS = 30
 
-# Fewer taps between shots. A guest who kept the first photo has already said
-# yes to the session, so the following countdowns start on their own — late
-# enough to see the preview and reach the cancel button.
-SHOT_AUTOSTART_SECONDS = 1.5
 # Keeping the shot is what nearly everyone does; retaking is the exception, so
 # it is the one that needs a button press. Any touch on the screen restarts it.
 CONFIRM_AUTO_KEEP_SECONDS = 6

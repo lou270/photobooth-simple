@@ -209,37 +209,3 @@ def test_leaving_the_screen_keeps_nothing_and_hides_the_ring(quick_auto_keep):
     assert screen.kept == 0
     assert screen.btn_confirm.show_progress is False
 
-
-# --- starting the next countdown without being asked -----------------------
-
-class Posing:
-    """Just enough of the countdown screen to run its autostart."""
-
-    _cancel_autostart = CountdownScreen._cancel_autostart
-    _autostart_event = CountdownScreen._autostart_event
-
-    def __init__(self, timer_active=False):
-        self._current_shot = 1
-        self._timer_active = timer_active
-        self._clock_autostart = None
-        self.triggered = 0
-
-    def trigger_event(self, obj):
-        self.triggered += 1
-
-
-def test_the_next_shot_starts_its_countdown_on_its_own():
-    screen = Posing()
-
-    screen._autostart_event(0)
-
-    assert screen.triggered == 1
-
-
-def test_a_guest_quicker_than_the_autostart_is_not_cancelled():
-    """trigger_event toggles: firing it on a running countdown would stop it."""
-    screen = Posing(timer_active=True)
-
-    screen._autostart_event(0)
-
-    assert screen.triggered == 0

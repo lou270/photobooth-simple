@@ -93,7 +93,7 @@ picking one there joins the flow at the Processing Screen.
 
 - **Start Screen:** Initial screen with "Press to begin" prompt, under the event's own title, subtitle and photo when the operator set them. With `SLIDESHOW = True`, the evening's photos take over the screen after a while without a touch; a touch brings the welcome screen back rather than starting a session
 - **Select Format Screen:** Choose between different photo layouts/formats. Skipped when a single template is installed, since there is nothing to choose
-- **Countdown Screen:** Live camera preview with countdown timer before capture. The first shot waits to be asked; the following ones start on their own, and the button under the preview cancels
+- **Countdown Screen:** Live camera preview with countdown timer before capture. Every shot waits for the guest to press the button, which then turns into cancel
 - **Confirm Capture Screen:** Keep the shot or take it again — nothing else. Keeping is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press
 - **Processing Screen:** Collage generation in progress
 - **Review Screen:** The finished collage and everything still open: the filter, applied to the whole collage and previewed live; the number of copies, on a button that cycles through them and counts the photos the guest will hold rather than the sheets the printer runs; print, share, or go home. The session is written to disk when the guest prints, shares or leaves, so what is saved is what they chose, and the filter is fixed from then on. Sharing comes before printing, since printing is what ends the session

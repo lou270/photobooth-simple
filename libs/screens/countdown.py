@@ -12,7 +12,7 @@ from kivy.uix.floatlayout import FloatLayout
 from libs.i18n import t
 from libs.kivywidgets import KivyCamera, BackgroundBoxLayout, ResizeLabel, RotatingLabel, CircularProgressCounter, icon_button_label, make_icon_button
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, COUNTDOWN_HOME_TIMEOUT_SECONDS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, SHOT_AUTOSTART_SECONDS, SHOT_TIMEOUT_SECONDS
+from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, COUNTDOWN_HOME_TIMEOUT_SECONDS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, SHOT_TIMEOUT_SECONDS
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
@@ -37,7 +37,6 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self._current_shot = 0
         self._current_format = 0
         self._timer_active = False
-        self._clock_autostart = None
         self._init_home_timeout()
 
         self.time_remaining = self.app.COUNTDOWN
@@ -144,13 +143,6 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self._clock = None
         self._clock_progress = None
         self._clock_trigger = None
-        self._clock_autostart = None
-
-        # Only the first shot waits to be asked. From the second on, the guest
-        # has already kept a photo and is standing in front of the camera: the
-        # countdown starts itself, and the button under it turns into cancel.
-        if self._current_shot > 0:
-            self._clock_autostart = Clock.schedule_once(self._autostart_event, SHOT_AUTOSTART_SECONDS)
 
     def on_exit(self, kwargs={}):
         Logger.info('CountdownScreen: on_exit().')
@@ -161,7 +153,6 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             Clock.unschedule(self._clock_progress)
         if self._clock_trigger:
             Clock.unschedule(self._clock_trigger)
-        self._cancel_autostart()
         self._stop_home_timeout()
         self.app.ringled.clear()
         # Belt and braces with the error path in timer_event: whatever happened,
@@ -272,24 +263,8 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             # Display photo for validation
             self.app.transition_to(ScreenNames.CONFIRM_CAPTURE, shot=self._current_shot, format=self._current_format)
 
-    def _cancel_autostart(self):
-        if self._clock_autostart:
-            Clock.unschedule(self._clock_autostart)
-            self._clock_autostart = None
-
-    def _autostart_event(self, dt):
-        Logger.info('CountdownScreen: autostart shot %s.', self._current_shot)
-        self._clock_autostart = None
-        if self._timer_active:
-            return
-        self.trigger_event(None)
-
     def trigger_event(self, obj):
         Logger.info('CountdownScreen: trigger_event().')
-        # A guest quicker than the autostart must not have it cancel the
-        # countdown they just started themselves.
-        self._cancel_autostart()
-        
         if not self._timer_active:
             # Start the countdown
             self._timer_active = True
