@@ -9,7 +9,7 @@
         .remote-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 18px;
+            gap: 16px;
         }
 
         .remote-card {
@@ -28,69 +28,51 @@
             padding: 14px;
         }
 
+        .remote-card .chip {
+            margin-bottom: 8px;
+        }
+
         .remote-meta {
-            margin: 0 0 10px;
+            margin: 0 0 12px;
             color: var(--text-secondary);
             font-size: 13px;
         }
 
-        .chip {
-            display: inline-block;
-            margin-bottom: 8px;
-            padding: 3px 10px;
-            border-radius: 999px;
-            font-size: 11px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-
-        .chip.pending { background: #fff3e6; color: #9a4d00; }
-        .chip.printed { background: #eaf7ee; color: #166534; }
-        .chip.rejected { background: #fdecee; color: #8f1d2c; }
-
-        .empty-state {
-            padding: 24px;
-            color: var(--text-secondary);
-        }
-
         .filters {
+            align-items: center;
             margin-bottom: 18px;
         }
 
-        .filters .btn.active {
-            background: var(--accent);
-            color: #ffffff;
-            border-color: var(--accent);
+        .filters .spacer {
+            flex: 1;
         }
     </style>
 </head>
 <body>
+    {% set active = 'remote' %}
+    {% include 'partials/admin_topbar.html' %}
+
     <main class="page-shell">
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
                     <h1>{{ t('web.admin.remote_title') }}</h1>
                     <p>{{ t('web.admin.remote_intro') }}</p>
-                </div>
-                <div class="actions">
-                    <a href="/admin" class="btn btn-ghost">{{ t('web.admin.back_to_admin') }}</a>
-                    <a href="/admin/logout" class="btn btn-secondary">{{ t('web.admin.log_out') }}</a>
                 </div>
             </section>
 
             {% if not remote_enabled %}
-            <div class="warning-box" style="margin-bottom: 18px;">
+            <div class="warning-box">
                 {{ t('web.admin.remote_disabled_warning') }}
             </div>
             {% endif %}
 
-            <div class="actions filters">
+            <div class="actions filters" role="group">
                 <button type="button" class="btn btn-ghost active" data-filter="all">{{ t('web.admin.filter_all') }}</button>
                 <button type="button" class="btn btn-ghost" data-filter="pending">{{ t('web.admin.filter_pending') }}</button>
                 <button type="button" class="btn btn-ghost" data-filter="printed">{{ t('web.admin.filter_printed') }}</button>
                 <button type="button" class="btn btn-ghost" data-filter="rejected">{{ t('web.admin.filter_rejected') }}</button>
+                <span class="spacer"></span>
                 <button id="refreshButton" type="button" class="btn btn-primary">{{ t('web.admin.refresh') }}</button>
             </div>
 

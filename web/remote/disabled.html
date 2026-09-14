@@ -3,18 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#171a2f">
     <title>PhotoBooth</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
-    <style>
-        body { background: #26495c; color: #ffffff; }
-        .centered { width: min(480px, 100%); margin: 0 auto; padding: 60px 20px; text-align: center; }
-        .centered p { color: rgba(255, 255, 255, 0.75); line-height: 1.6; }
-    </style>
 </head>
-<body>
-    <main class="centered">
-        <h1>{{ t('web.remote.disabled_title') }}</h1>
-        <p>{{ t('web.remote.disabled_message') }}</p>
+<body class="theme-guest">
+    {% set show_gallery_link = false %}
+    {% include 'partials/guest_topbar.html' %}
+
+    <main class="center-shell">
+        <section class="panel center-card">
+            <div class="center-icon" aria-hidden="true">📵</div>
+            <h1>{{ t('web.remote.disabled_title') }}</h1>
+            <p>{{ t('web.remote.disabled_message') }}</p>
+        </section>
     </main>
 </body>
 </html>

@@ -3,44 +3,39 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#171a2f">
     <!-- Reloading is the whole mechanism: the booth answers this address with
          the collage as soon as it is saved, which takes a few seconds. -->
     <meta http-equiv="refresh" content="2">
     <title>PhotoBooth</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        .empty-shell {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
+        .spinner {
+            width: 52px;
+            height: 52px;
+            margin: 0 auto 18px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--champagne);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
         }
 
-        .empty-card {
-            width: min(560px, 100%);
-            padding: 32px;
-            text-align: center;
+        @keyframes spin {
+            to { transform: rotate(360deg); }
         }
 
-        .empty-icon {
-            font-size: 72px;
-            line-height: 1;
-            margin-bottom: 18px;
-        }
-
-        .empty-card p {
-            margin: 10px 0 0;
-            color: var(--text-secondary);
-            line-height: 1.6;
+        @media (prefers-reduced-motion: reduce) {
+            .spinner { animation-duration: 3s; }
         }
     </style>
 </head>
-<body>
-    <main class="empty-shell">
-        <section class="panel empty-card">
-            <div class="empty-icon">⏳</div>
-            <span class="eyebrow">{{ t('web.gallery.collage_title') }}</span>
+<body class="theme-guest">
+    {% set show_gallery_link = false %}
+    {% include 'partials/guest_topbar.html' %}
+
+    <main class="center-shell">
+        <section class="panel center-card">
+            <div class="spinner" aria-hidden="true"></div>
             <h1>{{ t('web.gallery.pending_title') }}</h1>
             <p>{{ t('web.gallery.pending_message') }}</p>
         </section>

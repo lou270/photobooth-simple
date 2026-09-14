@@ -29,7 +29,7 @@
             grid-template-columns: minmax(180px, 240px) 1fr;
             gap: 16px;
             padding: 14px 0;
-            border-top: 1px solid #eeeeee;
+            border-top: 1px solid var(--panel-border);
         }
 
         .info-row:first-child {
@@ -43,7 +43,13 @@
 
         .info-row span {
             color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
             word-break: break-word;
+        }
+
+        .panel-section h2 {
+            margin: 0 0 16px;
+            font-size: 20px;
         }
 
         @media (max-width: 720px) {
@@ -55,17 +61,18 @@
     </style>
 </head>
 <body>
+    {% set active = 'stats' %}
+    {% include 'partials/admin_topbar.html' %}
+
     <main class="page-shell">
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">{{ t('web.stats.title') }}</span>
                     <h1>{{ t('web.stats.heading') }}</h1>
                     <p>{{ t('web.stats.intro') }}</p>
                 </div>
                 <div class="actions">
                     <a href="/download/all-photos" class="btn btn-success {% if not downloadable_photos %}disabled{% endif %}">{{ t('web.stats.download_all') }}</a>
-                    <a href="/gallery" class="btn btn-ghost">{{ t('web.gallery.title') }}</a>
                 </div>
             </section>
 
@@ -107,7 +114,7 @@
 
                 <div class="panel-section">
                     <span class="eyebrow">{{ t('web.stats.details') }}</span>
-                    <h2 style="margin-top: 0;">{{ t('web.stats.additional_info') }}</h2>
+                    <h2>{{ t('web.stats.additional_info') }}</h2>
                     <div class="info-list">
                         <div class="info-row">
                             <strong>{{ t('web.stats.last_print') }}</strong>

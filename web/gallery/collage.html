@@ -3,47 +3,55 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#171a2f">
     <title>PhotoBooth - {{ t('web.gallery.collage_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        .collage-stage {
-            display: grid;
-            gap: 24px;
-        }
-
         .collage-frame {
-            padding: 20px;
+            padding: 14px;
         }
 
         .collage-frame img {
             display: block;
             width: 100%;
-            max-height: calc(100vh - 260px);
+            max-height: calc(100vh - 240px);
             object-fit: contain;
-            border-radius: 14px;
-            background: #f8f9fa;
+            border-radius: var(--radius-sm);
+        }
+
+        .collage-actions {
+            justify-content: center;
+            margin-top: 18px;
+        }
+
+        .collage-actions .btn-success {
+            min-width: min(320px, 100%);
+        }
+
+        .session-id {
+            margin: 0 0 14px;
+            font-weight: 600;
+            color: var(--text-muted);
+            font-size: 14px;
+            text-align: center;
+            font-variant-numeric: tabular-nums;
         }
     </style>
 </head>
-<body>
-    <main class="page-shell">
-        <div class="page-container">
-            <section class="page-hero">
-                <div>
-                    <span class="eyebrow">{{ t('web.gallery.collage_title') }}</span>
-                    <h1>{{ session }}</h1>
-                </div>
-                <div class="actions">
-                    <a href="/gallery" class="btn btn-ghost">{{ t('web.gallery.title') }}</a>
-                    <a href="/download/{{ session }}/collage.jpg" class="btn btn-success">{{ t('web.gallery.download') }}</a>
-                </div>
-            </section>
+<body class="theme-guest">
+    {% include 'partials/guest_topbar.html' %}
 
-            <section class="collage-stage">
-                <div class="panel collage-frame">
-                    <img src="/image/{{ session }}/collage.jpg" alt="{{ t('web.gallery.collage_alt') }} {{ session }}">
-                </div>
-            </section>
+    <main class="page-shell">
+        <div class="page-container narrow">
+            <h1 class="session-id">{{ t('web.gallery.collage_title') }} · {{ session }}</h1>
+
+            <div class="panel collage-frame">
+                <img src="/image/{{ session }}/collage.jpg" alt="{{ t('web.gallery.collage_alt') }} {{ session }}">
+            </div>
+
+            <div class="actions collage-actions">
+                <a href="/download/{{ session }}/collage.jpg" class="btn btn-success btn-large">{{ t('web.gallery.download') }}</a>
+            </div>
         </div>
     </main>
 </body>

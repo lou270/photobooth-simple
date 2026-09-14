@@ -6,530 +6,700 @@
     <title>PhotoBooth - {{ t('web.admin.title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        .admin-stack {
-            display: grid;
-            gap: 20px;
-        }
-
-        .quick-actions {
+        .dashboard {
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             gap: 16px;
+            margin-bottom: 28px;
         }
 
-        .quick-card {
-            background: var(--panel-muted);
-            border: 1px solid #eeeeee;
-            border-radius: var(--radius-md);
-            padding: 20px;
+        @media (max-width: 980px) {
+            .dashboard {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
         }
 
-        .quick-card h2,
-        .section-card h2 {
-            margin: 0;
-            font-size: 20px;
-        }
-
-        .quick-card p,
-        .section-card p {
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        .quick-card p,
-        .section-card p {
-            margin: 10px 0 18px;
-        }
-
-        .welcome-background {
-            display: grid;
-            grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-            gap: 20px;
-            align-items: start;
-        }
-
-        .welcome-background-preview {
-            display: block;
-            width: 100%;
-            aspect-ratio: 16 / 10;
-            object-fit: cover;
-            border-radius: 12px;
-            border: 1px solid #eeeeee;
-        }
-
-        .welcome-background-empty {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 16px;
-            text-align: center;
-            color: var(--text-muted);
-            background: var(--panel-muted);
-        }
-
-        .welcome-background-actions {
-            display: grid;
-            gap: 12px;
-        }
-
-        @media (max-width: 720px) {
-            .welcome-background {
+        @media (max-width: 620px) {
+            .dashboard {
                 grid-template-columns: 1fr;
             }
         }
 
-        .disk-card {
-            display: grid;
-            gap: 14px;
+        .dashboard .card {
+            display: flex;
+            flex-direction: column;
         }
 
-        .disk-stats {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 12px;
-        }
-
-        .disk-stat {
-            padding: 14px;
-            border: 1px solid #eeeeee;
-            border-radius: 12px;
-            background: #ffffff;
-        }
-
-        .disk-label {
-            color: var(--text-muted);
-            font-size: 12px;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }
-
-        .disk-value {
-            margin-top: 6px;
-            font-size: 20px;
-            font-weight: 700;
+        .dashboard .card p {
+            flex: 1;
         }
 
         .disk-bar {
-            height: 12px;
+            height: 10px;
+            margin: 12px 0 10px;
             overflow: hidden;
             border-radius: 999px;
-            background: #e5e7eb;
+            background: var(--panel-border);
         }
 
         .disk-bar-fill {
-            width: {{ disk_usage.used_percent }}%;
             height: 100%;
             border-radius: inherit;
             background: var(--accent);
         }
 
-        .disk-path {
-            margin: 0;
+        .disk-bar-fill.high {
+            background: var(--danger);
+        }
+
+        .disk-numbers {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
             color: var(--text-secondary);
             font-size: 13px;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .disk-path {
+            margin: 8px 0 0;
+            color: var(--text-muted);
+            font-size: 12px;
             word-break: break-all;
         }
 
-        .section-card {
+        /* --- settings ------------------------------------------------------ */
+
+        .settings-header {
+            padding: 24px 24px 0;
+        }
+
+        .settings-header h2 {
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .settings-header p {
+            max-width: 760px;
+            margin: 8px 0 0;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        .settings-layout {
+            display: grid;
+            grid-template-columns: 220px minmax(0, 1fr);
+            gap: 24px;
             padding: 24px;
         }
 
-        .status-block {
-            display: grid;
-            gap: 16px;
+        .settings-toc {
+            position: sticky;
+            top: 16px;
+            align-self: start;
         }
 
-        .config-toolbar {
+        .settings-toc ol {
+            display: grid;
+            gap: 2px;
+            margin: 0;
+            padding: 0;
+            list-style: none;
+        }
+
+        .settings-toc a {
+            display: block;
+            padding: 8px 12px;
+            border-radius: var(--radius-sm);
+            color: var(--text-secondary);
+            font-size: 14px;
+            text-decoration: none;
+        }
+
+        .settings-toc a:hover {
+            background: var(--panel-muted);
+            color: var(--text-primary);
+        }
+
+        .settings-section {
+            scroll-margin-top: 16px;
+            margin-bottom: 20px;
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-md);
+        }
+
+        .settings-section-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--panel-border);
+            background: var(--panel-muted);
+            border-radius: var(--radius-md) var(--radius-md) 0 0;
+        }
+
+        .settings-section-header h3 {
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            margin-bottom: 16px;
-        }
-
-        .config-toolbar p {
-            margin: 0;
-            color: var(--text-secondary);
-        }
-
-        .config-sections {
-            display: grid;
-            gap: 20px;
-        }
-
-        .config-section {
-            padding: 20px;
-            border: 1px solid #eeeeee;
-            border-radius: 16px;
-            background: var(--panel-muted);
-        }
-
-        .config-section h3 {
+            gap: 10px;
             margin: 0;
             font-size: 18px;
         }
 
-        .config-section p {
-            margin: 8px 0 0;
+        .settings-section-header p {
+            margin: 6px 0 0;
             color: var(--text-secondary);
+            font-size: 14px;
+            line-height: 1.55;
         }
 
-        .config-fields {
+        .badge {
+            padding: 2px 8px;
+            border-radius: 999px;
+            background: var(--accent-soft);
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 700;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+        }
+
+        .setting-row {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 16px;
-            margin-top: 18px;
+            grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+            gap: 12px 28px;
+            align-items: start;
+            padding: 18px 20px;
+            border-top: 1px solid var(--panel-border);
         }
 
-        .config-field {
-            display: grid;
-            gap: 8px;
+        .setting-row:first-child {
+            border-top: none;
         }
 
-        .config-field.full-width {
-            grid-column: 1 / -1;
+        .setting-text label,
+        .setting-text .setting-name {
+            display: inline;
+            margin-right: 8px;
+            font-size: 15px;
+            font-weight: 650;
         }
 
-        .config-field.inline-pair {
-            grid-column: 1 / -1;
-            grid-template-columns: minmax(260px, 1fr) minmax(220px, 320px);
-            align-items: end;
-            gap: 16px;
-        }
-
-        .config-field.inline-pair .checkbox-field {
-            min-height: 46px;
-        }
-
-        .config-field.inline-pair .inline-number {
-            display: grid;
-            gap: 8px;
-        }
-
-        .field-select {
-            width: 100%;
-            min-height: 46px;
-            padding: 0 14px;
-            border: 1px solid var(--panel-border-strong);
-            border-radius: 10px;
-            background: #ffffff;
-            color: var(--text-primary);
-            font: inherit;
-        }
-
-        .field-select:focus {
-            outline: none;
-            border-color: var(--accent);
-            box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.12);
-        }
-
-        .field-help {
-            margin: 0;
+        .setting-key {
+            display: inline-block;
+            padding: 1px 6px;
+            border-radius: 6px;
+            background: var(--panel-muted);
+            border: 1px solid var(--panel-border);
             color: var(--text-muted);
-            font-size: 13px;
-            line-height: 1.5;
+            font-size: 11.5px;
+            vertical-align: 1px;
+            white-space: nowrap;
         }
 
-        .checkbox-field {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            min-height: 46px;
-            padding: 12px 14px;
-            border: 1px solid var(--panel-border-strong);
-            border-radius: 10px;
-            background: #ffffff;
+        .setting-text .field-help {
+            margin-top: 6px;
         }
 
-        .checkbox-field input[type="checkbox"] {
-            width: 18px;
-            height: 18px;
-            margin: 2px 0 0;
+        .setting-default {
+            margin: 6px 0 0;
+            color: var(--text-muted);
+            font-size: 12.5px;
         }
 
-        .checkbox-copy {
+        .setting-control {
             display: grid;
-            gap: 4px;
+            align-content: start;
+            gap: 8px;
         }
 
-        .checkbox-copy strong {
+        .input-unit {
+            display: flex;
+            align-items: stretch;
+        }
+
+        .input-unit .field-input {
+            border-top-right-radius: 0;
+            border-bottom-right-radius: 0;
+        }
+
+        .input-unit .unit {
+            display: flex;
+            align-items: center;
+            padding: 0 12px;
+            border: 1px solid var(--panel-border-strong);
+            border-left: none;
+            border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+            background: var(--panel-muted);
+            color: var(--text-secondary);
+            font-size: 14px;
+            white-space: nowrap;
+        }
+
+        /* A checkbox drawn as a switch: on or off reads at a glance, down a
+           long list of settings. The input stays a real, focusable checkbox. */
+        .switch {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            min-height: 44px;
+            cursor: pointer;
+            color: var(--text-secondary);
             font-size: 14px;
         }
 
-        .config-note {
-            margin-top: 14px;
-            padding: 12px 14px;
-            border-radius: 10px;
-            background: var(--panel-muted);
-            color: var(--text-secondary);
+        .switch input {
+            position: absolute;
+            opacity: 0;
+            width: 1px;
+            height: 1px;
+        }
+
+        .switch-track {
+            position: relative;
+            flex: none;
+            width: 46px;
+            height: 26px;
+            border-radius: 999px;
+            background: var(--panel-border-strong);
+            transition: background-color 0.15s ease;
+        }
+
+        .switch-track::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 20px;
+            height: 20px;
+            border-radius: 50%;
+            background: #ffffff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.25);
+            transition: transform 0.15s ease;
+        }
+
+        .switch input:checked + .switch-track {
+            background: var(--success);
+        }
+
+        .switch input:checked + .switch-track::after {
+            transform: translateX(20px);
+        }
+
+        .switch input:focus-visible + .switch-track {
+            box-shadow: var(--focus-ring);
+        }
+
+        .switch input:disabled + .switch-track {
+            opacity: 0.5;
+        }
+
+        .switch .switch-on,
+        .switch input:checked ~ .switch-off {
+            display: none;
+        }
+
+        .switch input:checked ~ .switch-on {
+            display: inline;
+        }
+
+        .password-state {
+            margin: 0;
             font-size: 13px;
-            line-height: 1.5;
+        }
+
+        .password-state.set {
+            color: var(--success);
+        }
+
+        .password-state.unset {
+            color: var(--danger);
+        }
+
+        .welcome-photo {
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
+            gap: 12px 28px;
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .welcome-photo-preview {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            margin-top: 12px;
+            aspect-ratio: 16 / 10;
+            object-fit: cover;
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-sm);
+            background: var(--panel-muted);
+            color: var(--text-muted);
+            font-size: 13px;
+            text-align: center;
+        }
+
+        .save-bar {
+            position: sticky;
+            bottom: 0;
+            z-index: 5;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px 20px;
+            flex-wrap: wrap;
+            margin-top: 4px;
+            padding: 14px 20px;
+            border: 1px solid var(--panel-border);
+            border-radius: var(--radius-md);
+            background: var(--panel-bg);
+            box-shadow: 0 -8px 24px rgba(29, 32, 51, 0.08);
+        }
+
+        .save-bar-note {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 14px;
+        }
+
+        .unsaved {
+            display: inline-block;
+            margin-right: 6px;
+            padding: 2px 10px;
+            border-radius: 999px;
+            background: var(--notice-warning-bg);
+            border: 1px solid var(--notice-warning-border);
+            color: var(--notice-warning-text);
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .danger-card {
-            border: 1px solid #fecaca;
-            background: #fff7f7;
+            margin-top: 28px;
+            border-color: var(--notice-error-border);
+            background: var(--notice-error-bg);
         }
 
         .danger-card .eyebrow {
-            color: #b91c1c;
+            color: var(--danger);
         }
 
-        .danger-callout {
-            margin-bottom: 18px;
-            padding: 14px 16px;
-            border: 1px solid #fecaca;
-            border-radius: 12px;
-            background: #fff1f2;
-            color: #8f1d2c;
-        }
-
-        @media (max-width: 900px) {
-            .quick-actions {
+        @media (max-width: 960px) {
+            .settings-layout {
                 grid-template-columns: 1fr;
             }
 
-            .disk-stats {
-                grid-template-columns: 1fr;
+            .settings-toc {
+                position: static;
             }
 
-            .config-fields {
-                grid-template-columns: 1fr;
+            .settings-toc ol {
+                display: flex;
+                flex-wrap: wrap;
+                gap: 6px;
             }
 
-            .config-field.inline-pair {
-                grid-template-columns: 1fr;
+            .settings-toc a {
+                padding: 6px 12px;
+                border: 1px solid var(--panel-border);
+                border-radius: 999px;
+                font-size: 13px;
             }
         }
 
         @media (max-width: 720px) {
-            .config-toolbar {
-                flex-direction: column;
-                align-items: stretch;
+            .settings-layout,
+            .settings-header {
+                padding-left: 14px;
+                padding-right: 14px;
+            }
+
+            .setting-row,
+            .welcome-photo {
+                grid-template-columns: 1fr;
+                padding: 16px;
+            }
+
+            /* Kept on screen while scrolling, so on a phone it has to stay small:
+               the note gives way to the two buttons and the unsaved flag. */
+            .save-bar {
+                padding: 10px;
+            }
+
+            .save-bar-text {
+                display: none;
+            }
+
+            .save-bar-note:has(.unsaved[hidden]) {
+                display: none;
+            }
+
+            .save-bar .actions {
+                flex: 1;
+                flex-wrap: nowrap;
+            }
+
+            .save-bar .btn {
+                flex: 1;
+                padding: 8px 10px;
             }
         }
     </style>
 </head>
 <body>
+    {% set active = 'admin' %}
+    {% include 'partials/admin_topbar.html' %}
+    {% set disabled_attr = '' if admin_enabled else 'disabled' %}
+
     <main class="page-shell">
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
                     <h1>{{ t('web.admin.control_panel_title') }}</h1>
                     <p>{{ t('web.admin.control_panel_intro') }}</p>
                 </div>
-                <div class="actions">
-                    <a href="/admin/logout" class="btn btn-secondary">{{ t('web.admin.log_out') }}</a>
-                </div>
             </section>
 
-            <section class="admin-stack" style="margin-bottom: 20px;">
-                <div class="status-block">
-                    {% if error_message %}
-                    <div class="status error">{{ error_message }}</div>
-                    {% endif %}
+            {% if error_message %}
+            <div class="status error" role="alert">{{ error_message }}</div>
+            {% endif %}
+            {% if success_message %}
+            <div class="status success" role="status">{{ success_message }}</div>
+            {% endif %}
+            {% if not admin_enabled %}
+            <div class="status error">{{ t('web.admin.password_not_set_actions') }}</div>
+            {% endif %}
 
-                    {% if success_message %}
-                    <div class="status success">{{ success_message }}</div>
-                    {% endif %}
+            <section class="dashboard">
+                <article class="card">
+                    <span class="eyebrow">{{ t('web.admin.stats_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.stats_card_title') }}</h2>
+                    <p>{{ t('web.admin.stats_card_hint') }}</p>
+                    <div class="actions"><a href="/stats" class="btn btn-primary">{{ t('web.admin.open_stats') }}</a></div>
+                </article>
 
-                    {% if not admin_enabled %}
-                    <div class="status error">{{ t('web.admin.password_not_set_actions') }}</div>
-                    {% endif %}
-                </div>
+                <article class="card">
+                    <span class="eyebrow">{{ t('web.admin.phone_camera_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.moderate_phone_photos') }}</h2>
+                    <p>{{ t('web.admin.moderate_phone_photos_hint') }}</p>
+                    <div class="actions"><a href="/admin/remote" class="btn btn-ghost">{{ t('web.admin.open_phone_photos') }}</a></div>
+                </article>
 
-                <div class="quick-actions">
-                    <article class="quick-card">
-                        <span class="eyebrow">{{ t('web.admin.templates_eyebrow') }}</span>
-                        <h2>{{ t('web.admin.edit_layouts') }}</h2>
-                        <p>{{ t('web.admin.edit_layouts_hint') }}</p>
-                        <a href="/admin/editor" class="btn btn-primary">{{ t('web.admin.open_template_editor') }}</a>
-                    </article>
+                <article class="card">
+                    <span class="eyebrow">{{ t('web.admin.templates_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.edit_layouts') }}</h2>
+                    <p>{{ t('web.admin.edit_layouts_hint') }}</p>
+                    <div class="actions"><a href="/admin/editor" class="btn btn-ghost">{{ t('web.admin.open_template_editor') }}</a></div>
+                </article>
 
-                    <article class="quick-card">
-                        <span class="eyebrow">{{ t('web.admin.maintenance_eyebrow') }}</span>
-                        <h2>{{ t('web.admin.restart_or_clean') }}</h2>
-                        <p>{{ t('web.admin.restart_or_clean_hint') }}</p>
-                        <form method="post" action="/admin/restart">
-                            <div class="actions">
-                                <button type="submit" class="btn btn-warning {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.restart_app') }}</button>
-                            </div>
-                        </form>
-                    </article>
-
-                    <article class="quick-card">
-                        <span class="eyebrow">{{ t('web.admin.logs_eyebrow') }}</span>
-                        <h2>{{ t('web.admin.read_app_logs') }}</h2>
-                        <p>{{ t('web.admin.read_app_logs_hint') }}</p>
-                        <a href="/admin/logs" class="btn btn-ghost">{{ t('web.admin.open_logs') }}</a>
-                    </article>
-
-                    <article class="quick-card">
-                        <span class="eyebrow">{{ t('web.admin.phone_camera_eyebrow') }}</span>
-                        <h2>{{ t('web.admin.moderate_phone_photos') }}</h2>
-                        <p>{{ t('web.admin.moderate_phone_photos_hint') }}</p>
-                        <a href="/admin/remote" class="btn btn-ghost">{{ t('web.admin.open_phone_photos') }}</a>
-                    </article>
-                </div>
-
-                <article class="quick-card disk-card">
+                <article class="card">
                     <span class="eyebrow">{{ t('web.admin.disk_space') }}</span>
                     <h2>{{ t('web.admin.disk_available', free=disk_usage.free) }}</h2>
-                    <div class="disk-bar" aria-label="{{ t('web.admin.disk_used_aria', percent=disk_usage.used_percent) }}">
-                        <div class="disk-bar-fill"></div>
+                    <div class="disk-bar" role="img" aria-label="{{ t('web.admin.disk_used_aria', percent=disk_usage.used_percent) }}">
+                        <div class="disk-bar-fill{% if disk_usage.used_percent >= 85 %} high{% endif %}" style="width: {{ disk_usage.used_percent }}%;"></div>
                     </div>
-                    <div class="disk-stats">
-                        <div class="disk-stat">
-                            <div class="disk-label">{{ t('web.admin.used') }}</div>
-                            <div class="disk-value">{{ disk_usage.used }}</div>
-                        </div>
-                        <div class="disk-stat">
-                            <div class="disk-label">{{ t('web.admin.available') }}</div>
-                            <div class="disk-value">{{ disk_usage.free }}</div>
-                        </div>
-                        <div class="disk-stat">
-                            <div class="disk-label">{{ t('web.admin.total') }}</div>
-                            <div class="disk-value">{{ disk_usage.total }}</div>
-                        </div>
+                    <div class="disk-numbers">
+                        <span>{{ t('web.admin.used') }} {{ disk_usage.used }}</span>
+                        <span>{{ t('web.admin.total') }} {{ disk_usage.total }}</span>
                     </div>
                     <p class="disk-path">{{ t('web.admin.disk_used_on', percent=disk_usage.used_percent, path=disk_usage.path) }}</p>
                 </article>
-            </section>
 
-            <section class="admin-stack">
-                <article class="panel section-card" id="event-section">
-                    <span class="eyebrow">{{ t('web.admin.event_eyebrow') }}</span>
-                    <h2>{{ t('web.admin.welcome_background_title') }}</h2>
-                    <p>{{ t('web.admin.welcome_background_hint') }}</p>
-                    <div class="welcome-background">
-                        {% if welcome_background_set %}
-                        <img class="welcome-background-preview" src="/admin/event/background" alt="{{ t('web.admin.welcome_background_title') }}">
-                        {% else %}
-                        <div class="welcome-background-preview welcome-background-empty">{{ t('web.admin.welcome_background_none') }}</div>
-                        {% endif %}
-                        <div class="welcome-background-actions">
-                            <form method="post" action="/admin/event/background" enctype="multipart/form-data">
-                                <input class="field-input" type="file" name="background" accept="image/jpeg,image/png,image/webp" required {% if not admin_enabled %}disabled{% endif %}>
-                                <div class="actions">
-                                    <button type="submit" class="btn btn-primary {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.welcome_background_upload') }}</button>
-                                </div>
-                            </form>
-                            {% if welcome_background_set %}
-                            <form method="post" action="/admin/event/background/delete">
-                                <div class="actions">
-                                    <button type="submit" class="btn btn-ghost {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.welcome_background_remove') }}</button>
-                                </div>
-                            </form>
-                            {% endif %}
-                            <p class="field-help">{{ t('web.admin.welcome_background_restart') }}</p>
-                        </div>
-                    </div>
+                <article class="card">
+                    <span class="eyebrow">{{ t('web.admin.restart_card_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.restart_title') }}</h2>
+                    <p>{{ t('web.admin.restart_hint') }}</p>
+                    <form method="post" action="/admin/restart" class="actions">
+                        <button type="submit" class="btn btn-warning" {{ disabled_attr }}>{{ t('web.admin.restart_app') }}</button>
+                    </form>
                 </article>
 
-                <article class="panel section-card" id="config-section">
-                    <span class="eyebrow">{{ t('web.admin.configuration_eyebrow') }}</span>
-                    <h2>{{ t('web.admin.edit_config_ini') }}</h2>
-                    <p>{{ t('web.admin.edit_config_ini_hint') }}</p>
+                <article class="card">
+                    <span class="eyebrow">{{ t('web.admin.logs_eyebrow') }}</span>
+                    <h2>{{ t('web.admin.read_app_logs') }}</h2>
+                    <p>{{ t('web.admin.read_app_logs_hint') }}</p>
+                    <div class="actions"><a href="/admin/logs" class="btn btn-ghost">{{ t('web.admin.open_logs') }}</a></div>
+                </article>
+            </section>
 
-                    <form method="post" action="/admin/config">
-                        <div class="config-toolbar">
-                            <p>{{ t('web.admin.apply_changes_hint') }}</p>
-                            <button type="submit" class="btn btn-success {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.save_config') }}</button>
-                        </div>
-                        <div class="config-sections">
+            {# The welcome photo is uploaded on its own, but shown inside the
+               Event section where an operator looks for it: its controls sit in
+               the settings form and point back here with the form attribute. #}
+            <form id="welcome-upload" method="post" action="/admin/event/background" enctype="multipart/form-data"></form>
+            <form id="welcome-remove" method="post" action="/admin/event/background/delete"></form>
+
+            <section class="panel" id="settings">
+                <header class="settings-header">
+                    <h2>{{ t('web.config.heading') }}</h2>
+                    <p>{{ t('web.config.intro') }}</p>
+                </header>
+
+                <div class="settings-layout">
+                    <nav class="settings-toc" aria-label="{{ t('web.config.toc') }}">
+                        <ol>
                             {% for section in config_sections %}
-                            <section class="config-section">
-                                <h3>{{ section.title }}</h3>
-                                {% if section.description %}
+                            <li><a href="#section-{{ section.id }}">{{ section.title }}</a></li>
+                            {% endfor %}
+                        </ol>
+                    </nav>
+
+                    <form id="config-form" method="post" action="/admin/config">
+                        {% for section in config_sections %}
+                        <section class="settings-section" id="section-{{ section.id }}">
+                            <header class="settings-section-header">
+                                <h3>{{ section.title }}{% if section.advanced %} <span class="badge">{{ t('web.config.advanced') }}</span>{% endif %}</h3>
                                 <p>{{ section.description }}</p>
-                                {% endif %}
-                                <div class="config-fields">
-                                    {% for field in section.fields %}
-                                    {% if not field.inline_with_previous %}
-                                    {% set inline_next = section.fields[loop.index0 + 1] if field.inline_with_next and (loop.index0 + 1) < section.fields|length else none %}
-                                    <div class="config-field {% if field.control == 'checkbox' or field.option == 'CALIBRATION' %}full-width{% endif %}{% if inline_next %} inline-pair{% endif %}">
-                                        {% if field.control == 'checkbox' %}
-                                        <label class="checkbox-field" for="{{ field.id }}">
-                                            <input id="{{ field.id }}" name="{{ field.name }}" type="checkbox" value="true" {% if field.checked %}checked{% endif %} {% if not admin_enabled %}disabled{% endif %}>
-                                            <span class="checkbox-copy">
-                                                <strong>{{ field.label }}</strong>
-                                                {% if field.help %}
-                                                <span class="field-help">{{ field.help }}</span>
-                                                {% endif %}
-                                            </span>
-                                        </label>
-                                        {% if inline_next %}
-                                        <div class="inline-number">
-                                            <label class="field-label" for="{{ inline_next.id }}">{{ inline_next.label }}</label>
-                                            <input
-                                                class="field-input"
-                                                id="{{ inline_next.id }}"
-                                                name="{{ inline_next.name }}"
-                                                type="{{ inline_next.control }}"
-                                                value="{{ inline_next.value }}"
-                                                {% if inline_next.placeholder %}placeholder="{{ inline_next.placeholder }}"{% endif %}
-                                                {% if inline_next.min is defined %}min="{{ inline_next.min }}"{% endif %}
-                                                {% if inline_next.max is defined %}max="{{ inline_next.max }}"{% endif %}
-                                                {% if inline_next.step is defined %}step="{{ inline_next.step }}"{% endif %}
-                                                {% if not admin_enabled %}disabled{% endif %}
-                                            >
-                                            {% if inline_next.help %}
-                                            <p class="field-help">{{ inline_next.help }}</p>
-                                            {% endif %}
-                                        </div>
+                            </header>
+
+                            {% if section.id == 'event' %}
+                            <div class="welcome-photo">
+                                <div class="setting-text">
+                                    <span class="setting-name">{{ t('web.admin.welcome_background_title') }}</span>
+                                    <p class="field-help">{{ t('web.admin.welcome_background_hint') }}</p>
+                                    {% if welcome_background_set %}
+                                    <img class="welcome-photo-preview" src="/admin/event/background" alt="{{ t('web.admin.welcome_background_title') }}">
+                                    {% else %}
+                                    <div class="welcome-photo-preview">{{ t('web.admin.welcome_background_none') }}</div>
+                                    {% endif %}
+                                </div>
+                                <div class="setting-control">
+                                    <input class="field-input" form="welcome-upload" type="file" name="background" accept="image/jpeg,image/png,image/webp" required aria-label="{{ t('web.admin.welcome_background_title') }}" {{ disabled_attr }}>
+                                    <button type="submit" form="welcome-upload" class="btn btn-primary" {{ disabled_attr }}>{{ t('web.admin.welcome_background_upload') }}</button>
+                                    {% if welcome_background_set %}
+                                    <button type="submit" form="welcome-remove" class="btn btn-ghost" {{ disabled_attr }}>{{ t('web.admin.welcome_background_remove') }}</button>
+                                    {% endif %}
+                                </div>
+                            </div>
+                            {% endif %}
+
+                            <div class="setting-list">
+                                {% for field in section.fields %}
+                                <div class="setting-row">
+                                    <div class="setting-text">
+                                        <label for="{{ field.id }}">{{ field.label }}</label>
+                                        <code class="setting-key" title="{{ t('web.config.key_title') }}">[{{ field.section }}] {{ field.option }}</code>
+                                        <p class="field-help">{{ field.help }}</p>
+                                        {% if field.default_text is not none %}
+                                        <p class="setting-default">{{ t('web.config.default', value=field.default_text) }}</p>
                                         {% endif %}
-                                        {% else %}
-                                        <label class="field-label" for="{{ field.id }}">{{ field.label }}</label>
-                                        {% if field.control == 'select' %}
-                                        <select class="field-select" id="{{ field.id }}" name="{{ field.name }}" {% if not admin_enabled %}disabled{% endif %}>
+                                    </div>
+
+                                    <div class="setting-control">
+                                        {% if field.control == 'checkbox' %}
+                                        <label class="switch">
+                                            <input id="{{ field.id }}" name="{{ field.name }}" type="checkbox" value="true" {% if field.checked %}checked{% endif %} {{ disabled_attr }}>
+                                            <span class="switch-track" aria-hidden="true"></span>
+                                            <span class="switch-on" aria-hidden="true">{{ t('web.config.value.on') }}</span>
+                                            <span class="switch-off" aria-hidden="true">{{ t('web.config.value.off') }}</span>
+                                        </label>
+                                        {% elif field.control == 'select' %}
+                                        <select class="field-select" id="{{ field.id }}" name="{{ field.name }}" {{ disabled_attr }}>
                                             {% for choice_value, choice_label in field.choices %}
                                             <option value="{{ choice_value }}" {% if choice_value == field.value %}selected{% endif %}>{{ choice_label }}</option>
                                             {% endfor %}
                                         </select>
                                         {% else %}
+                                        {% set input %}
                                         <input
                                             class="field-input"
                                             id="{{ field.id }}"
                                             name="{{ field.name }}"
                                             type="{{ field.control }}"
                                             value="{{ field.value }}"
+                                            {% if field.control == 'password' %}autocomplete="new-password"{% endif %}
+                                            {% if field.control == 'text' %}spellcheck="false"{% endif %}
                                             {% if field.placeholder %}placeholder="{{ field.placeholder }}"{% endif %}
                                             {% if field.min is defined %}min="{{ field.min }}"{% endif %}
                                             {% if field.max is defined %}max="{{ field.max }}"{% endif %}
                                             {% if field.step is defined %}step="{{ field.step }}"{% endif %}
-                                            {% if not admin_enabled %}disabled{% endif %}
+                                            {{ disabled_attr }}
                                         >
+                                        {% endset %}
+                                        {% if field.unit_text %}
+                                        <div class="input-unit">{{ input }}<span class="unit">{{ field.unit_text }}</span></div>
+                                        {% else %}
+                                        {{ input }}
                                         {% endif %}
-                                        {% if field.help %}
-                                        <p class="field-help">{{ field.help }}</p>
+                                        {% if field.control == 'password' %}
+                                        <p class="password-state {{ 'set' if field.password_set else 'unset' }}">{{ t('web.config.password_set') if field.password_set else t('web.config.password_not_set') }}</p>
                                         {% endif %}
                                         {% endif %}
                                     </div>
-                                    {% endif %}
-                                    {% endfor %}
                                 </div>
-                            </section>
-                            {% endfor %}
-                        </div>
-                        <div class="config-note">{{ t('web.admin.config_tip') }}</div>
-                    </form>
-                </article>
+                                {% endfor %}
+                            </div>
+                        </section>
+                        {% endfor %}
 
-                <article class="panel section-card danger-card">
-                    <span class="eyebrow">{{ t('web.admin.danger_zone') }}</span>
-                    <h2>{{ t('web.admin.delete_saved_photos') }}</h2>
-                    <p>{{ t('web.admin.delete_saved_photos_hint') }}</p>
-                    <div class="danger-callout">{{ t('web.admin.delete_saved_photos_warning') }}</div>
-                    <form method="post" action="/admin/delete-all">
-                        <div class="actions">
-                            <button type="submit" class="btn btn-danger {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.delete_all_photos') }}</button>
+                        <div class="save-bar">
+                            <p class="save-bar-note"><span class="unsaved" id="unsaved-flag" hidden>{{ t('web.config.unsaved') }}</span><span class="save-bar-text">{{ t('web.config.restart_note') }}</span></p>
+                            <div class="actions">
+                                <button type="submit" class="btn btn-ghost" {{ disabled_attr }}>{{ t('web.config.save') }}</button>
+                                <button type="submit" name="then_restart" value="1" class="btn btn-success" {{ disabled_attr }}>{{ t('web.config.save_and_restart') }}</button>
+                            </div>
                         </div>
                     </form>
-                </article>
+                </div>
+            </section>
+
+            <section class="card danger-card">
+                <span class="eyebrow">{{ t('web.admin.danger_zone') }}</span>
+                <h2>{{ t('web.admin.delete_saved_photos') }}</h2>
+                <p>{{ t('web.admin.delete_saved_photos_hint') }} {{ t('web.admin.delete_saved_photos_warning') }}</p>
+                <form method="post" action="/admin/delete-all" id="delete-all-form" class="actions">
+                    <button type="submit" class="btn btn-danger" {{ disabled_attr }}>{{ t('web.admin.delete_all_photos') }}</button>
+                </form>
             </section>
         </div>
     </main>
+
+    <script>
+        (function () {
+            var CONFIRM_DELETE_ALL = {{ t('web.admin.confirm_delete_all')|tojson }};
+            var form = document.getElementById('config-form');
+            var flag = document.getElementById('unsaved-flag');
+            var dirty = false;
+
+            function warnBeforeLeaving(event) {
+                event.preventDefault();
+                event.returnValue = '';
+            }
+
+            // Months from now nobody remembers which field they touched, so
+            // leaving with changes not written to config.ini asks first.
+            function markDirty(event) {
+                // The welcome photo's picker sits among the settings but is
+                // sent by its own form, and a save would not carry it.
+                if (dirty || event.target.form !== form) {
+                    return;
+                }
+                dirty = true;
+                flag.hidden = false;
+                window.addEventListener('beforeunload', warnBeforeLeaving);
+            }
+
+            if (form) {
+                form.addEventListener('input', markDirty);
+                form.addEventListener('change', markDirty);
+                form.addEventListener('submit', function () {
+                    window.removeEventListener('beforeunload', warnBeforeLeaving);
+                });
+            }
+
+            ['welcome-upload', 'welcome-remove'].forEach(function (id) {
+                var other = document.getElementById(id);
+                if (other) {
+                    other.addEventListener('submit', function () {
+                        window.removeEventListener('beforeunload', warnBeforeLeaving);
+                    });
+                }
+            });
+
+            document.getElementById('delete-all-form').addEventListener('submit', function (event) {
+                if (!window.confirm(CONFIRM_DELETE_ALL)) {
+                    event.preventDefault();
+                }
+            });
+        }());
+    </script>
 </body>
 </html>

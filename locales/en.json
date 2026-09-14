@@ -76,7 +76,6 @@
     "gallery": {
       "title": "Gallery",
       "admin": "Admin",
-      "stats": "Stats",
       "download": "Download",
       "collage_alt": "Collage",
       "collage_title": "Collage",
@@ -101,7 +100,6 @@
       "sent_photos_heading": "Photos you sent",
       "sent_empty": "Nothing sent yet. Your photos will appear here.",
       "upload_limits": "Up to {max_per_sender} photos per phone, {max_upload_mb} MB each.",
-      "gallery_link": "See the photos taken at the booth",
       "no_internet_hint": "If your phone warns that this WiFi has no internet, open that notification and choose:",
       "no_internet_option": "Use this network as is",
       "status_pending": "At the booth",
@@ -133,24 +131,31 @@
         "too_fast": "Sending too fast. Wait a moment and try again."
       }
     },
+    "nav": {
+      "label": "Main navigation",
+      "dashboard": "Admin",
+      "stats": "Statistics",
+      "gallery": "Gallery",
+      "phone_photos": "Phone photos",
+      "logs": "Logs",
+      "editor": "Templates"
+    },
     "admin": {
       "eyebrow": "Administration",
       "log_out": "Log out",
-      "back_to_admin": "Back to admin",
       "title": "Admin",
       "login_title": "Admin Login",
       "login_heading": "Admin login",
-      "login_intro": "Authentication is required before opening the PhotoBooth administration area.",
-      "password_not_set": "ADMIN_PASSWORD is not set in config.ini. Admin access is disabled.",
-      "password_not_set_actions": "ADMIN_PASSWORD is not set in config.ini. Admin actions are disabled.",
+      "login_intro": "Enter the admin password to manage the booth.",
+      "password_not_set": "No valid admin password is set in config.ini (ADMIN_PASSWORD): the admin area is closed.",
+      "password_not_set_actions": "No valid admin password is set (ADMIN_PASSWORD): changes are disabled.",
       "password_label": "Admin password",
       "password_placeholder": "Password",
       "sign_in": "Sign in",
-      "back_to_stats": "Back to stats",
       "remote_page_title": "Phone photos",
       "remote_title": "Photos from phones",
       "remote_intro": "Everything guests sent from the remote capture page. Rejecting a photo takes it out of the booth queue; deleting also removes the file.",
-      "remote_disabled_warning": "Remote capture is disabled. Turn on REMOTE_CAPTURE in the admin configuration and restart the application.",
+      "remote_disabled_warning": "Photos from phones are turned off. Turn on \"Photos sent from phones\" in the settings (Guest phones section), then restart the booth.",
       "filter_all": "All",
       "filter_pending": "Waiting",
       "filter_printed": "Printed",
@@ -197,35 +202,30 @@
       "sessions_deleted": "{count} session(s) deleted.",
       "prepare_config_failed": "Error while preparing config.ini.",
       "save_config_failed": "Error while saving config.ini.",
-      "config_saved_restart": "config.ini saved. Restart app to apply all changes.",
-      "config_saved_password_disabled": "config.ini saved. Admin password disabled. Sign in is now disabled.",
+      "config_saved_restart": "Settings saved to config.ini. Restart the booth to apply them.",
+      "config_saved_password_disabled": "Settings saved. The admin password is disabled: signing in is now closed.",
       "restart_unavailable": "Restart callback is unavailable.",
       "restart_failed": "Error while restarting app.",
       "restart_requested": "Application restart requested. Page may become unavailable for a few seconds.",
-      "control_panel_title": "PhotoBooth control panel",
-      "control_panel_intro": "Everything needed to manage templates, application settings and maintenance is grouped here with the most common actions first.",
+      "control_panel_title": "Booth admin",
+      "control_panel_intro": "Follow the evening, moderate photos and set the booth up from this page.",
       "templates_eyebrow": "Templates",
       "edit_layouts": "Edit layouts",
-      "edit_layouts_hint": "Create, duplicate and save print templates from the visual editor.",
-      "event_eyebrow": "Event",
+      "edit_layouts_hint": "Create and edit printed layouts, with their photo frames and texts.",
       "welcome_background_title": "Welcome screen photo",
-      "welcome_background_hint": "The photo behind the title guests see while the booth waits. The title, the subtitle and the event name printed on templates are in the Event section of the configuration below.",
+      "welcome_background_hint": "The photo behind the title guests see while the booth waits. Sent on its own: it is stored as soon as it is uploaded, without the Save button.",
       "welcome_background_none": "No photo uploaded: the booth shows its own.",
       "welcome_background_upload": "Upload the photo",
       "welcome_background_remove": "Back to the booth's own photo",
-      "welcome_background_restart": "Applied on the next start of the booth.",
       "welcome_background_invalid": "That file is not a photo the booth can read. Use a JPEG, PNG or WebP image.",
       "welcome_background_save_failed": "The welcome photo could not be saved.",
       "welcome_background_saved": "Welcome photo saved. Restart the application to show it.",
       "welcome_background_removed": "Welcome photo removed. Restart the application to show the booth's own.",
       "open_template_editor": "Open template editor",
-      "maintenance_eyebrow": "Maintenance",
-      "restart_or_clean": "Restart or clean",
-      "restart_or_clean_hint": "Restart the booth after changes, or remove all saved sessions from the danger zone below.",
-      "restart_app": "Restart app",
+      "restart_app": "Restart",
       "logs_eyebrow": "Logs",
       "read_app_logs": "Read application logs",
-      "read_app_logs_hint": "Open the newest log files from the logs folder directly in the browser.",
+      "read_app_logs_hint": "What the booth wrote down while running, useful when something does not work.",
       "open_logs": "Open logs",
       "phone_camera_eyebrow": "Phone camera",
       "moderate_phone_photos": "Moderate phone photos",
@@ -235,25 +235,365 @@
       "disk_available": "{free} available",
       "disk_used_aria": "Disk used {percent} percent",
       "used": "Used",
-      "available": "Available",
       "total": "Total",
       "disk_used_on": "{percent}% used on {path}",
-      "configuration_eyebrow": "Configuration",
-      "edit_config_ini": "Edit config.ini",
-      "edit_config_ini_hint": "Use this section when a printer, countdown, port or hardware setting must be changed. Choice-based fields use dropdowns, booleans use checkboxes, and CALIBRATION remains a raw string.",
-      "apply_changes_hint": "Apply your changes here, then restart PhotoBooth so the new configuration is loaded.",
-      "save_config": "Save config.ini",
-      "config_tip": "Tip: save first, then use the restart action above to apply the updated configuration to the running application.",
-      "danger_zone": "Danger Zone",
+      "danger_zone": "Danger zone",
       "delete_saved_photos": "Delete saved photos",
-      "delete_saved_photos_hint": "This permanently removes all saved images, session folders and statistics linked to this session.",
-      "delete_saved_photos_warning": "Only use this action when you intentionally want to clear the booth history.",
-      "delete_all_photos": "Delete all photos"
+      "delete_saved_photos_hint": "Permanently deletes every saved session, the photos phones sent and the statistics (print counter included). The welcome photo and the settings are kept.",
+      "delete_saved_photos_warning": "Use it between two events, once the photos are safe (archive in Statistics, or USB drive).",
+      "delete_all_photos": "Delete all photos",
+      "stats_eyebrow": "Statistics",
+      "stats_card_title": "The evening in numbers",
+      "stats_card_hint": "Photos taken, prints left, downloads, and an archive of every photo.",
+      "open_stats": "Open statistics",
+      "restart_title": "Restart the booth",
+      "restart_hint": "Applies saved settings and the welcome photo. The booth is unavailable for a few seconds.",
+      "config_saved_restarting": "Settings saved. Booth restart requested: this page may be unavailable for a moment.",
+      "confirm_delete_all": "Permanently delete every photo and the statistics?",
+      "restart_card_eyebrow": "Maintenance"
+    },
+    "config": {
+      "heading": "Booth settings",
+      "intro": "Each setting explains what it does, shows its default value and the name it has in config.ini, so the file still makes sense when opened by hand.",
+      "toc": "Sections",
+      "advanced": "Advanced",
+      "default": "Default: {value}",
+      "key_title": "Name of this setting in the config.ini file",
+      "current_value": "Current: {value}",
+      "leave_unchanged": "Leave unchanged",
+      "password_placeholder": "Leave blank to keep the current password",
+      "password_set": "A password is set.",
+      "password_not_set": "No valid password: the admin area is closed.",
+      "save": "Save",
+      "save_and_restart": "Save and restart the booth",
+      "unsaved": "Unsaved changes",
+      "restart_note": "The booth reads these settings when it starts: they apply on the next restart.",
+      "load_failed": "Unable to read config.ini to show the settings.",
+      "value": {
+        "on": "on",
+        "off": "off",
+        "empty": "empty",
+        "disabled": "disabled",
+        "unlimited": "Unlimited",
+        "automatic": "automatic",
+        "printing_disabled": "none (printing disabled)",
+        "open_network": "Open network"
+      },
+      "units": {
+        "seconds": "s",
+        "frames": "frames",
+        "prints": "prints",
+        "copies": "copies",
+        "megabytes": "MB",
+        "gigabytes": "GB",
+        "pixels": "px",
+        "percent": "%",
+        "photos": "photos",
+        "days": "days",
+        "files": "files"
+      },
+      "errors": {
+        "required": "{label} is required.",
+        "not_a_number": "{label} must be a number.",
+        "at_least": "{label} must be at least {min}.",
+        "at_most": "{label} must be at most {max}."
+      },
+      "choices": {
+        "camera": {
+          "auto": "Detect automatically",
+          "gphoto2": "DSLR over USB (gphoto2)",
+          "picamera2": "Raspberry Pi camera (picamera2)",
+          "opencv": "USB webcam (OpenCV)",
+          "fake": "Fake, no hardware (testing)"
+        },
+        "language": {
+          "en": "English",
+          "fr": "Français"
+        },
+        "rotation": {
+          "0": "None (landscape)",
+          "90": "Quarter turn right (portrait)",
+          "180": "Upside down",
+          "270": "Quarter turn left (portrait)"
+        }
+      },
+      "sections": {
+        "event": {
+          "title": "Event",
+          "description": "What makes the booth this evening's booth: the welcome screen, and the texts printed on the photos."
+        },
+        "slideshow": {
+          "title": "Idle slideshow",
+          "description": "The evening's photos on the welcome screen while nobody is using the booth."
+        },
+        "capture": {
+          "title": "Taking photos",
+          "description": "Countdown, filters, which camera is used, and blurred borders around images."
+        },
+        "print": {
+          "title": "Printing",
+          "description": "The printer, and how many prints guests can ask for."
+        },
+        "phones": {
+          "title": "Guest phones",
+          "description": "What guests can do from their own phone: get their photo, or send one to the booth to print it."
+        },
+        "guest_network": {
+          "title": "Guest network (QR codes)",
+          "description": "What the QR codes on the booth carry, so a phone reaches it without anyone typing. The booth does not create this WiFi network: it only describes it."
+        },
+        "screen": {
+          "title": "Screen and hardware",
+          "description": "Language, size and orientation of the screen, and the ring light."
+        },
+        "storage": {
+          "title": "Storage and USB drive",
+          "description": "Where photos are saved, and the safeguards against a full disk."
+        },
+        "access": {
+          "title": "Access, network and logs",
+          "description": "The password for these pages, the web server address, and how long logs are kept."
+        },
+        "dslr_liveview": {
+          "title": "DSLR: during preview",
+          "description": "Settings sent to a DSLR (gphoto2 only) while the preview is shown. \"Leave unchanged\" keeps whatever is set on the camera."
+        },
+        "dslr_capture": {
+          "title": "DSLR: when shooting",
+          "description": "Settings sent to the DSLR right before each photo. \"Leave unchanged\" keeps whatever is set on the camera."
+        }
+      },
+      "fields": {
+        "Event": {
+          "WELCOME_TITLE": {
+            "label": "Welcome title",
+            "help": "The big words on the welcome screen. Leave empty to keep \"PHOTO BOOTH\". The photo behind it is changed just above."
+          },
+          "WELCOME_SUBTITLE": {
+            "label": "Welcome subtitle",
+            "help": "A line under the title, such as the names and the date. Leave empty for none."
+          },
+          "EVENT_NAME": {
+            "label": "Event name",
+            "help": "Printed wherever a template text says {event} (template editor). It is not shown anywhere else."
+          },
+          "DATE_FORMAT": {
+            "label": "Date format",
+            "help": "How {date} prints on templates: %d day, %m month, %Y year, %y two-digit year. For example %d/%m/%Y gives 14/09/2026. {time} always prints as hours:minutes."
+          }
+        },
+        "Slideshow": {
+          "SLIDESHOW": {
+            "label": "Slideshow when idle",
+            "help": "Shows the evening's collages, newest first. A touch brings the welcome screen back without starting a session. Only starts once a first photo exists."
+          },
+          "SLIDESHOW_IDLE_SECONDS": {
+            "label": "Start the slideshow after",
+            "help": "Time without any touch on the welcome screen before the slideshow starts. At least 10 seconds."
+          },
+          "SLIDESHOW_PHOTO_SECONDS": {
+            "label": "Time per photo",
+            "help": "How long each collage stays before the next. At least 2 seconds."
+          }
+        },
+        "Capture": {
+          "COUNTDOWN": {
+            "label": "Countdown",
+            "help": "Seconds between the guest's press and the photo. 0 shoots at once."
+          },
+          "FILTERS": {
+            "label": "Photo filters",
+            "help": "Offers guests a choice of filters (black and white, sepia, vintage...) on the review screen, before printing."
+          },
+          "CAMERA": {
+            "label": "Camera",
+            "help": "\"Detect automatically\" tries every kind of camera at startup, which is slower. Naming the right one makes startup faster and predictable. \"Fake\" simulates a camera to test without hardware."
+          },
+          "CALIBRATION": {
+            "label": "Preview / photo calibration",
+            "help": "Only when the preview and the photo come from two different cameras (say a Pi camera for the preview and a DSLR for the photo): crops the preview to match the final photo. Format (zoom, offset_x, offset_y), produced by tools/calibrate_zoom.py. Leave empty to disable."
+          },
+          "BLUR_CAMERA": {
+            "label": "Blurred borders around the preview",
+            "help": "Fills the empty bands around the live preview with a blurred copy of the image instead of plain bands."
+          },
+          "PREVIEW_BLUR_REFRESH_FRAMES": {
+            "label": "Preview blur refresh",
+            "help": "The blur above is only recomputed every N frames, to spare the CPU. 1 = every frame (smoothest, heaviest); 3 suits a Raspberry Pi. No effect when preview borders are off."
+          },
+          "BLUR_IMAGES": {
+            "label": "Blurred borders around each photo",
+            "help": "Same effect on the screen showing each photo right after it is taken."
+          },
+          "BLUR_COLLAGE": {
+            "label": "Blurred borders around the collage",
+            "help": "Same effect on the review screen showing the final collage. Does not affect prints."
+          }
+        },
+        "Print": {
+          "PRINTER": {
+            "label": "Printer name",
+            "help": "The printer's name in CUPS (shown by lpstat -p). Leave empty to disable printing entirely."
+          },
+          "MAX_PRINTS": {
+            "label": "Maximum prints",
+            "help": "Total prints allowed, such as what the paper roll holds. Once reached, the booth stops printing. Leave empty for unlimited. The counter restarts from zero with \"Delete all photos\"."
+          },
+          "MAX_COPIES": {
+            "label": "Maximum copies per print",
+            "help": "Sheets a guest can ask for at once (10 at most). A template that duplicates its collage puts two photos on each sheet. 1 hides the copies selector."
+          },
+          "PRINTER_WAIT_TIMEOUT": {
+            "label": "Wait when the printer stops answering",
+            "help": "When the printer is unplugged or in error, how long the booth waits for it to come back before giving up the print (the photo stays saved). At least 5 seconds."
+          }
+        },
+        "Global": {
+          "SHARE": {
+            "label": "\"Get my photo\" button",
+            "help": "Adds a button on the review screen whose QR code takes the guest to their own photo, to download on their phone. The phone must be able to reach the booth: see \"Guest network\"."
+          },
+          "LANGUAGE": {
+            "label": "Language",
+            "help": "Language of the booth screen and of these admin pages. Pages guests open on their own phone follow the phone's language."
+          },
+          "FULLSCREEN": {
+            "label": "Fullscreen",
+            "help": "Runs the booth fullscreen, with no window or taskbar. Untick only to test on a computer."
+          },
+          "WINDOW_WIDTH": {
+            "label": "Screen width",
+            "help": "The screen's native resolution: 1024 x 600 for the Ingcool 7\" touchscreen, 1920 x 1080 for a full HD monitor. Also used in fullscreen."
+          },
+          "WINDOW_HEIGHT": {
+            "label": "Screen height",
+            "help": "See the width. For a turned screen, do not swap width and height: use the rotation."
+          },
+          "ROTATION": {
+            "label": "Screen rotation",
+            "help": "For a screen mounted on its side: the booth turns its display and touch input itself. Keep width and height at the native resolution. On Windows, leave at \"None\": the display is clipped there."
+          },
+          "RINGLED": {
+            "label": "LED ring light",
+            "help": "Drives the WS2812 LED ring wired to the Raspberry Pi SPI port. Leave unticked without that hardware."
+          },
+          "ADMIN_PASSWORD": {
+            "label": "Admin password",
+            "help": "Protects these pages. At least 10 characters and not a common password (admin, 1234...), otherwise the admin area stays closed. Leaving it blank keeps the current one; typing None closes the admin area."
+          }
+        },
+        "Remote": {
+          "REMOTE_CAPTURE": {
+            "label": "Photos sent from phones",
+            "help": "Shows a QR code on the welcome screen: the guest takes a photo with their phone, sends it to the booth, then comes to print it. Received photos are moderated in \"Phone photos\"."
+          },
+          "REMOTE_MAX_UPLOAD_MB": {
+            "label": "Largest photo accepted",
+            "help": "Anything larger is refused. The page already shrinks the photo on the phone before sending, so this is rarely reached."
+          },
+          "REMOTE_MAX_IMAGE_PIXELS": {
+            "label": "Longest side kept",
+            "help": "Received photos are shrunk to this size. Above the print resolution there is nothing to gain and a disk to fill. At least 640."
+          },
+          "REMOTE_MAX_PER_SENDER": {
+            "label": "Waiting photos per phone",
+            "help": "How many photos one phone may leave waiting to be printed, so one guest cannot fill the queue alone."
+          },
+          "REMOTE_MAX_PENDING": {
+            "label": "Waiting photos in total",
+            "help": "Largest size of the queue, all phones together."
+          },
+          "REMOTE_MIN_UPLOAD_INTERVAL": {
+            "label": "Delay between two sends",
+            "help": "Minimum time a phone must wait between two sends. 0 for none."
+          },
+          "REMOTE_URL": {
+            "label": "Booth address in QR codes",
+            "help": "Leave empty: the booth finds its own address, which is right when it has a single connection. Fill it in when it has several (cable and WiFi), sits behind a port forward, or has a fixed name. Full address, port included."
+          }
+        },
+        "WiFi": {
+          "WIFI_SSID": {
+            "label": "Guest WiFi name",
+            "help": "The network guests join to reach the booth (travel router, venue WiFi...). A first QR code joins it without typing. Leave empty when guests are on it already: only the page code is shown."
+          },
+          "WIFI_PASSWORD": {
+            "label": "WiFi password",
+            "help": "Put in the QR code, so guests can see it. Leave empty for an open network."
+          },
+          "WIFI_HIDDEN": {
+            "label": "Hidden network",
+            "help": "Tick only if this WiFi does not broadcast its name."
+          }
+        },
+        "Storage": {
+          "DCIM_DIRECTORY": {
+            "label": "Photo folder",
+            "help": "Where sessions (photos and collages) are saved. Relative to the booth folder, or absolute (such as /media/photos)."
+          },
+          "DISK_MIN_FREE_GB": {
+            "label": "Minimum free space",
+            "help": "Below this, the booth refuses new sessions rather than failing in the middle of one."
+          },
+          "DISK_MAX_USED_PERCENT": {
+            "label": "Maximum disk usage",
+            "help": "The same safeguard, as a percentage of the disk in use. 100 turns it off."
+          }
+        },
+        "USB": {
+          "USB_EXPORT": {
+            "label": "Copy to USB drive",
+            "help": "Copies saved sessions to a USB drive as soon as one is plugged into the booth."
+          },
+          "USB_MIN_FREE_GB": {
+            "label": "Minimum free space on the drive",
+            "help": "The copy is refused when the drive has less free space than this."
+          }
+        },
+        "Web": {
+          "WEB_PORT": {
+            "label": "Web server port",
+            "help": "The port of the gallery, the admin and the send-a-photo page (http://booth-address:5000). QR codes follow it automatically."
+          },
+          "WEB_HOST": {
+            "label": "Web server listen address",
+            "help": "0.0.0.0: reachable from every network the booth is on. 127.0.0.1: only from the booth itself (phones can no longer reach it). A specific address: one network only."
+          }
+        },
+        "Log": {
+          "LOG_RETENTION_DAYS": {
+            "label": "Keep logs for",
+            "help": "Older logs are deleted at every start."
+          },
+          "LOG_MAX_FILES": {
+            "label": "Maximum log files",
+            "help": "Beyond this, the oldest are deleted at every start."
+          }
+        },
+        "DSLR": {
+          "SHUTTERSPEED": {
+            "label": "Shutter speed",
+            "help": "In fractions of a second. 1/125 freezes ordinary movement; faster darkens the image."
+          },
+          "APERTURE": {
+            "label": "Aperture (f/)",
+            "help": "Small number: more light, blurred background. Large number: everything sharp, but more light needed (a flash)."
+          },
+          "FOCUSMODE": {
+            "label": "Focus mode",
+            "help": "One Shot (Canon) or AF-S (Nikon): focuses once before each photo. AF-C: continuous tracking. Manual: no autofocus."
+          },
+          "ISO": {
+            "label": "ISO sensitivity",
+            "help": "Higher: brighter image but more grain. 100 to 400 with a flash."
+          }
+        }
+      }
     },
     "stats": {
       "title": "Statistics",
-      "heading": "PhotoBooth usage overview",
-      "intro": "Review captured sessions, downloads and gallery usage from the embedded web server.",
+      "heading": "Booth statistics",
+      "intro": "Photos taken, prints, downloads and gallery visits since the last reset.",
       "download_all": "Download all photos",
       "photos_taken": "Photos taken",
       "photos_taken_hint": "Total collages created by the booth.",

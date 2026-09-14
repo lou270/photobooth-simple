@@ -22,8 +22,15 @@
 
         body {
             display: flex;
+            flex-direction: column;
             height: 100vh;
             overflow: hidden;
+        }
+
+        .editor-app {
+            flex: 1;
+            display: flex;
+            min-height: 0;
         }
 
         .prop-group textarea {
@@ -31,7 +38,7 @@
             min-height: 60px;
             padding: 8px;
             font: inherit;
-            border: 1px solid #ddd;
+            border: 1px solid var(--panel-border-strong);
             border-radius: 8px;
             resize: vertical;
         }
@@ -60,7 +67,7 @@
 
         .sidebar-header {
             padding: 20px;
-            border-bottom: 1px solid #eeeeee;
+            border-bottom: 1px solid var(--panel-border);
         }
 
         .sidebar-header h1 {
@@ -86,12 +93,12 @@
         }
 
         .template-item:hover {
-            background: #e9ecef;
+            background: var(--accent-soft);
         }
 
         .template-item.active {
-            border-color: var(--accent);
-            background: #e7f3ff;
+            border-color: var(--champagne);
+            background: var(--accent-soft);
         }
 
         .template-item-name {
@@ -235,20 +242,20 @@
 
         .photo-frame {
             position: absolute;
-            border: 2px solid var(--accent);
-            background: rgba(0, 123, 255, 0.1);
+            border: 2px solid var(--indigo);
+            background: rgba(74, 67, 181, 0.12);
             cursor: move;
             box-sizing: border-box;
         }
 
         .photo-frame:hover {
-            background: rgba(0, 123, 255, 0.2);
-            border-color: var(--accent-hover);
+            background: rgba(74, 67, 181, 0.22);
+            border-color: var(--accent);
         }
 
         .photo-frame.selected {
-            border-color: #ff6b6b;
-            background: rgba(255, 107, 107, 0.2);
+            border-color: var(--champagne);
+            background: rgba(212, 163, 115, 0.25);
         }
 
         .photo-frame-label {
@@ -268,7 +275,7 @@
             width: 10px;
             height: 10px;
             background: white;
-            border: 2px solid #ff6b6b;
+            border: 2px solid var(--champagne);
             border-radius: 50%;
             z-index: 10;
         }
@@ -347,7 +354,7 @@
             margin-top: 10px;
             padding: 10px;
             background: var(--panel-muted);
-            border: 1px solid #eeeeee;
+            border: 1px solid var(--panel-border);
             border-radius: 8px;
             line-height: 1.5;
         }
@@ -355,7 +362,7 @@
         .export-panel {
             margin-top: 20px;
             padding-top: 20px;
-            border-top: 1px solid #eeeeee;
+            border-top: 1px solid var(--panel-border);
         }
 
         input[type="checkbox"] {
@@ -406,10 +413,13 @@
 
         @media (max-width: 1180px) {
             body {
-                flex-direction: column;
                 height: auto;
                 min-height: 100vh;
                 overflow: auto;
+            }
+
+            .editor-app {
+                flex-direction: column;
             }
 
             .sidebar,
@@ -430,11 +440,14 @@
     </style>
 </head>
 <body>
+    {% set active = 'editor' %}
+    {% include 'partials/admin_topbar.html' %}
+
+    <div class="editor-app">
     <div class="sidebar">
         <div class="sidebar-header">
             <h1>Templates</h1>
             <div style="display: grid; gap: 10px;">
-                <a href="/admin" class="btn btn-ghost" style="width: 100%;">Back to admin</a>
                 <button class="btn btn-primary" onclick="createNewTemplate()" style="width: 100%;">New template</button>
                 <input type="file" id="importJsonFile" accept="application/json,.json" onchange="importTemplate()" style="display: none;">
                 <button class="btn btn-primary" onclick="document.getElementById('importJsonFile').click()" style="width: 100%;">
@@ -623,6 +636,7 @@
             - Handles to resize<br>
             - Delete to remove
         </div>
+    </div>
     </div>
 
     <div id="newTemplateModal" class="modal">
@@ -1111,7 +1125,7 @@
 
             ctx.save();
             ctx.setLineDash([8, 4]);
-            ctx.strokeStyle = isSelected ? '#ff6b6b' : '#8a4fff';
+            ctx.strokeStyle = isSelected ? '#d4a373' : '#2e7d5b';
             ctx.lineWidth = 2;
             ctx.strokeRect(x, y, box.width, box.height);
             ctx.setLineDash([]);
@@ -1196,9 +1210,9 @@
 
         function drawPhotoFrame(photo, index, isDuplicate) {
             const isSelected = selectedKind === 'photo' && index === selectedFrameIndex && !isDuplicate;
-            ctx.strokeStyle = isSelected ? '#ff6b6b' : '#007bff';
+            ctx.strokeStyle = isSelected ? '#d4a373' : '#4a43b5';
             ctx.lineWidth = 2;
-            ctx.fillStyle = isSelected ? 'rgba(255, 107, 107, 0.1)' : 'rgba(0, 123, 255, 0.1)';
+            ctx.fillStyle = isSelected ? 'rgba(212, 163, 115, 0.2)' : 'rgba(74, 67, 181, 0.12)';
 
             ctx.fillRect(photo.x, photo.y, photo.width, photo.height);
             ctx.strokeRect(photo.x, photo.y, photo.width, photo.height);
@@ -1221,7 +1235,7 @@
 
             handles.forEach(handle => {
                 ctx.fillStyle = 'white';
-                ctx.strokeStyle = '#ff6b6b';
+                ctx.strokeStyle = '#d4a373';
                 ctx.lineWidth = 2;
                 ctx.beginPath();
                 ctx.arc(handle.x, handle.y, handleSize / 2, 0, Math.PI * 2);

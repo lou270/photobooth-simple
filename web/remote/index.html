@@ -3,17 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#26495c">
+    <meta name="theme-color" content="#171a2f">
     <title>PhotoBooth - {{ t('web.remote.title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         /* A page held in one hand, at arm's length, in a dark room: everything
            is sized for a thumb and nothing depends on hovering. */
-        body {
-            background: #26495c;
-            color: #ffffff;
-        }
-
         .remote-shell {
             width: min(560px, 100%);
             margin: 0 auto;
@@ -21,59 +16,39 @@
         }
 
         .remote-header {
+            margin-bottom: 20px;
             text-align: center;
-            margin-bottom: 22px;
         }
 
         .remote-header h1 {
             margin: 0 0 6px;
             font-size: 26px;
-            letter-spacing: 0.02em;
         }
 
         .remote-header p {
             margin: 0;
-            color: rgba(255, 255, 255, 0.75);
+            color: var(--text-secondary);
             font-size: 15px;
             line-height: 1.5;
         }
 
-        .card {
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.16);
-            border-radius: var(--radius-lg);
-            padding: 18px;
+        .remote-shell .card {
             margin-bottom: 18px;
+            padding: 18px;
+            border-radius: var(--radius-lg);
         }
 
-        .btn-block {
-            width: 100%;
-            min-height: 64px;
-            font-size: 18px;
-        }
-
-        .btn-capture {
-            background: #538a64;
-            color: #ffffff;
-        }
-
-        .btn-send {
-            background: #667eea;
-            color: #ffffff;
-        }
-
-        .btn-quiet {
-            background: rgba(255, 255, 255, 0.12);
-            color: #ffffff;
-            border-color: rgba(255, 255, 255, 0.2);
+        .remote-shell .card h2 {
+            margin: 0 0 14px;
+            font-size: 17px;
         }
 
         .preview-frame {
             position: relative;
             margin-bottom: 14px;
-            border-radius: var(--radius-md);
             overflow: hidden;
-            background: rgba(0, 0, 0, 0.35);
+            border-radius: var(--radius-md);
+            background: var(--panel-muted);
         }
 
         .preview-frame img,
@@ -95,28 +70,10 @@
 
         .hint {
             margin: 12px 0 0;
-            color: rgba(255, 255, 255, 0.7);
+            color: var(--text-secondary);
             font-size: 13px;
             line-height: 1.5;
             text-align: center;
-        }
-
-        .feedback {
-            margin-bottom: 16px;
-            padding: 14px 16px;
-            border-radius: var(--radius-md);
-            font-size: 15px;
-            line-height: 1.45;
-        }
-
-        .feedback.ok {
-            background: rgba(83, 138, 100, 0.25);
-            border: 1px solid rgba(83, 138, 100, 0.6);
-        }
-
-        .feedback.ko {
-            background: rgba(139, 72, 70, 0.3);
-            border: 1px solid rgba(139, 72, 70, 0.7);
         }
 
         .sent-list {
@@ -126,9 +83,9 @@
         }
 
         .sent-item {
-            border-radius: var(--radius-md);
             overflow: hidden;
-            background: rgba(0, 0, 0, 0.3);
+            border-radius: var(--radius-md);
+            background: var(--panel-muted);
         }
 
         .sent-item img {
@@ -143,47 +100,31 @@
             font-size: 12px;
         }
 
-        .chip {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 999px;
-            font-weight: 700;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        .chip.pending { background: rgba(253, 126, 20, 0.3); color: #ffd8b5; }
-        .chip.printed { background: rgba(40, 167, 69, 0.3); color: #bdf0c8; }
-        .chip.rejected { background: rgba(220, 53, 69, 0.3); color: #ffc9ce; }
-
         .link-button {
             margin-top: 6px;
             padding: 0;
             border: 0;
             background: none;
-            color: rgba(255, 255, 255, 0.65);
+            color: var(--text-secondary);
+            font: inherit;
             font-size: 12px;
             text-decoration: underline;
             cursor: pointer;
         }
 
         .hidden { display: none !important; }
-
-        h2 {
-            margin: 0 0 14px;
-            font-size: 17px;
-        }
     </style>
 </head>
-<body>
+<body class="theme-guest">
+    {% include 'partials/guest_topbar.html' %}
+
     <main class="remote-shell">
         <header class="remote-header">
             <h1>{{ t('web.remote.heading') }}</h1>
             <p>{{ t('web.remote.subheading') }}</p>
         </header>
 
-        <div id="feedback" class="feedback hidden" role="status" aria-live="polite"></div>
+        <div id="feedback" class="status hidden" role="status" aria-live="polite"></div>
 
         <section class="card">
             <!-- Capture step: the phone's own camera application, opened by the
@@ -191,9 +132,9 @@
                  a booth serving plain HTTP cannot offer, so the live view below
                  is only wired up when the page happens to have one. -->
             <div id="capture-step">
-                <label class="btn btn-capture btn-block" for="photo-input">{{ t('web.remote.take_photo') }}</label>
+                <label class="btn btn-success btn-block btn-large" for="photo-input">{{ t('web.remote.take_photo') }}</label>
                 <input id="photo-input" type="file" accept="image/*" capture="environment" class="hidden">
-                <button id="live-button" type="button" class="btn btn-quiet btn-block hidden" style="margin-top: 10px;">
+                <button id="live-button" type="button" class="btn btn-ghost btn-block hidden" style="margin-top: 10px;">
                     {{ t('web.remote.use_live_camera') }}
                 </button>
                 <p class="hint">{{ t('web.remote.privacy_hint') }}</p>
@@ -204,8 +145,8 @@
                     <video id="live-video" playsinline muted></video>
                 </div>
                 <div class="row">
-                    <button id="live-shoot" type="button" class="btn btn-capture">{{ t('web.remote.shoot') }}</button>
-                    <button id="live-cancel" type="button" class="btn btn-quiet">{{ t('web.remote.cancel') }}</button>
+                    <button id="live-shoot" type="button" class="btn btn-success">{{ t('web.remote.shoot') }}</button>
+                    <button id="live-cancel" type="button" class="btn btn-ghost">{{ t('web.remote.cancel') }}</button>
                 </div>
             </div>
 
@@ -213,9 +154,9 @@
                 <div class="preview-frame">
                     <img id="preview-image" alt="{{ t('web.remote.photo_to_send_alt') }}">
                 </div>
-                <button id="send-button" type="button" class="btn btn-send btn-block">{{ t('web.remote.send_to_booth') }}</button>
+                <button id="send-button" type="button" class="btn btn-primary btn-block btn-large">{{ t('web.remote.send_to_booth') }}</button>
                 <div class="row" style="margin-top: 10px;">
-                    <button id="retake-button" type="button" class="btn btn-quiet">{{ t('web.remote.take_another') }}</button>
+                    <button id="retake-button" type="button" class="btn btn-ghost">{{ t('web.remote.take_another') }}</button>
                 </div>
             </div>
         </section>
@@ -228,7 +169,6 @@
 
         <p class="hint">
             {{ t('web.remote.upload_limits', max_per_sender=max_per_sender, max_upload_mb=max_upload_mb) }}
-            {% if show_gallery_link %}<br><a href="/gallery">{{ t('web.remote.gallery_link') }}</a>{% endif %}
         </p>
 
         <!-- A booth is often reached over a network with no internet behind it,
@@ -287,11 +227,11 @@
 
             function say(message, ok) {
                 elements.feedback.textContent = message;
-                elements.feedback.className = 'feedback ' + (ok ? 'ok' : 'ko');
+                elements.feedback.className = 'status ' + (ok ? 'success' : 'error');
             }
 
             function clearFeedback() {
-                elements.feedback.className = 'feedback hidden';
+                elements.feedback.className = 'status hidden';
             }
 
             function show(step) {

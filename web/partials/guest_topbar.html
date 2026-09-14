@@ -1,0 +1,13 @@
+{#- The bar across the top of the pages a guest opens on a phone.
+    Only the gallery is offered, and only where guests are meant to reach it:
+    the including page may set `show_gallery_link` to false. -#}
+<header class="topbar">
+    <div class="topbar-inner">
+        <span class="brand"><span class="brand-mark" aria-hidden="true"></span>PhotoBooth</span>
+        {%- if show_gallery_link is not defined or show_gallery_link %}
+        <nav class="topnav topnav-short" aria-label="{{ t('web.nav.label') }}">
+            <a href="/gallery"{% if active == 'gallery' %} aria-current="page"{% endif %}>{{ t('web.nav.gallery') }}</a>
+        </nav>
+        {%- endif %}
+    </div>
+</header>

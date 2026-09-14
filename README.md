@@ -208,8 +208,9 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 
 ## Dressing the booth for an event
 
-Everything here is set on site from the admin page, and applied on the next start of the booth
-(**Restart app** on the same page).
+Everything here is set on site from the admin page, in the *Event* section of the settings, and
+applied on the next start of the booth (**Save and restart the booth** at the bottom of the settings).
+Each setting there says what it does, its default, and its name in `config.ini`.
 
 ### The welcome screen
 

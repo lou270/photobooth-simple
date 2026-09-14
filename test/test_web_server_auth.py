@@ -178,6 +178,50 @@ def test_saving_the_configuration_writes_the_file(client, editable_config):
     assert 'COUNTDOWN = 9' in editable_config.read_text(encoding='utf-8')
 
 
+def test_save_and_restart_writes_the_file_then_restarts(server, client, editable_config):
+    from libs.webserver.config_form import field_name
+
+    restarts = []
+    server.restart_callback = lambda: restarts.append(True)
+    login(client)
+    # Saved with a usable password, or the save closes the admin area first.
+    form = submitted_form(editable_config, **{
+        field_name('Capture', 'COUNTDOWN'): '4',
+        field_name('Global', 'ADMIN_PASSWORD'): ADMIN_PASSWORD,
+    }, then_restart='1')
+
+    response = client.post('/admin/config', data=form)
+
+    assert response.status_code == 200
+    assert 'COUNTDOWN = 4' in editable_config.read_text(encoding='utf-8')
+    assert restarts == [True]
+
+
+def test_a_plain_save_does_not_restart(server, client, editable_config):
+    from libs.webserver.config_form import field_name
+
+    restarts = []
+    server.restart_callback = lambda: restarts.append(True)
+    login(client)
+    form = submitted_form(editable_config, **{field_name('Global', 'ADMIN_PASSWORD'): ADMIN_PASSWORD})
+
+    response = client.post('/admin/config', data=form)
+
+    assert b'setting-row' in response.data  # still on the admin page, not sent to login
+    assert restarts == []
+
+
+def test_the_admin_page_names_every_setting_as_config_ini_does(client, editable_config):
+    """Months later, the page must still lead back to the line in the file."""
+    from libs.webserver.config_form import CONFIG_FORM_SECTIONS
+
+    login(client)
+    page = client.get('/admin').get_data(as_text=True)
+
+    assert page.count('class="setting-row"') == sum(len(s['fields']) for s in CONFIG_FORM_SECTIONS)
+    assert '[Capture] COUNTDOWN' in page
+
+
 def test_a_refused_value_leaves_the_file_alone(client, editable_config):
     from libs.webserver.config_form import field_name
 

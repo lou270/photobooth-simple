@@ -1,0 +1,22 @@
+{#- The bar across the top of every operator page.
+    The including page sets `active` to the name of its own link. -#}
+<header class="topbar">
+    <div class="topbar-inner">
+        <a class="brand" href="/admin"><span class="brand-mark" aria-hidden="true"></span>PhotoBooth</a>
+        <nav class="topnav" aria-label="{{ t('web.nav.label') }}">
+            {%- for name, href, key in [
+                ('admin', '/admin', 'web.nav.dashboard'),
+                ('stats', '/stats', 'web.nav.stats'),
+                ('remote', '/admin/remote', 'web.nav.phone_photos'),
+                ('editor', '/admin/editor', 'web.nav.editor'),
+                ('logs', '/admin/logs', 'web.nav.logs'),
+                ('gallery', '/gallery', 'web.nav.gallery'),
+            ] %}
+            <a href="{{ href }}"{% if active == name %} aria-current="page"{% endif %}>{{ t(key) }}</a>
+            {%- endfor %}
+        </nav>
+        {%- if show_logout is not defined or show_logout %}
+        <a class="topbar-link" href="/admin/logout">{{ t('web.admin.log_out') }}</a>
+        {%- endif %}
+    </div>
+</header>

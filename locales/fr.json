@@ -76,7 +76,6 @@
     "gallery": {
       "title": "Galerie",
       "admin": "Administration",
-      "stats": "Statistiques",
       "download": "Télécharger",
       "collage_alt": "Montage",
       "collage_title": "Montage",
@@ -101,7 +100,6 @@
       "sent_photos_heading": "Photos envoyées",
       "sent_empty": "Rien envoyé pour l'instant. Vos photos apparaîtront ici.",
       "upload_limits": "Jusqu'à {max_per_sender} photos par téléphone, {max_upload_mb} Mo chacune.",
-      "gallery_link": "Voir les photos prises à la borne",
       "no_internet_hint": "Si votre téléphone signale que ce WiFi n'a pas d'accès à Internet, ouvrez la notification et choisissez :",
       "no_internet_option": "Utiliser ce réseau tel quel",
       "status_pending": "À la borne",
@@ -133,24 +131,31 @@
         "too_fast": "Envoi trop rapide. Patientez un instant et réessayez."
       }
     },
+    "nav": {
+      "label": "Navigation principale",
+      "dashboard": "Administration",
+      "stats": "Statistiques",
+      "gallery": "Galerie",
+      "phone_photos": "Photos des téléphones",
+      "logs": "Journaux",
+      "editor": "Modèles"
+    },
     "admin": {
       "eyebrow": "Administration",
       "log_out": "Se déconnecter",
-      "back_to_admin": "Retour à l'administration",
       "title": "Administration",
       "login_title": "Connexion administrateur",
       "login_heading": "Connexion administrateur",
-      "login_intro": "Une authentification est requise avant d'ouvrir l'espace d'administration de PhotoBooth.",
-      "password_not_set": "ADMIN_PASSWORD n'est pas défini dans config.ini. L'accès administrateur est désactivé.",
-      "password_not_set_actions": "ADMIN_PASSWORD n'est pas défini dans config.ini. Les actions administrateur sont désactivées.",
+      "login_intro": "Entrez le mot de passe administrateur pour gérer la borne.",
+      "password_not_set": "Aucun mot de passe administrateur valide n'est défini dans config.ini (ADMIN_PASSWORD) : l'administration est fermée.",
+      "password_not_set_actions": "Aucun mot de passe administrateur valide n'est défini (ADMIN_PASSWORD) : les modifications sont désactivées.",
       "password_label": "Mot de passe administrateur",
       "password_placeholder": "Mot de passe",
       "sign_in": "Se connecter",
-      "back_to_stats": "Retour aux statistiques",
       "remote_page_title": "Photos des téléphones",
       "remote_title": "Photos envoyées depuis les téléphones",
       "remote_intro": "Tout ce que les invités ont envoyé depuis la page d'envoi de photos. Rejeter une photo la retire de la file de la borne ; la supprimer efface aussi le fichier.",
-      "remote_disabled_warning": "L'envoi depuis un téléphone est désactivé. Activez REMOTE_CAPTURE dans la configuration d'administration et redémarrez l'application.",
+      "remote_disabled_warning": "L'envoi depuis les téléphones est désactivé. Activez « Envoi de photos depuis les téléphones » dans les réglages (section Téléphones des invités), puis redémarrez la borne.",
       "filter_all": "Toutes",
       "filter_pending": "En attente",
       "filter_printed": "Imprimées",
@@ -197,35 +202,30 @@
       "sessions_deleted": "{count} session(s) supprimée(s).",
       "prepare_config_failed": "Erreur lors de la préparation de config.ini.",
       "save_config_failed": "Erreur lors de l'enregistrement de config.ini.",
-      "config_saved_restart": "config.ini enregistré. Redémarrez l'application pour appliquer tous les changements.",
-      "config_saved_password_disabled": "config.ini enregistré. Mot de passe administrateur désactivé. La connexion est maintenant désactivée.",
+      "config_saved_restart": "Réglages enregistrés dans config.ini. Redémarrez la borne pour les appliquer.",
+      "config_saved_password_disabled": "Réglages enregistrés. Le mot de passe administrateur est désactivé : la connexion est maintenant fermée.",
       "restart_unavailable": "Le redémarrage n'est pas disponible.",
       "restart_failed": "Erreur lors du redémarrage de l'application.",
       "restart_requested": "Redémarrage de l'application demandé. La page peut être indisponible quelques instants.",
-      "control_panel_title": "Panneau de contrôle PhotoBooth",
-      "control_panel_intro": "Tout ce qu'il faut pour gérer les modèles, les paramètres de l'application et la maintenance est regroupé ici, avec les actions les plus courantes en premier.",
+      "control_panel_title": "Administration de la borne",
+      "control_panel_intro": "Suivez la soirée, modérez les photos et réglez la borne depuis cette page.",
       "templates_eyebrow": "Modèles",
       "edit_layouts": "Modifier les mises en page",
-      "edit_layouts_hint": "Créez, dupliquez et enregistrez des modèles d'impression depuis l'éditeur visuel.",
-      "event_eyebrow": "Événement",
+      "edit_layouts_hint": "Créez et modifiez les mises en page imprimées, avec leurs cadres photo et leurs textes.",
       "welcome_background_title": "Photo de l'écran d'accueil",
-      "welcome_background_hint": "La photo derrière le titre que voient les invités pendant que la borne attend. Le titre, le sous-titre et le nom de l'événement imprimé sur les modèles se règlent dans la section Event de la configuration ci-dessous.",
+      "welcome_background_hint": "La photo derrière le titre que voient les invités pendant que la borne attend. Envoyée à part : elle s'enregistre dès l'envoi, sans le bouton Enregistrer.",
       "welcome_background_none": "Aucune photo envoyée : la borne affiche la sienne.",
       "welcome_background_upload": "Envoyer la photo",
       "welcome_background_remove": "Revenir à la photo de la borne",
-      "welcome_background_restart": "Appliqué au prochain démarrage de la borne.",
       "welcome_background_invalid": "Ce fichier n'est pas une photo lisible par la borne. Utilisez une image JPEG, PNG ou WebP.",
       "welcome_background_save_failed": "La photo d'accueil n'a pas pu être enregistrée.",
       "welcome_background_saved": "Photo d'accueil enregistrée. Redémarrez l'application pour l'afficher.",
       "welcome_background_removed": "Photo d'accueil retirée. Redémarrez l'application pour revenir à celle de la borne.",
       "open_template_editor": "Ouvrir l'éditeur de modèles",
-      "maintenance_eyebrow": "Maintenance",
-      "restart_or_clean": "Redémarrer ou nettoyer",
-      "restart_or_clean_hint": "Redémarrez la borne après des changements, ou supprimez toutes les sessions enregistrées depuis la zone de danger ci-dessous.",
-      "restart_app": "Redémarrer l'application",
+      "restart_app": "Redémarrer",
       "logs_eyebrow": "Journaux",
       "read_app_logs": "Lire les journaux de l'application",
-      "read_app_logs_hint": "Ouvrez les fichiers de journal les plus récents du dossier logs directement dans le navigateur.",
+      "read_app_logs_hint": "Ce que la borne a noté pendant son fonctionnement, utile quand quelque chose ne marche pas.",
       "open_logs": "Ouvrir les journaux",
       "phone_camera_eyebrow": "Appareil photo du téléphone",
       "moderate_phone_photos": "Modérer les photos des téléphones",
@@ -235,25 +235,365 @@
       "disk_available": "{free} disponible",
       "disk_used_aria": "Disque utilisé à {percent} pour cent",
       "used": "Utilisé",
-      "available": "Disponible",
       "total": "Total",
       "disk_used_on": "{percent}% utilisé sur {path}",
-      "configuration_eyebrow": "Configuration",
-      "edit_config_ini": "Modifier config.ini",
-      "edit_config_ini_hint": "Utilisez cette section pour modifier une imprimante, un compte à rebours, un port ou un réglage matériel. Les champs à choix utilisent des listes déroulantes, les booléens des cases à cocher, et CALIBRATION reste une chaîne brute.",
-      "apply_changes_hint": "Appliquez vos changements ici, puis redémarrez PhotoBooth pour charger la nouvelle configuration.",
-      "save_config": "Enregistrer config.ini",
-      "config_tip": "Astuce : enregistrez d'abord, puis utilisez l'action de redémarrage ci-dessus pour appliquer la configuration mise à jour à l'application en cours d'exécution.",
       "danger_zone": "Zone de danger",
       "delete_saved_photos": "Supprimer les photos enregistrées",
-      "delete_saved_photos_hint": "Ceci supprime définitivement toutes les images enregistrées, les dossiers de session et les statistiques liées à cette session.",
-      "delete_saved_photos_warning": "N'utilisez cette action que lorsque vous voulez volontairement effacer l'historique de la borne.",
-      "delete_all_photos": "Supprimer toutes les photos"
+      "delete_saved_photos_hint": "Supprime définitivement toutes les séances enregistrées, les photos reçues des téléphones et les statistiques (dont le compteur de tirages). La photo d'accueil et les réglages sont conservés.",
+      "delete_saved_photos_warning": "À utiliser entre deux événements, après avoir récupéré les photos (archive dans Statistiques, ou clé USB).",
+      "delete_all_photos": "Supprimer toutes les photos",
+      "stats_eyebrow": "Statistiques",
+      "stats_card_title": "Chiffres de la soirée",
+      "stats_card_hint": "Photos prises, tirages restants, téléchargements, et archive de toutes les photos.",
+      "open_stats": "Voir les statistiques",
+      "restart_title": "Redémarrer la borne",
+      "restart_hint": "Applique les réglages enregistrés et la photo d'accueil. La borne est indisponible quelques secondes.",
+      "config_saved_restarting": "Réglages enregistrés. Redémarrage de la borne demandé : la page peut être indisponible quelques instants.",
+      "confirm_delete_all": "Supprimer définitivement toutes les photos et les statistiques ?",
+      "restart_card_eyebrow": "Maintenance"
+    },
+    "config": {
+      "heading": "Réglages de la borne",
+      "intro": "Chaque réglage explique à quoi il sert, indique sa valeur par défaut et le nom qu'il porte dans config.ini, pour s'y retrouver aussi en ouvrant le fichier à la main.",
+      "toc": "Sections",
+      "advanced": "Avancé",
+      "default": "Par défaut : {value}",
+      "key_title": "Nom de ce réglage dans le fichier config.ini",
+      "current_value": "Actuel : {value}",
+      "leave_unchanged": "Ne pas modifier",
+      "password_placeholder": "Laisser vide pour garder le mot de passe actuel",
+      "password_set": "Un mot de passe est défini.",
+      "password_not_set": "Aucun mot de passe valide : l'administration est fermée.",
+      "save": "Enregistrer",
+      "save_and_restart": "Enregistrer et redémarrer la borne",
+      "unsaved": "Modifications non enregistrées",
+      "restart_note": "La borne lit ces réglages au démarrage : ils s'appliquent au prochain redémarrage.",
+      "load_failed": "Impossible de lire config.ini pour afficher les réglages.",
+      "value": {
+        "on": "activé",
+        "off": "désactivé",
+        "empty": "vide",
+        "disabled": "désactivé",
+        "unlimited": "Illimité",
+        "automatic": "automatique",
+        "printing_disabled": "aucune (impression désactivée)",
+        "open_network": "Réseau ouvert"
+      },
+      "units": {
+        "seconds": "s",
+        "frames": "images",
+        "prints": "tirages",
+        "copies": "copies",
+        "megabytes": "Mo",
+        "gigabytes": "Go",
+        "pixels": "px",
+        "percent": "%",
+        "photos": "photos",
+        "days": "jours",
+        "files": "fichiers"
+      },
+      "errors": {
+        "required": "« {label} » doit être renseigné.",
+        "not_a_number": "« {label} » doit être un nombre.",
+        "at_least": "« {label} » doit valoir au moins {min}.",
+        "at_most": "« {label} » doit valoir au plus {max}."
+      },
+      "choices": {
+        "camera": {
+          "auto": "Détection automatique",
+          "gphoto2": "Reflex en USB (gphoto2)",
+          "picamera2": "Caméra Raspberry Pi (picamera2)",
+          "opencv": "Webcam USB (OpenCV)",
+          "fake": "Factice, sans matériel (tests)"
+        },
+        "language": {
+          "en": "English",
+          "fr": "Français"
+        },
+        "rotation": {
+          "0": "Aucune (paysage)",
+          "90": "Quart de tour à droite (portrait)",
+          "180": "À l'envers",
+          "270": "Quart de tour à gauche (portrait)"
+        }
+      },
+      "sections": {
+        "event": {
+          "title": "Événement",
+          "description": "Ce qui personnalise la borne pour une soirée : l'écran d'accueil et les textes imprimés sur les photos."
+        },
+        "slideshow": {
+          "title": "Diaporama d'attente",
+          "description": "Les photos de la soirée défilent sur l'écran d'accueil quand personne n'utilise la borne."
+        },
+        "capture": {
+          "title": "Prise de vue",
+          "description": "Compte à rebours, filtres, appareil photo utilisé et bords flous autour des images."
+        },
+        "print": {
+          "title": "Impression",
+          "description": "L'imprimante, et combien de tirages les invités peuvent demander."
+        },
+        "phones": {
+          "title": "Téléphones des invités",
+          "description": "Ce que les invités peuvent faire depuis leur propre téléphone : récupérer leur photo, ou en envoyer une à la borne pour l'imprimer."
+        },
+        "guest_network": {
+          "title": "Réseau des invités (QR codes)",
+          "description": "Ce que contiennent les QR codes affichés par la borne, pour qu'un téléphone la rejoigne sans rien taper. La borne ne crée pas ce réseau WiFi : elle le décrit seulement."
+        },
+        "screen": {
+          "title": "Écran et matériel",
+          "description": "Langue, taille et orientation de l'écran, et anneau lumineux."
+        },
+        "storage": {
+          "title": "Stockage et clé USB",
+          "description": "Où les photos sont enregistrées, et les garde-fous contre un disque plein."
+        },
+        "access": {
+          "title": "Accès, réseau et journaux",
+          "description": "Le mot de passe de ces pages, l'adresse du serveur web et la conservation des journaux."
+        },
+        "dslr_liveview": {
+          "title": "Reflex : pendant l'aperçu",
+          "description": "Réglages envoyés à un appareil reflex (gphoto2 uniquement) pendant que l'aperçu s'affiche. « Ne pas modifier » laisse le réglage fait sur l'appareil."
+        },
+        "dslr_capture": {
+          "title": "Reflex : au déclenchement",
+          "description": "Réglages envoyés à l'appareil reflex juste avant chaque photo. « Ne pas modifier » laisse le réglage fait sur l'appareil."
+        }
+      },
+      "fields": {
+        "Event": {
+          "WELCOME_TITLE": {
+            "label": "Titre de l'écran d'accueil",
+            "help": "Les grands mots affichés sur l'écran d'accueil. Laisser vide pour garder « PHOTO BOOTH ». La photo derrière ce titre se change juste au-dessus."
+          },
+          "WELCOME_SUBTITLE": {
+            "label": "Sous-titre de l'écran d'accueil",
+            "help": "Une ligne sous le titre, par exemple les prénoms et la date. Laisser vide pour ne rien afficher."
+          },
+          "EVENT_NAME": {
+            "label": "Nom de l'événement",
+            "help": "Imprimé à la place de {event} dans les textes des modèles (éditeur de modèles). Il n'est affiché nulle part ailleurs."
+          },
+          "DATE_FORMAT": {
+            "label": "Format de la date",
+            "help": "Comment {date} s'imprime sur les modèles : %d jour, %m mois, %Y année, %y année sur 2 chiffres. Exemple : %d/%m/%Y donne 14/09/2026. {time} s'imprime toujours en heures:minutes."
+          }
+        },
+        "Slideshow": {
+          "SLIDESHOW": {
+            "label": "Diaporama quand la borne est inutilisée",
+            "help": "Montre les montages de la soirée, du plus récent au plus ancien. Un toucher ramène l'écran d'accueil sans lancer de séance. Ne démarre qu'une fois la première photo prise."
+          },
+          "SLIDESHOW_IDLE_SECONDS": {
+            "label": "Démarrer le diaporama après",
+            "help": "Temps sans aucun toucher sur l'écran d'accueil avant que le diaporama commence. Minimum 10 secondes."
+          },
+          "SLIDESHOW_PHOTO_SECONDS": {
+            "label": "Durée de chaque photo",
+            "help": "Temps d'affichage d'un montage avant le suivant. Minimum 2 secondes."
+          }
+        },
+        "Capture": {
+          "COUNTDOWN": {
+            "label": "Compte à rebours",
+            "help": "Secondes entre l'appui de l'invité et la photo. 0 déclenche immédiatement."
+          },
+          "FILTERS": {
+            "label": "Filtres photo",
+            "help": "Propose aux invités un choix de filtres (noir et blanc, sépia, vintage…) sur l'écran de revue, avant d'imprimer."
+          },
+          "CAMERA": {
+            "label": "Appareil photo",
+            "help": "« Détection automatique » essaie chaque type d'appareil au démarrage, ce qui est plus lent. Choisir le bon type rend le démarrage plus rapide et prévisible. « Factice » simule un appareil pour tester sans matériel."
+          },
+          "CALIBRATION": {
+            "label": "Calibrage aperçu / photo",
+            "help": "Seulement quand l'aperçu et la photo viennent de deux appareils différents (par exemple caméra Raspberry Pi pour l'aperçu, reflex pour la photo) : recadre l'aperçu pour qu'il corresponde à la photo finale. Format (zoom, décalage_x, décalage_y), à obtenir avec l'outil tools/calibrate_zoom.py. Laisser vide pour désactiver."
+          },
+          "BLUR_CAMERA": {
+            "label": "Bords flous autour de l'aperçu",
+            "help": "Remplit les bandes vides autour de l'aperçu en direct avec une version floutée de l'image, au lieu de bandes unies."
+          },
+          "PREVIEW_BLUR_REFRESH_FRAMES": {
+            "label": "Recalcul du flou de l'aperçu",
+            "help": "Le flou ci-dessus n'est recalculé qu'une image sur N, pour ménager le processeur. 1 = à chaque image (le plus fluide, le plus lourd) ; 3 convient à un Raspberry Pi. Sans effet si les bords flous de l'aperçu sont désactivés."
+          },
+          "BLUR_IMAGES": {
+            "label": "Bords flous autour de chaque photo",
+            "help": "Même effet sur l'écran qui montre chaque photo juste après la prise."
+          },
+          "BLUR_COLLAGE": {
+            "label": "Bords flous autour du montage",
+            "help": "Même effet sur l'écran de revue qui montre le montage final. N'affecte pas l'impression."
+          }
+        },
+        "Print": {
+          "PRINTER": {
+            "label": "Nom de l'imprimante",
+            "help": "Le nom de l'imprimante dans CUPS (visible avec la commande lpstat -p). Laisser vide pour désactiver complètement l'impression."
+          },
+          "MAX_PRINTS": {
+            "label": "Nombre maximum de tirages",
+            "help": "Nombre total de tirages autorisés, par exemple la capacité du rouleau de papier. Une fois atteint, la borne n'imprime plus. Laisser vide pour illimité. Le compteur repart de zéro avec « Supprimer toutes les photos »."
+          },
+          "MAX_COPIES": {
+            "label": "Copies maximum par impression",
+            "help": "Nombre de feuilles qu'un invité peut demander d'un coup (10 au plus). Un modèle qui duplique son montage met deux photos par feuille. 1 masque le choix du nombre de copies."
+          },
+          "PRINTER_WAIT_TIMEOUT": {
+            "label": "Attente si l'imprimante ne répond plus",
+            "help": "Quand l'imprimante est débranchée ou en erreur, temps pendant lequel la borne attend son retour avant d'abandonner l'impression (la photo reste enregistrée). Minimum 5 secondes."
+          }
+        },
+        "Global": {
+          "SHARE": {
+            "label": "Bouton « Récupérer ma photo »",
+            "help": "Ajoute sur l'écran de revue un bouton dont le QR code emmène l'invité sur sa propre photo, à télécharger sur son téléphone. Le téléphone doit pouvoir joindre la borne : voir « Réseau des invités »."
+          },
+          "LANGUAGE": {
+            "label": "Langue",
+            "help": "Langue de l'écran de la borne et de ces pages d'administration. Les pages ouvertes par les invités sur leur téléphone suivent la langue du téléphone."
+          },
+          "FULLSCREEN": {
+            "label": "Plein écran",
+            "help": "Lance la borne en plein écran, sans fenêtre ni barre. Décocher seulement pour tester sur un ordinateur."
+          },
+          "WINDOW_WIDTH": {
+            "label": "Largeur de l'écran",
+            "help": "La définition native de l'écran : 1024 × 600 pour l'écran tactile Ingcool 7″, 1920 × 1080 pour un écran Full HD. Aussi utilisée en plein écran."
+          },
+          "WINDOW_HEIGHT": {
+            "label": "Hauteur de l'écran",
+            "help": "Voir la largeur. Pour un écran tourné, ne pas inverser largeur et hauteur : utiliser la rotation."
+          },
+          "ROTATION": {
+            "label": "Rotation de l'écran",
+            "help": "Pour un écran monté sur le côté : la borne tourne elle-même l'affichage et le tactile. Garder largeur et hauteur à la définition native. Sous Windows, laisser sur « Aucune » : l'affichage y est rogné."
+          },
+          "RINGLED": {
+            "label": "Anneau lumineux LED",
+            "help": "Active l'anneau de LED WS2812 branché sur le port SPI du Raspberry Pi. Sans ce matériel, laisser décoché."
+          },
+          "ADMIN_PASSWORD": {
+            "label": "Mot de passe administrateur",
+            "help": "Protège ces pages. Au moins 10 caractères, et pas un mot de passe courant (admin, 1234…), sinon l'administration reste fermée. Laisser vide garde le mot de passe actuel ; écrire None ferme l'administration."
+          }
+        },
+        "Remote": {
+          "REMOTE_CAPTURE": {
+            "label": "Envoi de photos depuis les téléphones",
+            "help": "Affiche un QR code sur l'écran d'accueil : l'invité prend une photo avec son téléphone, l'envoie à la borne, puis vient l'imprimer. Les photos reçues se modèrent dans « Photos des téléphones »."
+          },
+          "REMOTE_MAX_UPLOAD_MB": {
+            "label": "Poids maximum d'une photo envoyée",
+            "help": "Au-delà, l'envoi est refusé. La page réduit déjà la photo sur le téléphone avant l'envoi, cette limite est donc rarement atteinte."
+          },
+          "REMOTE_MAX_IMAGE_PIXELS": {
+            "label": "Plus grand côté conservé",
+            "help": "Les photos reçues sont réduites à cette taille. Au-delà de la résolution d'impression, on ne gagne rien et on remplit le disque. Minimum 640."
+          },
+          "REMOTE_MAX_PER_SENDER": {
+            "label": "Photos en attente par téléphone",
+            "help": "Combien de photos un même téléphone peut laisser en attente d'impression, pour qu'un invité ne remplisse pas la file à lui seul."
+          },
+          "REMOTE_MAX_PENDING": {
+            "label": "Photos en attente au total",
+            "help": "Taille maximum de la file, tous téléphones confondus."
+          },
+          "REMOTE_MIN_UPLOAD_INTERVAL": {
+            "label": "Délai entre deux envois",
+            "help": "Temps minimum qu'un téléphone doit attendre entre deux envois. 0 pour aucun délai."
+          },
+          "REMOTE_URL": {
+            "label": "Adresse de la borne dans les QR codes",
+            "help": "Laisser vide : la borne trouve elle-même son adresse, ce qui convient quand elle n'a qu'une connexion. À remplir si elle en a plusieurs (câble et WiFi), si elle est derrière une redirection de port ou a un nom fixe. Adresse complète avec le port."
+          }
+        },
+        "WiFi": {
+          "WIFI_SSID": {
+            "label": "Nom du WiFi des invités",
+            "help": "Le réseau que les invités rejoignent pour atteindre la borne (routeur de voyage, WiFi de la salle…). Un premier QR code permet de le rejoindre sans rien taper. Laisser vide si les invités y sont déjà : seul le QR code de la page s'affiche."
+          },
+          "WIFI_PASSWORD": {
+            "label": "Mot de passe du WiFi",
+            "help": "Placé dans le QR code, et donc visible par les invités. Laisser vide pour un réseau ouvert."
+          },
+          "WIFI_HIDDEN": {
+            "label": "Réseau masqué",
+            "help": "À cocher seulement si ce WiFi ne diffuse pas son nom."
+          }
+        },
+        "Storage": {
+          "DCIM_DIRECTORY": {
+            "label": "Dossier des photos",
+            "help": "Où les séances (photos et montages) sont enregistrées. Chemin relatif au dossier de la borne, ou absolu (par exemple /media/photos)."
+          },
+          "DISK_MIN_FREE_GB": {
+            "label": "Espace libre minimum",
+            "help": "En dessous, la borne refuse de nouvelles séances plutôt que d'échouer au milieu de l'une d'elles."
+          },
+          "DISK_MAX_USED_PERCENT": {
+            "label": "Remplissage maximum du disque",
+            "help": "Même garde-fou, en pourcentage du disque occupé. 100 le désactive."
+          }
+        },
+        "USB": {
+          "USB_EXPORT": {
+            "label": "Copie sur clé USB",
+            "help": "Copie automatiquement les séances enregistrées sur une clé USB dès qu'elle est branchée sur la borne."
+          },
+          "USB_MIN_FREE_GB": {
+            "label": "Espace libre minimum sur la clé",
+            "help": "La copie est refusée si la clé a moins d'espace libre que cela."
+          }
+        },
+        "Web": {
+          "WEB_PORT": {
+            "label": "Port du serveur web",
+            "help": "Le port de la galerie, de l'administration et de la page d'envoi de photos (http://adresse-de-la-borne:5000). Les QR codes le reprennent automatiquement."
+          },
+          "WEB_HOST": {
+            "label": "Adresse d'écoute du serveur web",
+            "help": "0.0.0.0 : joignable depuis tous les réseaux de la borne. 127.0.0.1 : uniquement depuis la borne elle-même (les téléphones ne peuvent plus la joindre). Une adresse précise : un seul réseau."
+          }
+        },
+        "Log": {
+          "LOG_RETENTION_DAYS": {
+            "label": "Conservation des journaux",
+            "help": "Les journaux plus anciens sont supprimés à chaque démarrage."
+          },
+          "LOG_MAX_FILES": {
+            "label": "Nombre maximum de journaux",
+            "help": "Au-delà, les plus anciens sont supprimés à chaque démarrage."
+          }
+        },
+        "DSLR": {
+          "SHUTTERSPEED": {
+            "label": "Vitesse d'obturation",
+            "help": "En fraction de seconde. 1/125 fige un mouvement normal ; plus rapide assombrit l'image."
+          },
+          "APERTURE": {
+            "label": "Ouverture (f/)",
+            "help": "Petit nombre : plus de lumière, arrière-plan flou. Grand nombre : tout est net, mais il faut plus de lumière (un flash)."
+          },
+          "FOCUSMODE": {
+            "label": "Mise au point",
+            "help": "One Shot (Canon) ou AF-S (Nikon) : mise au point une fois avant chaque photo. AF-C : suivi continu. Manual : pas d'autofocus."
+          },
+          "ISO": {
+            "label": "Sensibilité ISO",
+            "help": "Plus haut : image plus claire mais plus de grain. 100 à 400 avec un flash."
+          }
+        }
+      }
     },
     "stats": {
       "title": "Statistiques",
-      "heading": "Aperçu d'utilisation de PhotoBooth",
-      "intro": "Consultez les sessions capturées, les téléchargements et l'utilisation de la galerie depuis le serveur web intégré.",
+      "heading": "Statistiques de la borne",
+      "intro": "Photos prises, impressions, téléchargements et visites de la galerie depuis la dernière remise à zéro.",
       "download_all": "Télécharger toutes les photos",
       "photos_taken": "Photos prises",
       "photos_taken_hint": "Total des montages créés par la borne.",

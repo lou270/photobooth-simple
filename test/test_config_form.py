@@ -1,5 +1,6 @@
 """The admin form over config.ini: what it shows, and what it writes back."""
 
+import json
 import sys
 import textwrap
 from pathlib import Path
@@ -7,6 +8,9 @@ from pathlib import Path
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
+import libs.config as config_module
+from libs import i18n
+from libs.config import Config
 from libs.webserver import config_form
 from libs.webserver.config_form import (
     CONFIG_FORM_SECTIONS,
@@ -18,7 +22,10 @@ from libs.webserver.config_form import (
     load_parser,
     normalize_value,
     render_sections,
+    text_key,
 )
+
+LOCALES = Path(__file__).resolve().parents[1] / 'locales'
 
 SAMPLE = textwrap.dedent("""\
     [Global]
@@ -220,7 +227,7 @@ def test_a_missing_required_number_is_refused_by_name():
     parser = load_parser(SHIPPED_CONFIG)
     form = full_form(parser, **{field_name('Web', 'WEB_PORT'): ''})
 
-    with pytest.raises(ValueError, match='Web port'):
+    with pytest.raises(ValueError, match=config_form.field_label(spec('Web', 'WEB_PORT'))):
         collect_updates(form, parser)
 
 
@@ -259,8 +266,156 @@ def test_every_field_declares_a_control_the_form_can_render():
     for section_spec in CONFIG_FORM_SECTIONS:
         for field_spec in section_spec['fields']:
             assert field_spec['control'] in known
-            assert field_spec['label']
             if field_spec['control'] == 'select':
                 assert field_spec['choices']
             if field_spec['control'] == 'number':
                 assert field_spec['number_type'] in {'int', 'float', 'optional_int'}
+
+
+# --- what the operator reads ------------------------------------------------
+
+def catalog(lang):
+    """The locale file itself, flattened: translate() would hide a gap behind English."""
+    flat = {}
+
+    def walk(prefix, node):
+        for key, value in node.items():
+            dotted = f'{prefix}.{key}' if prefix else key
+            if isinstance(value, dict):
+                walk(dotted, value)
+            else:
+                flat[dotted] = value
+
+    walk('', json.loads((LOCALES / f'{lang}.json').read_text(encoding='utf-8')))
+    return flat
+
+
+@pytest.mark.parametrize('lang', i18n.AVAILABLE_LANGUAGES)
+def test_every_setting_is_explained_in_every_language(lang):
+    """A setting with no words is a setting nobody remembers the purpose of."""
+    texts = catalog(lang)
+    missing = []
+
+    for section_spec in CONFIG_FORM_SECTIONS:
+        for part in ('title', 'description'):
+            key = f'web.config.sections.{section_spec["id"]}.{part}'
+            if not texts.get(key):
+                missing.append(key)
+        for field_spec in section_spec['fields']:
+            wanted = [text_key(field_spec, 'label'), text_key(field_spec, 'help')]
+            wanted += [choice_key for _value, choice_key in field_spec.get('choices', ()) if choice_key is not None]
+            if 'unit' in field_spec:
+                wanted.append(f'web.config.units.{field_spec["unit"]}')
+            wanted += [field_spec[extra] for extra in ('default_key', 'placeholder_key') if extra in field_spec]
+            missing += [key for key in wanted if not texts.get(key)]
+
+    assert missing == []
+
+
+def test_the_form_reads_in_the_booth_language():
+    sections = render_sections(load_parser(SAMPLE), lang='fr')
+    countdown = next(f for s in sections for f in s['fields'] if f['option'] == 'COUNTDOWN')
+
+    assert countdown['label'] == i18n.translate('fr', 'web.config.fields.Capture.COUNTDOWN.label')
+    assert countdown['default_text'] == '5 s'
+    assert countdown['unit_text'] == 's'
+
+
+def test_a_refusal_is_worded_for_the_operator_in_their_language():
+    with pytest.raises(ValueError) as refusal:
+        coerce_value(spec('Capture', 'COUNTDOWN'), 'cinq', '5', lang='fr')
+
+    assert i18n.translate('fr', 'web.config.fields.Capture.COUNTDOWN.label') in str(refusal.value)
+    assert 'invalid literal' not in str(refusal.value)
+
+
+def test_a_refused_submission_keeps_every_other_value_typed():
+    parser = load_parser(SHIPPED_CONFIG)
+    form = full_form(parser, **{
+        field_name('Capture', 'COUNTDOWN'): '9',
+        field_name('Web', 'WEB_PORT'): '0',
+    })
+
+    with pytest.raises(ValueError) as refusal:
+        collect_updates(form, parser)
+
+    assert refusal.value.submitted_form_values[field_name('Capture', 'COUNTDOWN')] == '9'
+
+
+# Each option the form edits, and the Config getter that reads it.
+GETTERS = {
+    ('Global', 'LANGUAGE'): 'get_language',
+    ('Global', 'FULLSCREEN'): 'get_fullscreen',
+    ('Global', 'WINDOW_WIDTH'): 'get_window_size',
+    ('Global', 'WINDOW_HEIGHT'): 'get_window_size',
+    ('Global', 'ROTATION'): 'get_window_rotation',
+    ('Global', 'SHARE'): 'get_share',
+    ('Global', 'RINGLED'): 'get_ringled',
+    ('Event', 'WELCOME_TITLE'): 'get_welcome_title',
+    ('Event', 'WELCOME_SUBTITLE'): 'get_welcome_subtitle',
+    ('Event', 'EVENT_NAME'): 'get_event_name',
+    ('Event', 'DATE_FORMAT'): 'get_date_format',
+    ('Slideshow', 'SLIDESHOW'): 'get_slideshow',
+    ('Slideshow', 'SLIDESHOW_IDLE_SECONDS'): 'get_slideshow_idle_seconds',
+    ('Slideshow', 'SLIDESHOW_PHOTO_SECONDS'): 'get_slideshow_photo_seconds',
+    ('Web', 'WEB_PORT'): 'get_web_port',
+    ('Web', 'WEB_HOST'): 'get_web_host',
+    ('Log', 'LOG_RETENTION_DAYS'): 'get_log_retention_days',
+    ('Log', 'LOG_MAX_FILES'): 'get_log_max_files',
+    ('WiFi', 'WIFI_SSID'): 'get_wifi_ssid',
+    ('WiFi', 'WIFI_PASSWORD'): 'get_wifi_password',
+    ('WiFi', 'WIFI_HIDDEN'): 'get_wifi_hidden',
+    ('Remote', 'REMOTE_CAPTURE'): 'get_remote_capture',
+    ('Remote', 'REMOTE_URL'): 'get_remote_url',
+    ('Remote', 'REMOTE_MAX_UPLOAD_MB'): 'get_remote_max_upload_mb',
+    ('Remote', 'REMOTE_MAX_IMAGE_PIXELS'): 'get_remote_max_image_pixels',
+    ('Remote', 'REMOTE_MAX_PER_SENDER'): 'get_remote_max_per_sender',
+    ('Remote', 'REMOTE_MAX_PENDING'): 'get_remote_max_pending',
+    ('Remote', 'REMOTE_MIN_UPLOAD_INTERVAL'): 'get_remote_min_upload_interval',
+    ('Capture', 'CAMERA'): 'get_camera_backend',
+    ('Capture', 'COUNTDOWN'): 'get_countdown',
+    ('Capture', 'CALIBRATION'): 'get_calibration',
+    ('Capture', 'FILTERS'): 'get_filters',
+    ('Capture', 'PREVIEW_BLUR_REFRESH_FRAMES'): 'get_preview_blur_refresh_frames',
+    ('Capture', 'BLUR_CAMERA'): 'get_blur_camera',
+    ('Capture', 'BLUR_IMAGES'): 'get_blur_images',
+    ('Capture', 'BLUR_COLLAGE'): 'get_blur_collage',
+    ('Storage', 'DCIM_DIRECTORY'): 'get_dcim_directory',
+    ('Storage', 'DISK_MIN_FREE_GB'): 'get_disk_min_free_gb',
+    ('Storage', 'DISK_MAX_USED_PERCENT'): 'get_disk_max_used_percent',
+    ('Print', 'PRINTER'): 'get_printer',
+    ('Print', 'MAX_PRINTS'): 'get_max_prints',
+    ('Print', 'MAX_COPIES'): 'get_max_copies',
+    ('Print', 'PRINTER_WAIT_TIMEOUT'): 'get_printer_wait_timeout',
+    ('USB', 'USB_EXPORT'): 'get_usb_export_enabled',
+    ('USB', 'USB_MIN_FREE_GB'): 'get_usb_min_free_gb',
+    **{(section, option): getter
+       for section, getter in (('DSLR_Liveview', 'get_dslr_liveview_params'), ('DSLR_Capture', 'get_dslr_capture_params'))
+       for option in ('SHUTTERSPEED', 'APERTURE', 'FOCUSMODE', 'ISO')},
+}
+
+EDITED_FIELDS = [
+    field_spec
+    for section_spec in CONFIG_FORM_SECTIONS
+    for field_spec in section_spec['fields']
+    if field_spec['option'] != 'ADMIN_PASSWORD'
+]
+
+
+@pytest.mark.parametrize('field_spec', EDITED_FIELDS, ids=lambda f: f'{f["section"]}.{f["option"]}')
+def test_the_default_shown_is_the_one_the_booth_uses(tmp_path, monkeypatch, field_spec):
+    """The page says what happens when an option is left out; so must the booth."""
+    section, option = field_spec['section'], field_spec['option']
+    assert (section, option) in GETTERS, f'{section}.{option} has no getter listed here'
+    assert 'default' in field_spec, f'{section}.{option} shows no default'
+
+    def read(lines):
+        path = tmp_path / 'config.ini'
+        path.write_text(''.join(line + '\n' for line in lines), encoding='utf-8')
+        monkeypatch.setattr(config_module, 'CONFIG_PATH', path)
+        return getattr(Config(), GETTERS[(section, option)])()
+
+    left_out = read([f'[{section}]'])
+    written = read([f'[{section}]', f'{option} = {field_spec["default"]}'])
+
+    assert written == left_out

@@ -6,52 +6,50 @@
     <title>PhotoBooth - {{ t('web.admin.login_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        .login-shell {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
         .login-card {
-            width: min(460px, 100%);
-            padding: 28px;
+            text-align: left;
         }
 
-        .login-card p {
-            margin: 0 0 20px;
-            color: var(--text-secondary);
-            line-height: 1.6;
+        .login-card form {
+            display: grid;
+            gap: 14px;
+            margin-top: 22px;
+        }
+
+        .login-card .field-label {
+            margin-bottom: 0;
         }
     </style>
 </head>
 <body>
-    <main class="login-shell">
-        <section class="panel login-card">
+    <header class="topbar">
+        <div class="topbar-inner">
+            <span class="brand"><span class="brand-mark" aria-hidden="true"></span>PhotoBooth</span>
+        </div>
+    </header>
+
+    <main class="center-shell">
+        <section class="panel center-card login-card">
             <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
             <h1>{{ t('web.admin.login_heading') }}</h1>
             <p>{{ t('web.admin.login_intro') }}</p>
 
             {% if error_message %}
-            <div class="status error">{{ error_message }}</div>
+            <div class="status error" role="alert" style="margin-top: 18px;">{{ error_message }}</div>
             {% endif %}
 
             {% if success_message %}
-            <div class="status success">{{ success_message }}</div>
+            <div class="status success" role="status" style="margin-top: 18px;">{{ success_message }}</div>
             {% endif %}
 
             {% if not admin_enabled %}
-            <div class="status error">{{ t('web.admin.password_not_set') }}</div>
+            <div class="status error" style="margin-top: 18px;">{{ t('web.admin.password_not_set') }}</div>
             {% endif %}
 
             <form method="post" action="/admin/login">
                 <label class="field-label" for="password">{{ t('web.admin.password_label') }}</label>
-                <input class="field-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="{{ t('web.admin.password_placeholder') }}" {% if not admin_enabled %}disabled{% endif %}>
-                <div class="actions">
-                    <button type="submit" class="btn btn-primary {% if not admin_enabled %}disabled{% endif %}" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.sign_in') }}</button>
-                    <a href="/stats" class="btn btn-ghost">{{ t('web.admin.back_to_stats') }}</a>
-                </div>
+                <input class="field-input" id="password" name="password" type="password" autocomplete="current-password" placeholder="{{ t('web.admin.password_placeholder') }}" {% if not admin_enabled %}disabled{% else %}autofocus{% endif %}>
+                <button type="submit" class="btn btn-primary btn-block" {% if not admin_enabled %}disabled{% endif %}>{{ t('web.admin.sign_in') }}</button>
             </form>
         </section>
     </main>

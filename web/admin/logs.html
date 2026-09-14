@@ -28,7 +28,7 @@
         .logs-sidebar-header h2,
         .logs-viewer-header h2 {
             margin: 0;
-            font-size: 18px;
+            font-size: 17px;
         }
 
         .logs-sidebar-header p,
@@ -44,23 +44,24 @@
 
         .log-item {
             width: 100%;
-            padding: 14px 18px;
+            padding: 13px 18px;
             border: 0;
-            border-bottom: 1px solid #eeeeee;
+            border-bottom: 1px solid var(--panel-border);
+            border-left: 4px solid transparent;
             background: transparent;
             color: var(--text-primary);
+            font: inherit;
             text-align: left;
             cursor: pointer;
         }
 
         .log-item:hover,
         .log-item.active {
-            background: #ffffff;
+            background: var(--panel-bg);
         }
 
         .log-item.active {
-            border-left: 4px solid var(--accent);
-            padding-left: 14px;
+            border-left-color: var(--champagne);
         }
 
         .log-filename {
@@ -68,12 +69,12 @@
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
-            font-weight: 700;
+            font-weight: 650;
         }
 
         .log-meta {
             display: block;
-            margin-top: 5px;
+            margin-top: 4px;
             color: var(--text-secondary);
             font-size: 12px;
         }
@@ -99,17 +100,12 @@
             margin: 0;
             padding: 18px;
             overflow: auto;
-            background: #111827;
-            color: #e5e7eb;
-            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+            background: var(--ink-deep);
+            color: #e6edf1;
+            font-family: var(--font-mono);
             font-size: 13px;
             line-height: 1.5;
             white-space: pre-wrap;
-        }
-
-        .empty-state {
-            padding: 18px;
-            color: var(--text-secondary);
         }
 
         @media (max-width: 800px) {
@@ -126,17 +122,15 @@
     </style>
 </head>
 <body>
+    {% set active = 'logs' %}
+    {% include 'partials/admin_topbar.html' %}
+
     <main class="page-shell">
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">{{ t('web.admin.eyebrow') }}</span>
                     <h1>{{ t('web.admin.logs_title') }}</h1>
                     <p>{{ t('web.admin.logs_intro') }}</p>
-                </div>
-                <div class="actions">
-                    <a href="/admin" class="btn btn-ghost">{{ t('web.admin.back_to_admin') }}</a>
-                    <a href="/admin/logout" class="btn btn-secondary">{{ t('web.admin.log_out') }}</a>
                 </div>
             </section>
 
@@ -207,6 +201,13 @@
             }
         }
 
+        function showEmpty(message) {
+            const empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = message;
+            logList.replaceChildren(empty);
+        }
+
         async function loadLogs() {
             try {
                 const response = await fetch('/api/admin/logs');
@@ -215,7 +216,7 @@
 
                 const logs = data.logs || [];
                 if (!logs.length) {
-                    logList.innerHTML = `<div class="empty-state">${I18N.no_log_files_found}</div>`;
+                    showEmpty(I18N.no_log_files_found);
                     clearViewer(I18N.no_log_selected_period);
                     return;
                 }
@@ -236,7 +237,7 @@
 
                 openLog(logs[0]);
             } catch (error) {
-                logList.innerHTML = `<div class="empty-state">${error.message}</div>`;
+                showEmpty(error.message);
             }
         }
 
@@ -249,7 +250,7 @@
                 const data = await response.json();
                 if (!response.ok) throw new Error(data.error || I18N.delete_logs_failed);
 
-                logList.innerHTML = `<div class="empty-state">${I18N.no_log_files_found}</div>`;
+                showEmpty(I18N.no_log_files_found);
                 clearViewer(I18N.logs_deleted_template.replace('{count}', data.deleted));
                 await loadLogs();
             } catch (error) {

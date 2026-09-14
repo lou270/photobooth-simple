@@ -484,11 +484,11 @@ class WebServer:
 
         try:
             parser = config_form.load_parser(self._load_config_text())
-            config_sections = config_form.render_sections(parser, form_values=form_values)
+            config_sections = config_form.render_sections(parser, form_values=form_values, lang=g.lang)
         except Exception as exc:
             Logger.error(f'WebServer: Error building admin config form: {exc}')
             config_sections = []
-            config_error_message = 'Unable to load config.ini into the admin form.'
+            config_error_message = i18n.translate(g.lang, 'web.config.load_failed')
 
         if error_message and config_error_message:
             error_message = f'{error_message} {config_error_message}'

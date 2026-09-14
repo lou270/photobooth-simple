@@ -3,73 +3,86 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#171a2f">
     <title>PhotoBooth - {{ t('web.gallery.title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         .gallery-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 18px;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 16px;
         }
 
         .gallery-card {
             overflow: hidden;
         }
 
+        .gallery-card a.thumb {
+            display: block;
+        }
+
         .gallery-card img {
             display: block;
             width: 100%;
+            height: auto;
             aspect-ratio: 4 / 3;
             object-fit: cover;
-            background: #e9ecef;
+            background: var(--panel-muted);
         }
 
         .gallery-card-body {
-            padding: 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            padding: 12px 14px;
         }
 
         .gallery-card-body h2 {
-            margin: 0 0 8px;
-            font-size: 18px;
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 13px;
+            font-weight: 600;
+            font-variant-numeric: tabular-nums;
         }
 
-        .gallery-card-body p {
-            margin: 0 0 14px;
-            color: var(--text-secondary);
-            font-size: 14px;
+        .gallery-card-body .btn {
+            min-height: 38px;
+            padding: 6px 14px;
         }
     </style>
 </head>
-<body>
+<body class="theme-guest">
+    {% set active = 'gallery' %}
+    {% include 'partials/guest_topbar.html' %}
+
     <main class="page-shell">
         <div class="page-container">
             <section class="page-hero">
                 <div>
-                    <span class="eyebrow">{{ t('web.gallery.title') }}</span>
-                </div>
-                <div class="actions">
-                    <a href="/stats" class="btn btn-primary">{{ t('web.gallery.stats') }}</a>
-                    <a href="/admin" class="btn btn-ghost">{{ t('web.gallery.admin') }}</a>
+                    <h1>{{ t('web.gallery.title') }}</h1>
                 </div>
             </section>
 
             <section class="gallery-grid">
                 {% for collage in collages %}
                 <article class="panel gallery-card">
-                    <a href="/collage/{{ collage.session }}" style="display: block; text-decoration: none;">
+                    <a class="thumb" href="/collage/{{ collage.session }}">
                         <img src="/thumb/{{ collage.session }}" loading="lazy" decoding="async"
                              width="800" height="600"
                              alt="{{ t('web.gallery.collage_alt') }} {{ collage.session }}">
                     </a>
                     <div class="gallery-card-body">
                         <h2>{{ collage.session }}</h2>
-                        <div class="actions">
-                            <a href="/download/{{ collage.session }}/collage.jpg" class="btn btn-success">{{ t('web.gallery.download') }}</a>
-                        </div>
+                        <a href="/download/{{ collage.session }}/collage.jpg" class="btn btn-success">{{ t('web.gallery.download') }}</a>
                     </div>
                 </article>
                 {% endfor %}
             </section>
+
+            <footer class="page-footer">
+                <a href="/admin">{{ t('web.gallery.admin') }}</a>
+            </footer>
         </div>
     </main>
 </body>
