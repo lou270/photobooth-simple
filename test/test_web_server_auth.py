@@ -222,6 +222,22 @@ def test_the_admin_page_names_every_setting_as_config_ini_does(client, editable_
     assert '[Capture] COUNTDOWN' in page
 
 
+def test_the_template_editor_speaks_the_booth_language(tmp_path):
+    from libs import i18n
+    from libs.webserver.admin import EDITOR_PAGE_JS_KEYS
+
+    server = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD, booth_language='fr')
+    client = server.app.test_client()
+    login(client)
+
+    page = client.get('/admin/editor').get_data(as_text=True)
+
+    assert i18n.translate('fr', 'web.editor.template_properties') in page
+    assert 'Template Properties' not in page
+    for key in EDITOR_PAGE_JS_KEYS.values():
+        assert i18n.translate('fr', key) != key, f'{key} has no French text'
+
+
 def test_a_refused_value_leaves_the_file_alone(client, editable_config):
     from libs.webserver.config_form import field_name
 

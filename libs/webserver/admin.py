@@ -32,6 +32,17 @@ LOGS_PAGE_JS_KEYS = {
     'logs_deleted_template': 'web.admin.logs_deleted_template',
 }
 
+# Same for editor/template_editor.html: alerts, confirmations and the names of
+# the built-in templates are all built by its script.
+EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
+    'sample_event', 'builtin_empty_name', 'builtin_empty_description', 'builtin_full_landscape',
+    'builtin_full_portrait', 'builtin_full_description', 'builtin_strip_portrait', 'builtin_strip_landscape',
+    'builtin_strip_description', 'duplicate_template', 'delete_template', 'embedded_image', 'canvas_photo',
+    'canvas_text', 'copy_name', 'builtin_not_deletable', 'keep_one_template', 'confirm_delete_with_file',
+    'confirm_delete', 'delete_failed', 'new_template_name', 'new_template_description', 'saved', 'save_failed',
+    'invalid_file', 'imported', 'parse_failed', 'no_background', 'no_foreground',
+)}
+
 
 def create_blueprint(server):
     """Build the admin routes, closing over the running WebServer."""
@@ -47,7 +58,7 @@ def create_blueprint(server):
         if not os.path.exists(server.template_editor_path):
             return 'Template editor not found', 404
 
-        return render_template('editor/template_editor.html')
+        return render_template('editor/template_editor.html', js_i18n=i18n.bundle(g.lang, EDITOR_PAGE_JS_KEYS))
 
     @blueprint.route('/admin/editor/fonts/<variant>')
     def editor_font(variant):

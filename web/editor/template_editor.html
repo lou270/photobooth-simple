@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="{{ g.lang }}">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Photo Booth Template Editor</title>
+    <title>PhotoBooth - {{ t('web.editor.page_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
         /* The font the booth prints text in, served by the booth itself, so a
@@ -446,18 +446,18 @@
     <div class="editor-app">
     <div class="sidebar">
         <div class="sidebar-header">
-            <h1>Templates</h1>
+            <h1>{{ t('web.editor.templates') }}</h1>
             <div style="display: grid; gap: 10px;">
-                <button class="btn btn-primary" onclick="createNewTemplate()" style="width: 100%;">New template</button>
+                <button class="btn btn-primary" onclick="createNewTemplate()" style="width: 100%;">{{ t('web.editor.new_template') }}</button>
                 <input type="file" id="importJsonFile" accept="application/json,.json" onchange="importTemplate()" style="display: none;">
                 <button class="btn btn-primary" onclick="document.getElementById('importJsonFile').click()" style="width: 100%;">
-                    📤 Import JSON
+                    📤 {{ t('web.editor.import_json') }}
                 </button>
                 <button class="btn btn-success" onclick="exportTemplate()" style="width: 100%;">
-                    📥 Export JSON
+                    📥 {{ t('web.editor.export_json') }}
                 </button>
                 <button class="btn btn-warning" onclick="saveTemplateToServer()" style="width: 100%;">
-                    💾 Save to server
+                    💾 {{ t('web.editor.save_to_server') }}
                 </button>
             </div>
         </div>
@@ -466,28 +466,28 @@
 
     <div class="main-content">
         <div class="toolbar">
-            <label>Orientation:</label>
+            <label>{{ t('web.editor.orientation') }}</label>
             <select id="orientationSelect" onchange="changeOrientation()">
-                <option value="landscape">Landscape</option>
-                <option value="portrait">Portrait</option>
+                <option value="landscape">{{ t('web.editor.landscape') }}</option>
+                <option value="portrait">{{ t('web.editor.portrait') }}</option>
             </select>
 
-            <label>Format:</label>
+            <label>{{ t('web.editor.format') }}</label>
             <select id="formatSelect" onchange="changeFormat()">
                 <option value="10x15">10x15 cm</option>
                 <option value="5x15">5x15 cm</option>
-                <option value="custom">Custom</option>
+                <option value="custom">{{ t('web.editor.custom') }}</option>
             </select>
 
-            <label>Size:</label>
+            <label>{{ t('web.editor.size') }}</label>
             <input type="number" id="widthInput" value="1800" onchange="updatePageDimensions()">
             <span style="color: var(--text-muted); margin: 0 2px;">×</span>
             <input type="number" id="heightInput" value="1200" onchange="updatePageDimensions()">
 
             <input type="checkbox" id="gridToggle" checked onchange="toggleGrid()">
-            <label for="gridToggle">Grid</label>
+            <label for="gridToggle">{{ t('web.editor.grid') }}</label>
 
-            <label>Step:</label>
+            <label>{{ t('web.editor.step') }}</label>
             <input type="number" id="gridSizeInput" value="30" min="5" max="100" step="5" onchange="updateGridSize()">
         </div>
 
@@ -500,172 +500,180 @@
     </div>
 
     <div class="properties-panel">
-        <h3>Template Properties</h3>
+        <h3>{{ t('web.editor.template_properties') }}</h3>
         <div class="prop-group">
-            <label>Name:</label>
+            <label>{{ t('web.editor.name') }}</label>
             <input type="text" id="templateName" oninput="updateTemplateName()">
         </div>
         <div class="prop-group">
-            <label>Description:</label>
+            <label>{{ t('web.editor.description') }}</label>
             <input type="text" id="templateDesc" oninput="updateTemplateDesc()">
         </div>
 
         <div class="prop-group">
-            <label>Background (optional):</label>
+            <label>{{ t('web.editor.background') }}</label>
             <div style="display: flex; gap: 5px;">
                 <input type="text" id="templateBackground" placeholder="path/to/background.png" oninput="updateTemplateBackground()" style="flex: 1;">
                 <input type="file" id="backgroundFile" accept="image/*" onchange="loadBackgroundImage()" style="display: none;">
-                <button class="btn btn-secondary" onclick="document.getElementById('backgroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
-                <button class="btn btn-secondary" onclick="downloadImageLayer('background')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
+                <button class="btn btn-secondary" title="{{ t('web.editor.choose_image') }}" aria-label="{{ t('web.editor.choose_image') }}" onclick="document.getElementById('backgroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
+                <button class="btn btn-secondary" title="{{ t('web.editor.download_image') }}" aria-label="{{ t('web.editor.download_image') }}" onclick="downloadImageLayer('background')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
             </div>
         </div>
 
         <div class="prop-group">
-            <label>Foreground (optional):</label>
+            <label>{{ t('web.editor.foreground') }}</label>
             <div style="display: flex; gap: 5px;">
                 <input type="text" id="templateForeground" placeholder="../overlays/frame.png" oninput="updateTemplateForeground()" style="flex: 1;">
                 <input type="file" id="foregroundFile" accept="image/*" onchange="loadForegroundImage()" style="display: none;">
-                <button class="btn btn-secondary" onclick="document.getElementById('foregroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
-                <button class="btn btn-secondary" onclick="downloadImageLayer('foreground')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
+                <button class="btn btn-secondary" title="{{ t('web.editor.choose_image') }}" aria-label="{{ t('web.editor.choose_image') }}" onclick="document.getElementById('foregroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
+                <button class="btn btn-secondary" title="{{ t('web.editor.download_image') }}" aria-label="{{ t('web.editor.download_image') }}" onclick="downloadImageLayer('foreground')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
             </div>
         </div>
 
         <div class="prop-group">
-            <button class="btn btn-success" onclick="addPhotoFrame()" style="width: 100%;">+ Add Photo Frame</button>
+            <button class="btn btn-success" onclick="addPhotoFrame()" style="width: 100%;">+ {{ t('web.editor.add_photo_frame') }}</button>
         </div>
 
         <div class="prop-group">
-            <button class="btn btn-success" onclick="addTextBox()" style="width: 100%;">+ Add Text</button>
+            <button class="btn btn-success" onclick="addTextBox()" style="width: 100%;">+ {{ t('web.editor.add_text') }}</button>
         </div>
 
         <div class="prop-group">
             <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="duplicateHorizontal" onchange="updateDuplication()" style="width: auto;">
-                Duplicate horizontally
+                {{ t('web.editor.duplicate_horizontal') }}
             </label>
         </div>
 
         <div class="prop-group">
             <label style="display: flex; align-items: center; gap: 8px;">
                 <input type="checkbox" id="duplicateVertical" onchange="updateDuplication()" style="width: auto;">
-                Duplicate vertically
+                {{ t('web.editor.duplicate_vertical') }}
             </label>
         </div>
 
         <div id="frameProperties" style="display: none;">
-            <h3 style="margin-top: 20px;">Selected Frame</h3>
+            <h3 style="margin-top: 20px;">{{ t('web.editor.selected_frame') }}</h3>
             <div class="prop-group">
-                <label>X:</label>
+                <label>{{ t('web.editor.x') }}</label>
                 <input type="number" id="frameX" onchange="updateFrameProperties()">
             </div>
             <div class="prop-group">
-                <label>Y:</label>
+                <label>{{ t('web.editor.y') }}</label>
                 <input type="number" id="frameY" onchange="updateFrameProperties()">
             </div>
             <div class="prop-group">
-                <label>Width:</label>
+                <label>{{ t('web.editor.width') }}</label>
                 <input type="number" id="frameWidth" onchange="updateFrameProperties()">
             </div>
             <div class="prop-group">
-                <label>Height:</label>
+                <label>{{ t('web.editor.height') }}</label>
                 <input type="number" id="frameHeight" onchange="updateFrameProperties()">
             </div>
             <div class="prop-actions">
-                <button class="btn btn-danger" onclick="deleteSelectedFrame()">Delete</button>
+                <button class="btn btn-danger" onclick="deleteSelectedFrame()">{{ t('web.editor.delete') }}</button>
             </div>
         </div>
 
         <div id="textProperties" style="display: none;">
-            <h3 style="margin-top: 20px;">Selected Text</h3>
+            <h3 style="margin-top: 20px;">{{ t('web.editor.selected_text') }}</h3>
             <div class="prop-group">
-                <label>Text:</label>
+                <label>{{ t('web.editor.text') }}</label>
                 <textarea id="textContent" oninput="updateTextProperties()"></textarea>
                 <div class="placeholder-buttons">
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{event}')" title="Event name, from the admin configuration">{event}</button>
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{date}')" title="Day the photo is taken">{date}</button>
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{time}')" title="Time the photo is taken">{time}</button>
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{event}')" title="{{ t('web.editor.placeholder_event_title') }}">{event}</button>
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{date}')" title="{{ t('web.editor.placeholder_date_title') }}">{date}</button>
+                    <button class="btn btn-secondary" onclick="insertPlaceholder('{time}')" title="{{ t('web.editor.placeholder_time_title') }}">{time}</button>
                 </div>
             </div>
             <div class="prop-group">
-                <label>Color:</label>
+                <label>{{ t('web.editor.color') }}</label>
                 <input type="color" id="textColor" oninput="updateTextProperties()">
             </div>
             <div class="prop-group">
-                <label>Alignment:</label>
+                <label>{{ t('web.editor.alignment') }}</label>
                 <select id="textAlign" onchange="updateTextProperties()">
-                    <option value="left">Left</option>
-                    <option value="center">Center</option>
-                    <option value="right">Right</option>
+                    <option value="left">{{ t('web.editor.align_left') }}</option>
+                    <option value="center">{{ t('web.editor.align_center') }}</option>
+                    <option value="right">{{ t('web.editor.align_right') }}</option>
                 </select>
             </div>
             <div class="prop-group">
                 <label style="display: flex; align-items: center; gap: 8px;">
                     <input type="checkbox" id="textBold" onchange="updateTextProperties()" style="width: auto;">
-                    Bold
+                    {{ t('web.editor.bold') }}
                 </label>
             </div>
             <div class="prop-group">
-                <label>X:</label>
+                <label>{{ t('web.editor.x') }}</label>
                 <input type="number" id="textX" onchange="updateTextProperties()">
             </div>
             <div class="prop-group">
-                <label>Y:</label>
+                <label>{{ t('web.editor.y') }}</label>
                 <input type="number" id="textY" onchange="updateTextProperties()">
             </div>
             <div class="prop-group">
-                <label>Width:</label>
+                <label>{{ t('web.editor.width') }}</label>
                 <input type="number" id="textWidth" onchange="updateTextProperties()">
             </div>
             <div class="prop-group">
-                <label>Height:</label>
+                <label>{{ t('web.editor.height') }}</label>
                 <input type="number" id="textHeight" onchange="updateTextProperties()">
             </div>
             <div class="info-text">
-                The text is sized to fill its box, so a longer event name shrinks instead of overflowing.
-                Placeholders are replaced when the photo is taken; the preview uses today's values.
+                {{ t('web.editor.text_info') }}
             </div>
             <div class="prop-actions">
-                <button class="btn btn-danger" onclick="deleteSelectedFrame()">Delete</button>
+                <button class="btn btn-danger" onclick="deleteSelectedFrame()">{{ t('web.editor.delete') }}</button>
             </div>
         </div>
 
         <div class="info-text">
-            <strong>Shortcuts:</strong><br>
-            - Click to select<br>
-            - Drag to move<br>
-            - Handles to resize<br>
-            - Delete to remove
+            <strong>{{ t('web.editor.shortcuts') }}</strong><br>
+            - {{ t('web.editor.shortcut_select') }}<br>
+            - {{ t('web.editor.shortcut_move') }}<br>
+            - {{ t('web.editor.shortcut_resize') }}<br>
+            - {{ t('web.editor.shortcut_delete') }}
         </div>
     </div>
     </div>
 
     <div id="newTemplateModal" class="modal">
         <div class="modal-content">
-            <h2>New Template</h2>
+            <h2>{{ t('web.editor.new_template') }}</h2>
             <div class="prop-group">
-                <label>Name:</label>
-                <input type="text" id="newTemplateName" placeholder="My template">
+                <label>{{ t('web.editor.name') }}</label>
+                <input type="text" id="newTemplateName" placeholder="{{ t('web.editor.new_name_placeholder') }}">
             </div>
             <div class="prop-group">
-                <label>Description:</label>
-                <input type="text" id="newTemplateDesc" placeholder="Template description">
+                <label>{{ t('web.editor.description') }}</label>
+                <input type="text" id="newTemplateDesc" placeholder="{{ t('web.editor.new_desc_placeholder') }}">
             </div>
             <div class="prop-group">
-                <label>Starting format:</label>
+                <label>{{ t('web.editor.starting_format') }}</label>
                 <select id="newTemplateFormat">
-                    <option value="10x15-landscape">10x15 cm Landscape</option>
-                    <option value="10x15-portrait">10x15 cm Portrait</option>
-                    <option value="5x15">5x15 cm Strip</option>
+                    <option value="10x15-landscape">{{ t('web.editor.format_10x15_landscape') }}</option>
+                    <option value="10x15-portrait">{{ t('web.editor.format_10x15_portrait') }}</option>
+                    <option value="5x15">{{ t('web.editor.format_5x15') }}</option>
                 </select>
             </div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeNewTemplateModal()">Cancel</button>
-                <button class="btn btn-primary" onclick="confirmNewTemplate()">Create</button>
+                <button class="btn btn-secondary" onclick="closeNewTemplateModal()">{{ t('web.editor.cancel') }}</button>
+                <button class="btn btn-primary" onclick="confirmNewTemplate()">{{ t('web.editor.create') }}</button>
             </div>
         </div>
     </div>
 
     <script>
+        // Words the script builds itself, in the booth's language. A {name} in
+        // one of them is filled by fmt(); the template placeholders {event},
+        // {date} and {time} are left alone, since no caller passes them.
+        const I18N = {{ js_i18n|tojson }};
+
+        function fmt(text, values) {
+            return text.replace(/\{(\w+)\}/g, (match, key) => (key in values ? values[key] : match));
+        }
+
         // State
         let templates = [];
         let currentTemplateIndex = -1;
@@ -674,7 +682,7 @@
         // 'text' (template.texts).
         let selectedKind = 'photo';
         // Today's {event}, {date} and {time}, sent by the booth with the templates.
-        let textValues = { event: 'Event name', date: '13/09/2026', time: '21:47' };
+        let textValues = { event: I18N.sample_event, date: '13/09/2026', time: '21:47' };
         const TEXT_LINE_SPACING = 0.15;
         const MIN_TEXT_BOX = 20;
         let gridSize = 30;
@@ -697,8 +705,8 @@
         async function init() {
             templates = [
                 {
-                    "name": "(Empty)",
-                    "description": "Empty page",
+                    "name": I18N.builtin_empty_name,
+                    "description": I18N.builtin_empty_description,
                     "page": { "width": 1800, "height": 1200 },
                     "photos": [],
                     "background": null,
@@ -708,8 +716,8 @@
                         "print-scaling": "fit"
                     }
                 }, {
-                    "name": "Full Page (Landscape)",
-                    "description": "Single photo full page format",
+                    "name": I18N.builtin_full_landscape,
+                    "description": I18N.builtin_full_description,
                     "page": { "width": 1800, "height": 1200 },
                     "photos": [
                         { "x": 60, "y": 60, "width": 1680, "height": 1080 }
@@ -722,8 +730,8 @@
                     }
                 },
                 {
-                    "name": "Full Page (Portrait)",
-                    "description": "Single photo full page format",
+                    "name": I18N.builtin_full_portrait,
+                    "description": I18N.builtin_full_description,
                     "page": { "width": 1200, "height": 1800 },
                     "photos": [
                         { "x": 60, "y": 60, "width": 1080, "height": 1680 }
@@ -736,8 +744,8 @@
                     }
                 },
                 {
-                    "name": "Photo Strip (Portrait)",
-                    "description": "Three photos strip format",
+                    "name": I18N.builtin_strip_portrait,
+                    "description": I18N.builtin_strip_description,
                     "page": { "width": 600, "height": 1800 },
                     "photos": [
                         { "x": 30, "y": 30, "width": 540, "height": 540 },
@@ -753,8 +761,8 @@
                     "duplicate_horizontal": true
                 },
                 {
-                    "name": "Photo Strip (Landscape)",
-                    "description": "Three photos strip format",
+                    "name": I18N.builtin_strip_landscape,
+                    "description": I18N.builtin_strip_description,
                     "page": { "width": 1800, "height": 600 },
                     "photos": [
                         { "x": 30, "y": 30, "width": 540, "height": 540 },
@@ -823,8 +831,8 @@
                             <div class="template-item-desc"></div>
                         </div>
                         <div class="template-item-actions">
-                            <button class="btn btn-secondary template-item-icon-btn" title="Duplicate template" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
-                            ${isBuiltInTemplate ? '' : `<button class="btn btn-danger template-item-icon-btn" title="Delete template" onclick="event.stopPropagation(); deleteTemplate(${index})">×</button>`}
+                            <button class="btn btn-secondary template-item-icon-btn" title="${I18N.duplicate_template}" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
+                            ${isBuiltInTemplate ? '' : `<button class="btn btn-danger template-item-icon-btn" title="${I18N.delete_template}" onclick="event.stopPropagation(); deleteTemplate(${index})">×</button>`}
                         </div>
                     </div>
                 `;
@@ -1154,7 +1162,7 @@
                 ctx.fillRect(x + 4, y + 4, 52, 18);
                 ctx.fillStyle = 'white';
                 ctx.font = '12px sans-serif';
-                ctx.fillText(`Text ${index + 1}`, x + 8, y + 17);
+                ctx.fillText(fmt(I18N.canvas_text, { number: index + 1 }), x + 8, y + 17);
             }
             ctx.restore();
         }
@@ -1221,7 +1229,7 @@
             ctx.fillRect(photo.x + 4, photo.y + 4, 60, 20);
             ctx.fillStyle = 'white';
             ctx.font = '12px sans-serif';
-            ctx.fillText(`Photo ${index + 1}`, photo.x + 8, photo.y + 18);
+            ctx.fillText(fmt(I18N.canvas_photo, { number: index + 1 }), photo.x + 8, photo.y + 18);
         }
 
         function drawResizeHandles(photo) {
@@ -1371,12 +1379,12 @@
                 if (type === 'background') {
                     backgroundImage = img;
                     if (path.startsWith('data:image')) {
-                        document.getElementById('templateBackground').value = '[Base64 Image - ' + Math.round(path.length / 1024) + ' KB]';
+                        document.getElementById('templateBackground').value = fmt(I18N.embedded_image, { size: Math.round(path.length / 1024) });
                     }
                 } else if (type === 'foreground') {
                     foregroundImage = img;
                     if (path.startsWith('data:image')) {
-                        document.getElementById('templateForeground').value = '[Base64 Image - ' + Math.round(path.length / 1024) + ' KB]';
+                        document.getElementById('templateForeground').value = fmt(I18N.embedded_image, { size: Math.round(path.length / 1024) });
                     }
                 }
                 renderCanvas();
@@ -1672,7 +1680,7 @@
 
         function duplicateTemplate(index) {
             const template = JSON.parse(JSON.stringify(templates[index]));
-            template.name = template.name + ' (copy)';
+            template.name = fmt(I18N.copy_name, { name: template.name });
             templates.push(template);
             templateSourceFiles.push(null);
             renderTemplateList();
@@ -1681,12 +1689,12 @@
 
         function deleteTemplate(index) {
             if (index < builtInTemplateCount) {
-                alert('Default templates cannot be deleted.');
+                alert(I18N.builtin_not_deletable);
                 return;
             }
 
             if (templates.length <= 1) {
-                alert('You must keep at least one template.');
+                alert(I18N.keep_one_template);
                 return;
             }
 
@@ -1697,8 +1705,8 @@
             const template = templates[index];
             const sourceFilename = templateSourceFiles[index];
             const confirmMessage = sourceFilename
-                ? `Delete template "${template.name}" and remove templates/${sourceFilename} from server?`
-                : `Delete template "${template.name}"?`;
+                ? fmt(I18N.confirm_delete_with_file, { name: template.name, file: sourceFilename })
+                : fmt(I18N.confirm_delete, { name: template.name });
 
             if (!confirm(confirmMessage)) {
                 return;
@@ -1726,7 +1734,7 @@
                 renderTemplateList();
                 loadTemplate();
             } catch (error) {
-                alert('Error deleting template: ' + error.message);
+                alert(fmt(I18N.delete_failed, { error: error.message }));
             }
         }
 
@@ -1741,8 +1749,8 @@
         }
 
         function confirmNewTemplate() {
-            const name = document.getElementById('newTemplateName').value || 'New Template';
-            const desc = document.getElementById('newTemplateDesc').value || 'Description';
+            const name = document.getElementById('newTemplateName').value || I18N.new_template_name;
+            const desc = document.getElementById('newTemplateDesc').value || I18N.new_template_description;
             const format = document.getElementById('newTemplateFormat').value;
 
             let width = 1800, height = 1200;
@@ -1804,9 +1812,9 @@
                 }
 
                 templateSourceFiles[currentTemplateIndex] = payload.filename || sourceFilename;
-                alert(`Template saved to templates/${templateSourceFiles[currentTemplateIndex]}`);
+                alert(fmt(I18N.saved, { file: templateSourceFiles[currentTemplateIndex] }));
             } catch (error) {
-                alert('Error saving template: ' + error.message);
+                alert(fmt(I18N.save_failed, { error: error.message }));
             }
         }
 
@@ -1842,7 +1850,7 @@
                     const importedTemplate = JSON.parse(e.target.result);
 
                     if (!importedTemplate.page || !importedTemplate.name) {
-                        alert('Invalid template file: missing required fields (page, name)');
+                        alert(I18N.invalid_file);
                         return;
                     }
 
@@ -1851,9 +1859,9 @@
                     renderTemplateList();
                     selectTemplate(templates.length - 1);
 
-                    alert(`Template "${importedTemplate.name}" imported successfully!`);
+                    alert(fmt(I18N.imported, { name: importedTemplate.name }));
                 } catch (error) {
-                    alert('Error parsing JSON file: ' + error.message);
+                    alert(fmt(I18N.parse_failed, { error: error.message }));
                 }
             };
             reader.readAsText(file);
@@ -1870,14 +1878,14 @@
 
             if (layer === 'background') {
                 if (!backgroundImage) {
-                    alert('No background image loaded');
+                    alert(I18N.no_background);
                     return;
                 }
                 imageToDownload = backgroundImage;
                 filename = baseName + '_background.png';
             } else if (layer === 'foreground') {
                 if (!foregroundImage) {
-                    alert('No foreground image loaded');
+                    alert(I18N.no_foreground);
                     return;
                 }
                 imageToDownload = foregroundImage;
