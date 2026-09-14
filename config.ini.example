@@ -33,6 +33,9 @@ SHARE = False
 # If set to True, RingLed will be enabled (requires spidev hardware)
 RINGLED = True
 
+# Number of LEDs on the ring, so the animations go all the way round it
+RINGLED_PIXELS = 12
+
 # Password protecting the admin pages: config editor, template editor, log viewer
 # and deletion of every saved session. Use None to keep admin access disabled.
 # Must be at least 10 characters and not a well-known value, otherwise admin
@@ -63,6 +66,44 @@ DATE_FORMAT = %d/%m/%Y
 SLIDESHOW = False
 SLIDESHOW_IDLE_SECONDS = 60
 SLIDESHOW_PHOTO_SECONDS = 6
+
+[Timing]
+# How long the booth waits for a guest, in seconds. A screen nobody answers goes
+# back to the welcome screen on its own, so the next guest never finds the
+# previous one's session.
+
+# The photo just taken is kept on its own after this long, unless the guest asks
+# to retake it
+AUTO_KEEP_SECONDS = 6
+
+# Back to the welcome screen when nobody presses the button for the next shot
+COUNTDOWN_IDLE_SECONDS = 30
+
+# ...when nobody picks a format
+SELECT_FORMAT_IDLE_SECONDS = 30
+
+# ...when nobody prints or leaves the final photo. It is not printed.
+REVIEW_IDLE_SECONDS = 60
+
+# ...when nobody picks one of the photos phones sent
+PHONE_PHOTOS_IDLE_SECONDS = 90
+
+# ...from an error a guest can continue past (a failed print, say). An error
+# that needs an operator stays on screen.
+ERROR_IDLE_SECONDS = 90
+
+# The QR codes close on their own after this long
+QR_CODES_IDLE_SECONDS = 45
+
+# Shortest time the printing screen stays, so the guest reads where to collect
+# the photo. A touch skips it.
+PRINT_SCREEN_MIN_SECONDS = 6
+
+# Safety nets, not waits: a capture taking longer than this resets the camera,
+# and a print job taking longer than this per sheet is reported as failed.
+# Raise them only for a camera or a printer known to be slower.
+CAPTURE_TIMEOUT_SECONDS = 10
+PRINT_SHEET_TIMEOUT_SECONDS = 180
 
 [Web]
 # Port used by the gallery and admin web server

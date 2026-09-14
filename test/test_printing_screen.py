@@ -22,6 +22,7 @@ from kivy.clock import Clock
 
 from libs.screens import PrintingScreen, ScreenMgr
 from libs.screens import printing as printing_module
+from libs.timings import TIMINGS
 
 
 class FakeDevices:
@@ -99,7 +100,7 @@ def settle(seconds):
 @pytest.fixture
 def quick_exit(monkeypatch):
     monkeypatch.setattr(printing_module, 'PRINT_DONE_SECONDS', 0.01)
-    monkeypatch.setattr(printing_module, 'PRINT_MIN_SECONDS', 0.01)
+    monkeypatch.setattr(TIMINGS, 'print_min', 0.01)
 
 
 # --- the job goes through --------------------------------------------------
@@ -296,7 +297,7 @@ def test_a_job_the_printer_never_finishes_still_gives_up_eventually():
     screen = Printing(app, copies=1)
     screen._tick(None)
 
-    screen._print_started_at = time.monotonic() - (printing_module.PRINT_SHEET_TIMEOUT_SECONDS + 1)
+    screen._print_started_at = time.monotonic() - (TIMINGS.print_sheet_timeout + 1)
     screen._tick(None)
 
     assert app.transitions[0][0] == ScreenMgr.ERROR

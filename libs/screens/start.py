@@ -20,7 +20,7 @@ from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
     BADGE_COLOR, darken_rgba, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
-    QR_POPUP_TIMEOUT_SECONDS, REMOTE_COLOR, SHARE_COLOR, TINY_FONT, wh_bind,
+    REMOTE_COLOR, SHARE_COLOR, TIMINGS, TINY_FONT, wh_bind,
 )
 from libs.screens.base import BackgroundScreen
 from libs.screens.popups import QRCodePopup
@@ -396,7 +396,7 @@ class StartScreen(BackgroundScreen):
             on_dismiss=self._dismiss_qr_popup,
             title=title,
             hint=hint,
-            auto_dismiss_seconds=QR_POPUP_TIMEOUT_SECONDS,
+            auto_dismiss_seconds=TIMINGS.qr_popup,
         )
         self.add_widget(self.qr_popup)
 

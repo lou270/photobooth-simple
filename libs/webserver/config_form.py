@@ -17,7 +17,8 @@ and a submitted form, and returns either rendered fields or new config text.
 import configparser
 import re
 
-from libs import i18n
+from libs import i18n, timings
+from libs.config import TIMING_OPTIONS
 
 # A choice is (value, translation key). A key of None shows the value itself,
 # for values that read the same in every language, such as a shutter speed.
@@ -67,6 +68,13 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Slideshow', 'option': 'SLIDESHOW', 'control': 'checkbox', 'default': 'False'},
             {'section': 'Slideshow', 'option': 'SLIDESHOW_IDLE_SECONDS', 'control': 'number', 'number_type': 'int', 'min': 10, 'step': 1, 'unit': 'seconds', 'default': '60'},
             {'section': 'Slideshow', 'option': 'SLIDESHOW_PHOTO_SECONDS', 'control': 'number', 'number_type': 'int', 'min': 2, 'step': 1, 'unit': 'seconds', 'default': '6'},
+        ),
+    },
+    {
+        'id': 'timing',
+        'fields': tuple(
+            {'section': 'Timing', 'option': option, 'control': 'number', 'number_type': 'int', 'min': minimum, 'step': 1, 'unit': 'seconds', 'default': str(timings.DEFAULTS[name])}
+            for name, (option, minimum) in TIMING_OPTIONS.items()
         ),
     },
     {
@@ -127,6 +135,7 @@ CONFIG_FORM_SECTIONS = (
              'choices': [('0', 'web.config.choices.rotation.0'), ('90', 'web.config.choices.rotation.90'),
                          ('180', 'web.config.choices.rotation.180'), ('270', 'web.config.choices.rotation.270')]},
             {'section': 'Global', 'option': 'RINGLED', 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Global', 'option': 'RINGLED_PIXELS', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 256, 'step': 1, 'unit': 'leds', 'default': '12'},
         ),
     },
     {

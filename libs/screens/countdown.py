@@ -12,12 +12,12 @@ from kivy.uix.floatlayout import FloatLayout
 from libs.i18n import t
 from libs.kivywidgets import KivyCamera, BackgroundBoxLayout, ResizeLabel, RotatingLabel, CircularProgressCounter, icon_button_label, make_icon_button
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, COUNTDOWN_HOME_TIMEOUT_SECONDS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, SHOT_TIMEOUT_SECONDS
+from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_CANCEL, ICON_HOME, ICON_LOADING, ICON_PROCESSING, ICON_TRIGGER, ICON_TTF, TIMINGS, Timing
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
 class CountdownScreen(HomeTimeoutMixin, ColorScreen):
-    HOME_TIMEOUT_SECONDS = COUNTDOWN_HOME_TIMEOUT_SECONDS
+    HOME_TIMEOUT_SECONDS = Timing('countdown_home')
     # The ring is the countdown timer while a shot is being taken, so it must
     # not also be showing the walk-away timeout.
     HOME_TIMEOUT_HIDES_RING = True
@@ -238,7 +238,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
 
     def timer_trigger(self, obj):
         if not(self.app.is_shot_completed(self._current_shot)):
-            if self.app.has_process_timed_out('shot', SHOT_TIMEOUT_SECONDS):
+            if self.app.has_process_timed_out('shot', TIMINGS.shot_timeout):
                 Logger.error('CountdownScreen: capture timed out after countdown.')
                 # The message travels with the recovery rather than being shown
                 # here: it is only true once the camera is back, and the guest

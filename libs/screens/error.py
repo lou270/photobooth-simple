@@ -11,8 +11,8 @@ from libs.i18n import t
 from libs.kivywidgets import ResizeLabel, RoundedButton
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
-    CONFIRM_COLOR, ERROR_HOME_TIMEOUT_SECONDS, HOME_COLOR, ICON_ERROR, ICON_TTF,
-    LARGE_FONT, SMALL_FONT, wh_bind,
+    CONFIRM_COLOR, HOME_COLOR, ICON_ERROR, ICON_TTF,
+    LARGE_FONT, SMALL_FONT, TIMINGS, wh_bind,
 )
 from libs.screens.base import ColorScreen
 
@@ -134,7 +134,7 @@ class ErrorScreen(ColorScreen):
         if not self._show_continue:
             return
         self._home_timeout_clock = Clock.schedule_once(
-            self._home_timeout_event, ERROR_HOME_TIMEOUT_SECONDS)
+            self._home_timeout_event, TIMINGS.error_home)
 
     def _stop_home_timeout(self):
         if self._home_timeout_clock:

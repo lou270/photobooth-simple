@@ -15,7 +15,7 @@ from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba, make_icon_butt
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
     BORDER_THINKNESS, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_TTF,
-    SELECT_FORMAT_HOME_TIMEOUT_SECONDS, SMALL_FONT, wh_bind,
+    SMALL_FONT, Timing, wh_bind,
 )
 from libs.screens.base import ColorScreen, HomeTimeoutMixin
 
@@ -29,7 +29,7 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
     +-----------------+
     """
 
-    HOME_TIMEOUT_SECONDS = SELECT_FORMAT_HOME_TIMEOUT_SECONDS
+    HOME_TIMEOUT_SECONDS = Timing('select_format_home')
 
     # The band the home button lives in. Kept out of the cards' reach: a guest
     # who touched the booth by mistake used to have no way out of this screen,

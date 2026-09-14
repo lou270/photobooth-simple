@@ -4,6 +4,7 @@ from kivy.core.window import Window
 from kivy.metrics import dp
 
 from libs.kivywidgets import hex_to_rgba, window_size_registry
+from libs.timings import TIMINGS, Timing  # noqa: F401 - re-exported for the screens
 
 
 # Font sizes as fractions of min(Window.width, Window.height) — DPI-independent and
@@ -29,46 +30,13 @@ def wh_bind(widget, attr, fn):
         lambda target, attr=attr, fn=fn: setattr(target, attr, fn()),
     )
 
-SHOT_TIMEOUT_SECONDS = 10
-REVIEW_HOME_TIMEOUT_SECONDS = 60
-COUNTDOWN_HOME_TIMEOUT_SECONDS = 30
-SELECT_FORMAT_HOME_TIMEOUT_SECONDS = 30
-# A safety net rather than a visible countdown here: the auto-keep timer below
-# always fires first, so this only catches a guest who left mid-choice with the
-# screen somehow still waiting.
-CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS = 30
+# The delays an operator can tune are TIMINGS, from libs/timings.py, read from
+# config.ini: screens read them when a delay starts rather than at import.
 
-# Keeping the shot is what nearly everyone does; retaking is the exception, so
-# it is the one that needs a button press. Any touch on the screen restarts it.
-CONFIRM_AUTO_KEEP_SECONDS = 6
 # A beat between the printer taking the job and the screen getting out of the
-# way, so the animation does not cut mid-sheet...
+# way, so the animation does not cut mid-sheet. Not a setting: it only paces an
+# animation, and print_min is the delay a guest actually feels.
 PRINT_DONE_SECONDS = 1.5
-# ...and a floor under the whole screen, because a printer that answers at once
-# would otherwise leave nothing on screen long enough to read. A touch skips it.
-PRINT_MIN_SECONDS = 6.0
-# Ceiling on the printing itself, per sheet. PRINTER_WAIT_TIMEOUT is what an
-# operator sets for a printer that went away, and used to bound this too, which
-# meant a dye-sub taking its usual minute a sheet was reported to the guest as a
-# failure while the prints were coming out. This is only a safety net against a
-# job CUPS never finishes, so it is generous.
-PRINT_SHEET_TIMEOUT_SECONDS = 180
-# Longer than the others: a guest browsing the photos phones sent is reading a
-# wall of faces, not answering a prompt.
-REMOTE_GALLERY_HOME_TIMEOUT_SECONDS = 90
-# An error a guest can walk away from — a print that failed, say — left the
-# booth showing their failure to everyone who came after them, because this is
-# the one interactive screen with no way back on its own. Only applied when
-# there is a continue button: a booth in maintenance is meant to stay there,
-# and sending it home would just walk it into the same wall again.
-ERROR_HOME_TIMEOUT_SECONDS = 90
-# The codes are the one overlay with nothing behind it that times out: the
-# welcome screen never leaves on its own, and the popup swallows every touch to
-# stop a tap on the card from starting a session. A guest who walked away from
-# it therefore left the booth unusable until someone found the close button.
-# Long enough for two scans and a phone joining a network, and every touch
-# gives the whole delay back.
-QR_POPUP_TIMEOUT_SECONDS = 45
 
 def lighten_rgba(color, amount=0.35):
     return (

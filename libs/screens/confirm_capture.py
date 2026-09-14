@@ -12,12 +12,12 @@ from kivy.uix.floatlayout import FloatLayout
 from libs.kivywidgets import BlurredImage, make_icon_button, ResizeLabel, short_side
 from libs.file_utils import FileUtils
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_AUTO_KEEP_SECONDS, CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF
+from libs.screens.theme import BORDER_THINKNESS, CANCEL_COLOR, CONFIRM_COLOR, CONFIRM_PROGRESS_COLOR, HOME_COLOR, ICON_CANCEL, ICON_CONFIRM, ICON_HOME, ICON_SHOT_TAKEN, ICON_SHOT_TO_TAKE, ICON_TTF, TIMINGS, Timing
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 
 
 class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
-    HOME_TIMEOUT_SECONDS = CONFIRM_CAPTURE_HOME_TIMEOUT_SECONDS
+    HOME_TIMEOUT_SECONDS = Timing('confirm_capture_home')
 
     """
     +-----------------+
@@ -128,7 +128,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         self._auto_keep_started_at = Clock.get_boottime()
         self.btn_confirm.progress = 1.0
         self.btn_confirm.show_progress = True
-        self._auto_keep_clock = Clock.schedule_once(self._auto_keep_event, CONFIRM_AUTO_KEEP_SECONDS)
+        self._auto_keep_clock = Clock.schedule_once(self._auto_keep_event, TIMINGS.auto_keep)
         self._auto_keep_progress_clock = Clock.schedule_interval(self._update_auto_keep_progress, 1 / 30.0)
 
     def _stop_auto_keep(self):
@@ -143,7 +143,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
 
     def _update_auto_keep_progress(self, dt):
         elapsed = Clock.get_boottime() - self._auto_keep_started_at
-        self.btn_confirm.progress = max(0, 1.0 - (elapsed / CONFIRM_AUTO_KEEP_SECONDS))
+        self.btn_confirm.progress = max(0, 1.0 - (elapsed / TIMINGS.auto_keep))
 
     def _auto_keep_event(self, dt):
         Logger.info('ConfirmCaptureScreen: keeping shot %s on its own.', self._current_shot)

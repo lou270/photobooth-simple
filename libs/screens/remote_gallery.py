@@ -29,7 +29,7 @@ from libs.screens.names import ScreenNames
 from libs.screens.popups import ConfirmPopup
 from libs.screens.theme import (
     CANCEL_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_DELETE, ICON_HOME, ICON_TTF,
-    REMOTE_GALLERY_HOME_TIMEOUT_SECONDS, SMALL_FONT, wh_bind,
+    SMALL_FONT, Timing, wh_bind,
 )
 
 
@@ -46,7 +46,7 @@ class RemoteGalleryScreen(HomeTimeoutMixin, ColorScreen):
     +-----------------------+
     """
 
-    HOME_TIMEOUT_SECONDS = REMOTE_GALLERY_HOME_TIMEOUT_SECONDS
+    HOME_TIMEOUT_SECONDS = Timing('remote_gallery_home')
 
     # A queue of hundreds is possible; a wall of hundreds of textures on a Pi is
     # not, and nobody scrolls that far to find their own face anyway.

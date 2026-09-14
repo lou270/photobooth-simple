@@ -290,7 +290,8 @@
         "percent": "%",
         "photos": "photos",
         "days": "jours",
-        "files": "fichiers"
+        "files": "fichiers",
+        "leds": "LED"
       },
       "errors": {
         "required": "« {label} » doit être renseigné.",
@@ -325,6 +326,10 @@
         "slideshow": {
           "title": "Diaporama d'attente",
           "description": "Les photos de la soirée défilent sur l'écran d'accueil quand personne n'utilise la borne."
+        },
+        "timing": {
+          "title": "Délais des écrans",
+          "description": "Combien de temps la borne attend un invité. Un écran sans réponse revient seul à l'accueil, pour que l'invité suivant ne tombe jamais sur la séance du précédent."
         },
         "capture": {
           "title": "Prise de vue",
@@ -480,6 +485,10 @@
           "ADMIN_PASSWORD": {
             "label": "Mot de passe administrateur",
             "help": "Protège ces pages. Au moins 10 caractères, et pas un mot de passe courant (admin, 1234…), sinon l'administration reste fermée. Laisser vide garde le mot de passe actuel ; écrire None ferme l'administration."
+          },
+          "RINGLED_PIXELS": {
+            "label": "Nombre de LED de l'anneau",
+            "help": "Le nombre de LED de l'anneau lumineux, pour que les animations en fassent tout le tour. 12 pour l'anneau prévu avec la borne."
           }
         },
         "Remote": {
@@ -586,6 +595,48 @@
           "ISO": {
             "label": "Sensibilité ISO",
             "help": "Plus haut : image plus claire mais plus de grain. 100 à 400 avec un flash."
+          }
+        },
+        "Timing": {
+          "AUTO_KEEP_SECONDS": {
+            "label": "Garder la photo automatiquement après",
+            "help": "Après chaque prise, la photo est gardée toute seule au bout de ce délai, sauf si l'invité demande à la refaire. Le cercle autour du bouton valider montre le temps qui reste."
+          },
+          "COUNTDOWN_IDLE_SECONDS": {
+            "label": "Retour à l'accueil : attente du déclenchement",
+            "help": "Si personne n'appuie pour lancer la photo suivante, la séance est abandonnée et la borne revient à l'accueil."
+          },
+          "SELECT_FORMAT_IDLE_SECONDS": {
+            "label": "Retour à l'accueil : choix du format",
+            "help": "Si personne ne choisit de format, la borne revient à l'accueil."
+          },
+          "REVIEW_IDLE_SECONDS": {
+            "label": "Retour à l'accueil : écran final",
+            "help": "Si personne n'imprime ni ne quitte l'écran qui montre le montage final, la borne revient à l'accueil sans imprimer."
+          },
+          "PHONE_PHOTOS_IDLE_SECONDS": {
+            "label": "Retour à l'accueil : photos des téléphones",
+            "help": "Si personne ne choisit une des photos envoyées par les téléphones, la borne revient à l'accueil. Plus long que les autres : on y parcourt des photos."
+          },
+          "ERROR_IDLE_SECONDS": {
+            "label": "Retour à l'accueil : erreur",
+            "help": "Pour une erreur que l'invité peut passer (une impression ratée, par exemple). Une erreur qui demande un opérateur reste affichée."
+          },
+          "QR_CODES_IDLE_SECONDS": {
+            "label": "Fermeture des QR codes",
+            "help": "Les QR codes de l'écran d'accueil se ferment seuls après ce délai. Assez long pour scanner deux codes et rejoindre le WiFi. Minimum 10 secondes."
+          },
+          "PRINT_SCREEN_MIN_SECONDS": {
+            "label": "Durée minimum de l'écran d'impression",
+            "help": "L'écran d'impression reste au moins ce temps, pour que l'invité lise où récupérer sa photo, même si l'imprimante répond tout de suite. Un toucher le passe."
+          },
+          "CAPTURE_TIMEOUT_SECONDS": {
+            "label": "Délai maximum d'une prise de vue",
+            "help": "Filet de sécurité : une prise de vue plus longue que ça est considérée comme bloquée, et l'appareil photo est réinitialisé. À augmenter seulement pour un appareil connu pour être lent. Minimum 3 secondes."
+          },
+          "PRINT_SHEET_TIMEOUT_SECONDS": {
+            "label": "Délai maximum d'impression par feuille",
+            "help": "Filet de sécurité : une impression qui dure plus longtemps que ça par feuille est déclarée en échec. Une imprimante à sublimation met souvent une minute par feuille. Minimum 30 secondes."
           }
         }
       }

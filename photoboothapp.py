@@ -51,6 +51,7 @@ from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
 from libs.stats_store import StatsStore
 from libs.template_collage import load_templates
+from libs.timings import TIMINGS
 from libs.usb_transfer import UsbTransfer
 from libs.webserver import WebServer
 
@@ -80,6 +81,9 @@ class PhotoboothApp(App):
         # of them.
         self.LANGUAGE = config.get_language()
         i18n.set_language(self.LANGUAGE)
+        # Same constraint for the delays: screens read them as they run, but
+        # nothing should run before the operator's values are in.
+        TIMINGS.update(config.get_timings())
         self.FULLSCREEN = config.get_fullscreen()
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()
@@ -118,7 +122,7 @@ class PhotoboothApp(App):
         
         # Always a usable object: a ring light that cannot be driven degrades to
         # a no-op instead of stopping the booth from starting.
-        RINGLED = create_led(enabled=config.get_ringled(), num_pixels=12)
+        RINGLED = create_led(enabled=config.get_ringled(), num_pixels=config.get_ringled_pixels())
 
         # Assign local variables
         self.sm = None

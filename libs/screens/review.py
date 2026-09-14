@@ -18,8 +18,8 @@ from libs.file_utils import FileUtils
 from libs.screens.filter_strip import FilterStrip, build_thumbnails
 from libs.screens.theme import (
     BORDER_THINKNESS, CONFIRM_COLOR, HOME_COLOR, HOME_PROGRESS_COLOR, ICON_HOME, ICON_PRINT,
-    ICON_SHARE, ICON_TTF, REVIEW_HOME_TIMEOUT_SECONDS, SHARE_COLOR, SMALL_FONT,
-    STEPPER_COLOR, wh_bind,
+    ICON_SHARE, ICON_TTF, SHARE_COLOR, SMALL_FONT,
+    STEPPER_COLOR, Timing, wh_bind,
 )
 from libs.screens.base import HomeTimeoutMixin, ColorScreen
 from libs.screens.names import ScreenNames
@@ -43,7 +43,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     anyone thinks about.
     """
 
-    HOME_TIMEOUT_SECONDS = REVIEW_HOME_TIMEOUT_SECONDS
+    HOME_TIMEOUT_SECONDS = Timing('review_home')
 
     # All as fractions of the short side, so the screen looks the same whichever
     # way the panel is turned. The print button is the biggest: it is what the

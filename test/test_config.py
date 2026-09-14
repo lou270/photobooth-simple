@@ -289,3 +289,56 @@ def test_a_rotated_booth_keeps_the_panel_mode_unswapped(tmp_path, monkeypatch):
     """)
     assert config.get_window_size() == (1920, 1080)
     assert config.get_window_rotation() == 90
+
+
+# --- delays and the ring light ------------------------------------------------
+
+def test_a_file_without_timing_keeps_every_delay_the_booth_had(tmp_path, monkeypatch):
+    from libs.timings import DEFAULTS
+
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+    """)
+    assert config.get_timings() == DEFAULTS
+
+
+def test_a_delay_set_in_the_file_is_used(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Timing]
+        REVIEW_IDLE_SECONDS = 120
+    """)
+    assert config.get_timings()['review_home'] == 120
+
+
+@pytest.mark.parametrize('raw', ['0', '-5', '1'])
+def test_a_delay_too_short_to_read_is_raised_to_its_floor(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Timing]
+        QR_CODES_IDLE_SECONDS = {raw}
+    """)
+    assert config.get_timings()['qr_popup'] == config_module.TIMING_OPTIONS['qr_popup'][1]
+
+
+def test_a_malformed_delay_keeps_its_default(tmp_path, monkeypatch):
+    from libs.timings import DEFAULTS
+
+    config = write_config(tmp_path, monkeypatch, """
+        [Timing]
+        AUTO_KEEP_SECONDS = six
+    """)
+    assert config.get_timings()['auto_keep'] == DEFAULTS['auto_keep']
+
+
+def test_every_delay_the_booth_has_can_be_set():
+    from libs.timings import DEFAULTS
+
+    assert set(config_module.TIMING_OPTIONS) == set(DEFAULTS)
+
+
+@pytest.mark.parametrize('raw,expected', [('24', 24), ('0', 1), ('9999', 256), ('lots', 12)])
+def test_the_ring_size_stays_one_a_ring_can_have(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        RINGLED_PIXELS = {raw}
+    """)
+    assert config.get_ringled_pixels() == expected

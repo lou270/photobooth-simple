@@ -18,8 +18,7 @@ from libs.i18n import t
 from libs.kivywidgets import PaperFeedAnimation, ResizeLabel
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
-    ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, PRINT_MIN_SECONDS,
-    PRINT_SHEET_TIMEOUT_SECONDS,
+    ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, TIMINGS,
 )
 from libs.screens.base import ColorScreen
 
@@ -129,7 +128,7 @@ class PrintingScreen(ColorScreen):
         """
         self._can_leave = True
         elapsed = time.monotonic() - self._started_at
-        delay = max(PRINT_DONE_SECONDS, PRINT_MIN_SECONDS - elapsed)
+        delay = max(PRINT_DONE_SECONDS, TIMINGS.print_min - elapsed)
         self._clock = Clock.schedule_once(self._leave, delay)
 
     def _leave(self, *args):
@@ -188,7 +187,7 @@ class PrintingScreen(ColorScreen):
 
         # A ceiling on the printing itself, budgeted per sheet. Only a safety
         # net against a job CUPS never finishes; nobody should ever reach it.
-        printing_deadline = PRINT_SHEET_TIMEOUT_SECONDS * max(1, len(self._print_task_ids))
+        printing_deadline = TIMINGS.print_sheet_timeout * max(1, len(self._print_task_ids))
         if time.monotonic() - self._print_started_at >= printing_deadline:
             self._fail(t('printing.print_failed'), t('printing.timed_out'))
             return

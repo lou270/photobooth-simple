@@ -14,7 +14,7 @@ os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kivy.clock import Clock
 
-from libs.screens import confirm_capture
+from libs.timings import TIMINGS
 from libs.screens import (
     ConfirmCaptureScreen,
     CountdownScreen,
@@ -133,6 +133,19 @@ def test_every_waiting_screen_shares_the_behaviour(screen):
     assert screen.HOME_TIMEOUT_SECONDS > 0
 
 
+def test_a_screen_follows_the_delay_the_operator_set(monkeypatch):
+    """Screens are imported before config.ini is read, so they must not copy it."""
+    monkeypatch.setattr(TIMINGS, 'review_home', 12)
+
+    assert ReviewScreen.HOME_TIMEOUT_SECONDS == 12
+
+
+def test_the_confirm_screen_never_leaves_before_it_keeps_the_shot(monkeypatch):
+    monkeypatch.setattr(TIMINGS, 'auto_keep', 45)
+
+    assert ConfirmCaptureScreen.HOME_TIMEOUT_SECONDS > TIMINGS.auto_keep
+
+
 def test_only_the_countdown_owns_the_ring():
     assert CountdownScreen.HOME_TIMEOUT_HIDES_RING is True
     assert ConfirmCaptureScreen.HOME_TIMEOUT_HIDES_RING is False
@@ -163,7 +176,7 @@ class Deciding:
 
 @pytest.fixture
 def quick_auto_keep(monkeypatch):
-    monkeypatch.setattr(confirm_capture, 'CONFIRM_AUTO_KEEP_SECONDS', 0.05)
+    monkeypatch.setattr(TIMINGS, 'auto_keep', 0.05)
 
 
 def test_a_shot_nobody_answers_is_kept(quick_auto_keep):

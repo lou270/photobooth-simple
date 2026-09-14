@@ -290,7 +290,8 @@
         "percent": "%",
         "photos": "photos",
         "days": "days",
-        "files": "files"
+        "files": "files",
+        "leds": "LEDs"
       },
       "errors": {
         "required": "{label} is required.",
@@ -325,6 +326,10 @@
         "slideshow": {
           "title": "Idle slideshow",
           "description": "The evening's photos on the welcome screen while nobody is using the booth."
+        },
+        "timing": {
+          "title": "Screen delays",
+          "description": "How long the booth waits for a guest. A screen nobody answers goes back to the welcome screen on its own, so the next guest never finds the previous one's session."
         },
         "capture": {
           "title": "Taking photos",
@@ -480,6 +485,10 @@
           "ADMIN_PASSWORD": {
             "label": "Admin password",
             "help": "Protects these pages. At least 10 characters and not a common password (admin, 1234...), otherwise the admin area stays closed. Leaving it blank keeps the current one; typing None closes the admin area."
+          },
+          "RINGLED_PIXELS": {
+            "label": "LEDs on the ring",
+            "help": "How many LEDs the ring light has, so the animations go all the way round. 12 for the ring the booth is built with."
           }
         },
         "Remote": {
@@ -586,6 +595,48 @@
           "ISO": {
             "label": "ISO sensitivity",
             "help": "Higher: brighter image but more grain. 100 to 400 with a flash."
+          }
+        },
+        "Timing": {
+          "AUTO_KEEP_SECONDS": {
+            "label": "Keep the photo on its own after",
+            "help": "After each shot, the photo is kept on its own after this delay, unless the guest asks to retake it. The ring around the confirm button shows the time left."
+          },
+          "COUNTDOWN_IDLE_SECONDS": {
+            "label": "Back to welcome: waiting for the shot",
+            "help": "When nobody presses to take the next photo, the session is abandoned and the booth goes back to the welcome screen."
+          },
+          "SELECT_FORMAT_IDLE_SECONDS": {
+            "label": "Back to welcome: format choice",
+            "help": "When nobody picks a format, the booth goes back to the welcome screen."
+          },
+          "REVIEW_IDLE_SECONDS": {
+            "label": "Back to welcome: final screen",
+            "help": "When nobody prints or leaves the screen showing the final collage, the booth goes back to the welcome screen without printing."
+          },
+          "PHONE_PHOTOS_IDLE_SECONDS": {
+            "label": "Back to welcome: phone photos",
+            "help": "When nobody picks one of the photos phones sent, the booth goes back to the welcome screen. Longer than the others: guests browse photos there."
+          },
+          "ERROR_IDLE_SECONDS": {
+            "label": "Back to welcome: error",
+            "help": "For an error a guest can continue past (a failed print, say). An error that needs an operator stays on screen."
+          },
+          "QR_CODES_IDLE_SECONDS": {
+            "label": "QR codes close after",
+            "help": "The QR codes on the welcome screen close on their own after this delay. Long enough to scan two codes and join the WiFi. At least 10 seconds."
+          },
+          "PRINT_SCREEN_MIN_SECONDS": {
+            "label": "Shortest printing screen",
+            "help": "The printing screen stays at least this long, so the guest reads where to collect the photo, even when the printer answers at once. A touch skips it."
+          },
+          "CAPTURE_TIMEOUT_SECONDS": {
+            "label": "Longest capture",
+            "help": "A safety net: a capture taking longer than this is treated as stuck, and the camera is reset. Raise it only for a camera known to be slow. At least 3 seconds."
+          },
+          "PRINT_SHEET_TIMEOUT_SECONDS": {
+            "label": "Longest print, per sheet",
+            "help": "A safety net: a print taking longer than this per sheet is reported as failed. A dye-sublimation printer often takes a minute a sheet. At least 30 seconds."
           }
         }
       }

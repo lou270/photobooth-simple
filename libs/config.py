@@ -6,6 +6,7 @@ from pathlib import Path
 
 from libs.event import DEFAULT_DATE_FORMAT
 from libs.i18n import AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE
+from libs import timings
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 CONFIG_PATH = PROJECT_ROOT / 'config.ini'
@@ -30,6 +31,26 @@ MIN_WINDOW_SIDE = 320
 # host-level rotation would need a different mechanism per display stack and a
 # calibration matrix per touchscreen.
 WINDOW_ROTATIONS = (0, 90, 180, 270)
+
+# Each tunable delay in libs/timings.py, the [Timing] option that sets it, and
+# the shortest value accepted: below it a screen would leave before anyone could
+# read it, or a camera would be reset in the middle of a normal capture.
+TIMING_OPTIONS = {
+    'auto_keep': ('AUTO_KEEP_SECONDS', 1),
+    'countdown_home': ('COUNTDOWN_IDLE_SECONDS', 5),
+    'select_format_home': ('SELECT_FORMAT_IDLE_SECONDS', 5),
+    'review_home': ('REVIEW_IDLE_SECONDS', 5),
+    'remote_gallery_home': ('PHONE_PHOTOS_IDLE_SECONDS', 5),
+    'error_home': ('ERROR_IDLE_SECONDS', 5),
+    'qr_popup': ('QR_CODES_IDLE_SECONDS', 10),
+    'print_min': ('PRINT_SCREEN_MIN_SECONDS', 0),
+    'shot_timeout': ('CAPTURE_TIMEOUT_SECONDS', 3),
+    'print_sheet_timeout': ('PRINT_SHEET_TIMEOUT_SECONDS', 30),
+}
+
+# The WS2812 ring the booth is built around; larger rings exist.
+DEFAULT_RINGLED_PIXELS = 12
+MAX_RINGLED_PIXELS = 256
 
 class Config:
     def __init__(self):
@@ -134,6 +155,18 @@ class Config:
 
     def get_ringled(self):
         return self._get_boolean(('Global',), 'RINGLED', fallback=False)
+
+    def get_ringled_pixels(self):
+        """How many LEDs the ring has: the animations go round that many."""
+        pixels = self._get_int(('Global',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
+        return min(MAX_RINGLED_PIXELS, max(1, pixels))
+
+    def get_timings(self):
+        """Every tunable delay, in seconds, keyed as libs/timings.py names them."""
+        return {
+            name: max(minimum, self._get_float(('Timing',), option, fallback=timings.DEFAULTS[name]))
+            for name, (option, minimum) in TIMING_OPTIONS.items()
+        }
 
     # --- the event --------------------------------------------------------
 

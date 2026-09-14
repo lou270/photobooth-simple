@@ -31,7 +31,7 @@ from libs.screens import ReviewScreen, ScreenMgr, StartScreen
 from libs.screens.names import ScreenNames
 from libs.screens.start import CornerTab
 from libs.screens.popups import QRCodePopup
-from libs.screens.theme import QR_POPUP_TIMEOUT_SECONDS
+from libs.timings import TIMINGS
 from photoboothapp import PhotoboothApp
 
 
@@ -176,8 +176,8 @@ def test_the_welcome_screen_hands_its_codes_a_delay(monkeypatch):
 
     screen.remote_qr_event(None)
 
-    assert built['auto_dismiss_seconds'] == QR_POPUP_TIMEOUT_SECONDS
-    assert QR_POPUP_TIMEOUT_SECONDS > 0
+    assert built['auto_dismiss_seconds'] == TIMINGS.qr_popup
+    assert TIMINGS.qr_popup > 0
 
 
 # --- a capture that failed ---------------------------------------------------
