@@ -207,6 +207,44 @@ def test_closing_a_camera_never_raises(fake_gp):
     camera.close()  # teardown must not raise while the app is already recovering
 
 
+def test_reopening_a_camera_frees_the_old_handle_and_opens_a_new_one(fake_gp):
+    """The old handle points at a USB address the body no longer answers on."""
+    def allocates(out):
+        out.contents.value = 2
+        return 0
+
+    fake_gp.gp_camera_new.result = allocates
+    camera = gphoto2.camera.__new__(gphoto2.camera)
+    old_handle = ctypes.c_void_p(1)
+    camera._ptr = old_handle
+    camera._preview_file = None
+
+    camera.reopen()
+
+    assert fake_gp.gp_camera_free.calls == [(old_handle,)]
+    assert len(fake_gp.gp_camera_init.calls) == 1
+    assert camera._ptr.value == 2
+
+
+def test_reopening_a_camera_that_is_not_back_leaves_a_handle_close_can_free(fake_gp):
+    def allocates(out):
+        out.contents.value = 2
+        return 0
+
+    fake_gp.gp_camera_new.result = allocates
+    fake_gp.gp_camera_init.result = -105
+    fake_gp.gp_result_as_string.result = b'Unknown model'
+    camera = gphoto2.camera.__new__(gphoto2.camera)
+    camera._ptr = ctypes.c_void_p(1)
+    camera._preview_file = None
+
+    with pytest.raises(gphoto2.libgphoto2error):
+        camera.reopen()
+
+    camera.close()
+    assert len(fake_gp.gp_camera_free.calls) == 2
+
+
 def test_closing_a_half_built_camera_is_safe(fake_gp):
     """__init__ can fail before _ptr or _preview_file exist."""
     camera = gphoto2.camera.__new__(gphoto2.camera)

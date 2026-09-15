@@ -133,8 +133,19 @@ class Cv2Camera(Camera):
         return True
 
 class Gphoto2Camera(Camera):
+    # Failures that mean the handle has lost the body, not that the body is busy:
+    # GP_ERROR_IO and GP_ERROR_IO_USB_FIND. Retrying on the same handle cannot
+    # cure them, only reopening it can.
+    DEVICE_LOST_RESULTS = (-7, -52)
+    # A lost camera is looked for at this pace, not at the preview's 15 fps: an
+    # attempt re-runs camera discovery and holds the camera lock while it does.
+    REOPEN_INTERVAL_SECONDS = 2.0
+    # One stray I/O error must not cost a reopen and a liveview restart.
+    REOPEN_AFTER_FAILURES = 3
+
     def __init__(self, dslr_liveview_params=None, dslr_capture_params=None):
         self._preview_failures = 0
+        self._last_reopen_at = None
         if gp:
             # List connected DSLR cameras
             if gp.cameraList().count():
@@ -296,7 +307,46 @@ class Gphoto2Camera(Camera):
                     Logger.warning('Gphoto2Camera preview thread failed %s times: %s', self._preview_failures, e)
                 else:
                     Logger.debug('Gphoto2Camera preview thread: %s', e)
+                self._reopen_if_lost(e)
                 time.sleep(1.0 / self._preview_fps)
+
+    def _reopen_if_lost(self, error):
+        """Reopen the camera when the preview failed because the handle lost it.
+
+        Without this the preview thread retried the dead handle for the rest of
+        the evening: the widget kept the last frame it had drawn, so the guest
+        posed in front of a still image while the log counted failures by the
+        thousand. The capture path recovers on its own, by rebuilding the
+        devices after a failed shot; an idle preview never fails a shot, so it
+        has to heal itself.
+        """
+        if getattr(error, 'result', None) not in self.DEVICE_LOST_RESULTS:
+            return False
+        if self._preview_failures < self.REOPEN_AFTER_FAILURES:
+            return False
+        now = time.monotonic()
+        if self._last_reopen_at is not None and now - self._last_reopen_at < self.REOPEN_INTERVAL_SECONDS:
+            return False
+        self._last_reopen_at = now
+
+        # Under the camera lock, so a capture never runs on a handle mid-swap.
+        with self._camera_lock:
+            try:
+                self._instance.reopen()
+            except Exception as e:
+                Logger.debug('Gphoto2Camera: camera not back on the USB bus yet: %s', e)
+                return False
+            try:
+                self._set_parameters(self.dslr_liveview_params)
+            except Exception as e:
+                Logger.info('Gphoto2Camera: could not reapply liveview params after reopening: %s', e)
+
+        Logger.warning(
+            'Gphoto2Camera: camera reopened after %s failed previews (%s)',
+            self._preview_failures, error,
+        )
+        self._preview_failures = 0
+        return True
 
     def _start_preview_thread(self):
         if self._preview_thread is not None and self._preview_thread.is_alive():

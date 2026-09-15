@@ -7,6 +7,10 @@ GP_CAPTURE_IMAGE = 0
 GP_FILE_TYPE_NORMAL = 1
 LIBRARY_NAME = 'libgphoto2.so'
 
+# Result codes, from gphoto2-port-result.h
+GP_ERROR_IO = -7
+GP_ERROR_IO_USB_FIND = -52
+
 # Widget types, from gphoto2-widget.h
 GP_WIDGET_RANGE = 3
 GP_WIDGET_TOGGLE = 4
@@ -153,6 +157,22 @@ class camera():
             self.close()
         except Exception:
             pass
+
+    def reopen(self):
+        """Drop this handle and open the camera again, wherever the bus has it now.
+
+        A handle keeps the USB address it was opened on. A body that drops off
+        the bus and comes back (power saving, a loose cable, a hub reset) returns
+        under a new address, and every call on the old handle then fails with
+        "Could not find the requested device" (-52) for as long as it lives.
+
+        When the camera is not back yet this raises, and leaves a fresh handle
+        that close() can still free.
+        """
+        self.close()
+        self._ptr = ctypes.c_void_p()
+        check(gp.gp_camera_new(PTR(self._ptr)))
+        self._init()
 
     def summary(self):
         txt = CameraText()

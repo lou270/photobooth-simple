@@ -285,6 +285,124 @@ def test_the_dslr_preview_loop_advances_its_frame_id():
     assert camera.get_preview_frame_id() == 3
 
 
+def _bare_dslr_preview():
+    """A Gphoto2Camera ready to run its preview loop, with no camera on USB."""
+    camera = Gphoto2Camera.__new__(Gphoto2Camera)
+    camera._preview_lock = threading.Lock()
+    camera._camera_lock = threading.Lock()
+    camera._preview_frame = None
+    camera._preview_frame_id = 0
+    camera._preview_failures = 0
+    camera._last_reopen_at = None
+    camera._preview_stop = False
+    camera._preview_fps = 1000                    # do not sleep through the test
+    camera._imread_preview = cv2.IMREAD_COLOR
+    camera.dslr_liveview_params = {}
+    camera.REOPEN_INTERVAL_SECONDS = 0            # every attempt is due at once
+    return camera
+
+
+class _PreviewFile:
+    encoded = cv2.imencode('.jpg', np.zeros((32, 48, 3), dtype=np.uint8))[1].tobytes()
+
+    def get_data(self, auto_clean=True):
+        return self.encoded
+
+
+def test_a_dslr_lost_from_the_usb_bus_is_reopened_and_the_preview_moves_again():
+    """What froze the preview at an event: 1380 failures on a dead handle.
+
+    The body came back on the bus under a new address, but the handle kept
+    asking for the old one, failing with -52 forever while the widget showed
+    the last frame it had drawn.
+    """
+    from libs.gphoto2 import libgphoto2error
+
+    camera = _bare_dslr_preview()
+
+    class LostThenFound:
+        def __init__(self):
+            self.lost = True
+            self.reopens = 0
+            self.frames = 0
+
+        def reopen(self):
+            self.reopens += 1
+            self.lost = False
+
+        def capture_preview(self):
+            if self.lost:
+                self.failures = getattr(self, 'failures', 0) + 1
+                if self.failures >= 50:           # never reopened: fail, not hang
+                    camera._preview_stop = True
+                raise libgphoto2error(-52, 'Could not find the requested device on the USB port')
+            self.frames += 1
+            if self.frames >= 3:
+                camera._preview_stop = True
+            return _PreviewFile()
+
+    camera._instance = instance = LostThenFound()
+    camera._preview_loop()
+
+    assert instance.reopens == 1
+    assert camera.get_preview_frame_id() == 3
+    assert camera._preview_failures == 0
+
+
+def test_a_camera_that_is_not_back_yet_is_looked_for_again():
+    from libs.gphoto2 import libgphoto2error
+
+    camera = _bare_dslr_preview()
+
+    class ComesBackOnThirdLook:
+        reopens = 0
+
+        def reopen(self):
+            self.reopens += 1
+            if self.reopens < 3:
+                raise libgphoto2error(-105, 'Unknown model')
+
+        def capture_preview(self):
+            if self.reopens < 3:
+                self.failures = getattr(self, 'failures', 0) + 1
+                if self.failures >= 50:           # never reopened: fail, not hang
+                    camera._preview_stop = True
+                raise libgphoto2error(-52, 'Could not find the requested device on the USB port')
+            camera._preview_stop = True
+            return _PreviewFile()
+
+    camera._instance = instance = ComesBackOnThirdLook()
+    camera._preview_loop()
+
+    assert instance.reopens == 3
+    assert camera.get_preview_frame_id() == 1
+
+
+def test_a_busy_dslr_is_not_reopened():
+    """Busy is the body doing something else, not a handle that lost it."""
+    from libs.gphoto2 import libgphoto2error
+
+    camera = _bare_dslr_preview()
+
+    class Busy:
+        reopens = 0
+        calls = 0
+
+        def reopen(self):
+            self.reopens += 1
+
+        def capture_preview(self):
+            self.calls += 1
+            if self.calls >= 10:
+                camera._preview_stop = True
+            raise libgphoto2error(-110, 'I/O in progress')
+
+    camera._instance = instance = Busy()
+    camera._preview_loop()
+
+    assert instance.reopens == 0
+
+
 def test_the_pi_preview_loop_counts_captures_not_addresses():
     """id() of the frame looks like a free counter and is not one.
 
