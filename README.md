@@ -218,8 +218,14 @@ Each setting there says what it does, its default, and its name in `config.ini`.
   JPEG no wider than 3840 pixels and keeps it in `event/welcome_background.jpg`, outside the photo
   directory, so deleting the evening's sessions leaves it in place. *Back to the booth's own photo*
   removes it.
-- **Title and subtitle:** `WELCOME_TITLE` replaces "PHOTO BOOTH" when set; `WELCOME_SUBTITLE` adds a
-  line under it, outlined so it stays readable on any photo.
+- **Title and subtitle:** `WELCOME_TITLE` replaces "Photo Booth" when set, and can be a whole
+  sentence: it breaks between words onto lines of even length and is drawn as large as the screen
+  allows, in landscape or upright. `WELCOME_SUBTITLE` adds a line under it, below a thin rule. Both
+  carry a soft shadow so they stay readable on any photo.
+- **Lettering:** `WELCOME_FONT` picks the typeface: `elegant` (Playfair Display, the default),
+  `script` (Great Vibes), `modern` (Montserrat) or `playful` (Fredoka). The fonts ship in
+  `assets/fonts/welcome/` under the SIL Open Font License, whose text sits next to each of them;
+  the Montserrat and Fredoka weights there are static instances cut from the variable fonts.
 
 ### Text on the prints
 

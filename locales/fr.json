@@ -1,6 +1,6 @@
 {
   "start": {
-    "title": "PHOTO BOOTH",
+    "title": "Photo Booth",
     "version": "Version {version}",
     "send_photo": "ENVOYER UNE PHOTO",
     "photos_waiting": "PHOTOS REÇUES"
@@ -311,6 +311,12 @@
           "en": "English",
           "fr": "Français"
         },
+        "welcome_font": {
+          "elegant": "Élégante (Playfair Display)",
+          "script": "Manuscrite (Great Vibes)",
+          "modern": "Moderne (Montserrat)",
+          "playful": "Ronde et festive (Fredoka)"
+        },
         "rotation": {
           "0": "Aucune (paysage)",
           "90": "Quart de tour à droite (portrait)",
@@ -372,11 +378,15 @@
         "Event": {
           "WELCOME_TITLE": {
             "label": "Titre de l'écran d'accueil",
-            "help": "Les grands mots affichés sur l'écran d'accueil. Laisser vide pour garder « PHOTO BOOTH ». La photo derrière ce titre se change juste au-dessus."
+            "help": "Les grands mots affichés sur l'écran d'accueil. Une phrase entière passe : elle revient à la ligne entre les mots, en lignes de longueur égale, et prend toute la place disponible. Laisser vide pour garder « Photo Booth ». La photo derrière ce titre se change juste au-dessus."
           },
           "WELCOME_SUBTITLE": {
             "label": "Sous-titre de l'écran d'accueil",
             "help": "Une ligne sous le titre, par exemple les prénoms et la date. Laisser vide pour ne rien afficher."
+          },
+          "WELCOME_FONT": {
+            "label": "Police de l'écran d'accueil",
+            "help": "Le style d'écriture du titre et du sous-titre. La manuscrite se lit mieux en minuscules qu'en capitales."
           },
           "EVENT_NAME": {
             "label": "Nom de l'événement",

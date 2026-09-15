@@ -1,6 +1,6 @@
 {
   "start": {
-    "title": "PHOTO BOOTH",
+    "title": "Photo Booth",
     "version": "Version {version}",
     "send_photo": "SEND A PHOTO",
     "photos_waiting": "PHOTOS RECEIVED"
@@ -311,6 +311,12 @@
           "en": "English",
           "fr": "Français"
         },
+        "welcome_font": {
+          "elegant": "Elegant (Playfair Display)",
+          "script": "Handwritten (Great Vibes)",
+          "modern": "Modern (Montserrat)",
+          "playful": "Round and playful (Fredoka)"
+        },
         "rotation": {
           "0": "None (landscape)",
           "90": "Quarter turn right (portrait)",
@@ -372,11 +378,15 @@
         "Event": {
           "WELCOME_TITLE": {
             "label": "Welcome title",
-            "help": "The big words on the welcome screen. Leave empty to keep \"PHOTO BOOTH\". The photo behind it is changed just above."
+            "help": "The big words on the welcome screen. A whole sentence fits: it breaks between words into lines of even length and takes all the room there is. Leave empty to keep \"Photo Booth\". The photo behind it is changed just above."
           },
           "WELCOME_SUBTITLE": {
             "label": "Welcome subtitle",
             "help": "A line under the title, such as the names and the date. Leave empty for none."
+          },
+          "WELCOME_FONT": {
+            "label": "Welcome lettering",
+            "help": "The typeface of the title and subtitle. The handwritten one reads better in lower case than in capitals."
           },
           "EVENT_NAME": {
             "label": "Event name",

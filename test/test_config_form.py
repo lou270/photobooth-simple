@@ -355,6 +355,7 @@ GETTERS = {
     **{('Timing', option): 'get_timings' for option, _minimum in config_module.TIMING_OPTIONS.values()},
     ('Event', 'WELCOME_TITLE'): 'get_welcome_title',
     ('Event', 'WELCOME_SUBTITLE'): 'get_welcome_subtitle',
+    ('Event', 'WELCOME_FONT'): 'get_welcome_font',
     ('Event', 'EVENT_NAME'): 'get_event_name',
     ('Event', 'DATE_FORMAT'): 'get_date_format',
     ('Slideshow', 'SLIDESHOW'): 'get_slideshow',

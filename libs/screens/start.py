@@ -1,11 +1,16 @@
 """The welcome screen a guest touches to begin."""
 
+import math
 import threading
 
+import cv2
+import numpy as np
 from kivy.animation import Animation
 from kivy.clock import Clock
+from kivy.core.text import Label as CoreLabel
 from kivy.core.window import Window
-from kivy.graphics import Color, RoundedRectangle
+from kivy.graphics import Color, Rectangle, RoundedRectangle
+from kivy.graphics.texture import Texture
 from kivy.logger import Logger
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
@@ -13,8 +18,7 @@ from kivy.uix.label import Label
 from libs import event
 from libs.i18n import t
 from libs.kivywidgets import (
-    BreezyBorderedLabel, FeedbackButtonBehavior, LayoutButton, make_icon_button,
-    ResizeLabel, short_side,
+    FeedbackButtonBehavior, LayoutButton, make_icon_button, short_side,
 )
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
@@ -78,6 +82,171 @@ class CornerTab(FeedbackButtonBehavior, FloatLayout):
             self._plate.radius = [0, radius, radius, 0]
 
 
+def break_lines(words, line_width, space_width, line_height, box_width, box_height,
+                max_lines=4, max_scale=float('inf')):
+    """Split words into lines, and say how large they can be drawn in a box.
+
+    Widths and the line height are measured once at one reference size: text
+    scales linearly, so the best size for a given split is whichever of the
+    box's width and height runs out first. Each line count gets its most even
+    split - the one whose longest line is shortest - and the count that draws
+    the words largest wins. A new line has to earn its place, though, by a
+    tenth: two lines only a hair larger than one read as a stray break. Past
+    max_scale every count draws the same size, and the fewest lines win. Uneven
+    lines count against a split too, so "de" is not left alone on a line of
+    its own just to gain a few pixels.
+
+    Returns (lines, scale), scale being relative to the measuring size.
+    """
+    count = len(words)
+    if not count:
+        return [], 0
+
+    widths = [line_width(word) for word in words]
+
+    def width_of(start, end):
+        return sum(widths[start:end]) + space_width * (end - start - 1)
+
+    best_lines, best_scale, best_score = None, 0, 0
+    for lines in range(1, min(max_lines, count) + 1):
+        # longest[k][i]: the shortest possible longest line, placing the first
+        # i words on k lines; cut[k][i] where the last of those lines starts.
+        longest = [[float('inf')] * (count + 1) for _ in range(lines + 1)]
+        cut = [[0] * (count + 1) for _ in range(lines + 1)]
+        longest[0][0] = 0
+        for k in range(1, lines + 1):
+            for i in range(k, count + 1):
+                for j in range(k - 1, i):
+                    candidate = max(longest[k - 1][j], width_of(j, i))
+                    if candidate < longest[k][i]:
+                        longest[k][i], cut[k][i] = candidate, j
+
+        split, end = [], count
+        for k in range(lines, 0, -1):
+            start = cut[k][end]
+            split.insert(0, ' '.join(words[start:end]))
+            end = start
+
+        split_widths = [line_width(line) for line in split]
+        widest = max(split_widths)
+        scale = min(box_width / widest, box_height / (lines * line_height), max_scale)
+        evenness = min(split_widths) / widest
+        score = scale * (1 - 0.3 * (1 - evenness))
+        if best_lines is None or score > best_score * 1.1:
+            best_lines, best_scale, best_score = split, scale, score
+
+    return best_lines, best_scale
+
+
+class WelcomeText(Label):
+    """Words laid straight onto the event's photo, sized to fill their box.
+
+    fit() breaks the text between words and picks the largest size at which
+    every line fits, so "Photo Booth" and a whole sentence both fill the room
+    they are given. The text carries a soft shadow rather than an outline or a
+    frame: it has to hold on any photo the operator chooses, bright bokeh
+    included, without looking like a caption on a video.
+    """
+
+    MEASURING_SIZE = 100
+    # A hair under the exact fit: the measure and the render round apart.
+    FIT_MARGIN = 0.97
+
+    def __init__(self, source_text, max_lines=4, **kwargs):
+        # split() rather than split(' '): runs of spaces, tabs and a stray
+        # space at either end are all one gap between two words.
+        words = source_text.split()
+        super(WelcomeText, self).__init__(
+            text=' '.join(words), halign='center', valign='middle', size_hint=(None, None), **kwargs)
+        self.words = words
+        self.max_lines = max_lines
+        self._shadow_padding = 0
+        with self.canvas.before:
+            Color(1, 1, 1, 1)
+            self._shadow = Rectangle(size=(0, 0))
+        self.bind(texture=self._build_shadow, pos=self._place_shadow, size=self._place_shadow)
+
+    def fit(self, box_width, box_height, max_font_size):
+        """Set the lines and the size for a box; returns the size used."""
+        if not self.words:
+            self.text = ''
+            self.size = (box_width, 0)
+            return 0
+
+        measure = CoreLabel(font_name=self.font_name, font_size=self.MEASURING_SIZE)
+
+        def line_width(text):
+            return measure.get_extents(text)[0]
+
+        space_width = line_width('x x') - 2 * line_width('x')
+        line_height = measure.get_extents('Hg')[1] * self.line_height
+        lines, scale = break_lines(
+            self.words, line_width, space_width, line_height,
+            box_width, box_height, self.max_lines,
+            max_scale=max_font_size / self.MEASURING_SIZE / self.FIT_MARGIN,
+        )
+        font_size = self.MEASURING_SIZE * scale * self.FIT_MARGIN
+
+        self.text = '\n'.join(lines)
+        self.font_size = font_size
+        self.text_size = (box_width, None)
+        self.texture_update()
+        self.size = (box_width, self.texture_size[1])
+        return font_size
+
+    def _build_shadow(self, *args):
+        """Blur the letters' own shapes into a dark halo, once per text.
+
+        Built from the rendered texture, so it follows any font, and blurred on
+        the CPU when the text changes rather than by a shader on every frame:
+        the booth's Pi has better things to draw.
+        """
+        texture = self.texture
+        self._shadow.size = (0, 0)
+        if texture is None or not all(texture.size):
+            return
+        try:
+            width, height = texture.size
+            alpha = np.frombuffer(texture.pixels, dtype=np.uint8).reshape(height, width, 4)[:, :, 3]
+        except Exception as exc:  # no pixels to read back, as under a mock GL
+            Logger.debug('WelcomeText: no shadow: %s', exc)
+            return
+
+        padding = int(math.ceil(self.font_size * 0.2))
+        alpha = cv2.copyMakeBorder(alpha, padding, padding, padding, padding, cv2.BORDER_CONSTANT, value=0)
+        alpha = alpha.astype(np.float32)
+        # A close, darker blur for the edges, and a wide faint one that lifts
+        # the words off a busy photo.
+        near = cv2.GaussianBlur(alpha, (0, 0), max(1.0, self.font_size * 0.025))
+        wide = cv2.GaussianBlur(alpha, (0, 0), max(1.0, self.font_size * 0.07))
+        shade = np.clip(near * 0.45 + wide * 0.55, 0, 255).astype(np.uint8)
+
+        pixels = np.zeros((shade.shape[0], shade.shape[1], 4), dtype=np.uint8)
+        pixels[:, :, 3] = shade
+        shadow = Texture.create(size=(shade.shape[1], shade.shape[0]), colorfmt='rgba')
+        shadow.blit_buffer(pixels.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        if texture.tex_coords[1] != 0:
+            # Label textures come flipped: read back, the rows are upside down.
+            shadow.flip_vertical()
+        self._shadow.texture = shadow
+        self._shadow_padding = padding
+        self._place_shadow()
+
+    def _place_shadow(self, *args):
+        texture = self._shadow.texture
+        if texture is None or self.texture is None:
+            return
+        width, height = self.texture.size
+        padding = self._shadow_padding
+        # Down a little, as a light from above would throw it.
+        drop = self.font_size * 0.03
+        self._shadow.size = (width + 2 * padding, height + 2 * padding)
+        self._shadow.pos = (
+            int(self.center_x - width / 2.0) - padding,
+            int(self.center_y - height / 2.0) - padding - drop,
+        )
+
+
 class StartScreen(BackgroundScreen):
     """
     +-----------------+
@@ -95,44 +264,40 @@ class StartScreen(BackgroundScreen):
 
         overlay_layout = LayoutButton()
 
-        start = BreezyBorderedLabel(
-            text=self.app.WELCOME_TITLE or t('start.title'),
-            border_color=(1,1,1,1),
-            border_width=short_side(0.006),
-            size_hint=(0.7, 0.2),
-            padding=(short_side(0.033), short_side(0.033), short_side(0.033), short_side(0.033)),
-            pos_hint={'x': 0.15, 'y': 0.4},
-        )
-        # BreezyBorderedLabel.on_size() recomputes font_size from width — no wh_bind needed
-        overlay_layout.add_widget(start)
-        self.start_label = start
+        title_font, subtitle_font = event.welcome_fonts(self.app.WELCOME_FONT)
 
-        # A line under the title, only when the operator wrote one. Outlined:
-        # it sits straight on a photo the operator chose, whatever its colours.
+        # Placed and sized in pixels by _layout_welcome, which knows how much
+        # room the words have once the window has a size.
+        self.start_label = WelcomeText(
+            self.app.WELCOME_TITLE or t('start.title'),
+            font_name=title_font,
+        )
+        overlay_layout.add_widget(self.start_label)
+
+        # A rule and a line under the title, only when the operator wrote one.
         self.subtitle_label = None
+        self._rule = None
         if self.app.WELCOME_SUBTITLE:
-            self.subtitle_label = Label(
-                text=self.app.WELCOME_SUBTITLE,
-                bold=True,
-                halign='center',
-                valign='middle',
-                size_hint=(0.8, 0.09),
-                pos_hint={'x': 0.1, 'y': 0.3},
-                outline_width=2,
-                outline_color=(0, 0, 0, 1),
+            with overlay_layout.canvas:
+                Color(0, 0, 0, 0.12)
+                self._rule_shadow = Rectangle()
+                Color(1, 1, 1, 0.9)
+                self._rule = Rectangle()
+            self.subtitle_label = WelcomeText(
+                self.app.WELCOME_SUBTITLE,
+                max_lines=2,
+                font_name=subtitle_font,
             )
-            self.subtitle_label.bind(size=self._fit_subtitle)
             overlay_layout.add_widget(self.subtitle_label)
 
-        # Touch icon
-        icon = ResizeLabel(
-            size_hint=(0.15, 0.2),
-            pos_hint={'x': 0.42, 'y': 0.1},
+        # The touch icon, between the two corner tabs.
+        self.touch_icon = Label(
+            size_hint=(None, None),
             font_name=ICON_TTF,
             text=ICON_TOUCH,
-            wh_fraction=0.22,
         )
-        overlay_layout.add_widget(icon)
+        overlay_layout.add_widget(self.touch_icon)
+        self._touch_pulse = None
 
         # Version: useful to the operator powering the booth up, and to nobody
         # else. Shown at startup, then faded out before the first guest arrives.
@@ -195,6 +360,88 @@ class StartScreen(BackgroundScreen):
         Window.bind(size=self._layout_corners)
         Clock.schedule_once(self._layout_corners, 0)
 
+        overlay_layout.bind(size=self._layout_welcome)
+        Clock.schedule_once(self._layout_welcome, 0)
+
+    # --- the words in the middle -------------------------------------------
+
+    def _layout_welcome(self, *args):
+        """Stack the title, the rule and the subtitle, centred above the tabs.
+
+        The block is sized from the words it holds rather than from fixed
+        boxes: a two-word title and a sentence on four lines both sit in the
+        middle of the free space, with the subtitle right under the last line.
+        """
+        layout = self.overlay_layout
+        width, height = layout.size
+        if not width or not height:
+            return
+
+        side = min(width, height)
+        # The tabs and the touch icon take the bottom of the screen; the
+        # version label and some air, the top.
+        bottom = side * 0.22
+        top = height - side * 0.07
+        room = top - bottom
+        text_width = width * 0.84
+
+        has_subtitle = self.subtitle_label is not None
+        rule_gap = side * 0.035
+        subtitle_room = side * 0.075 if has_subtitle else 0
+        # Capped, so a long sentence settles on fewer, wider lines with air
+        # around them rather than a wall of words from edge to edge.
+        title_room = min(room - (subtitle_room + 2 * rule_gap if has_subtitle else 0), side * 0.5)
+
+        title_size = self.start_label.fit(text_width, title_room, max_font_size=side * 0.24)
+        block = self.start_label.height
+
+        if has_subtitle:
+            self.subtitle_label.fit(
+                text_width, subtitle_room,
+                max_font_size=min(side * 0.05, title_size * 0.45),
+            )
+            block += 2 * rule_gap + self.subtitle_label.height
+
+        # A little above the middle of the free space: the eye's centre of a
+        # screen sits higher than its geometric one.
+        y = bottom + (room - block) / 2.0 + room * 0.03
+        y = min(y, top - block)
+
+        self.start_label.center_x = width / 2.0
+        self.start_label.top = y + block
+        if has_subtitle:
+            self.subtitle_label.center_x = width / 2.0
+            self.subtitle_label.y = y
+            rule_width = min(side * 0.22, text_width)
+            rule_thickness = max(1.0, side * 0.003)
+            rule_y = y + self.subtitle_label.height + rule_gap - rule_thickness / 2.0
+            self._rule.size = (rule_width, rule_thickness)
+            self._rule.pos = (width / 2.0 - rule_width / 2.0, rule_y)
+            self._rule_shadow.size = (rule_width, rule_thickness * 3)
+            self._rule_shadow.pos = (width / 2.0 - rule_width / 2.0, rule_y - rule_thickness * 1.5)
+
+        icon = side * 0.13
+        self.touch_icon.size = (icon, icon)
+        self.touch_icon.font_size = side * 0.11
+        self.touch_icon.center_x = width / 2.0
+        self.touch_icon.y = side * 0.05
+
+    def _pulse_touch_icon(self):
+        """A slow breath on the icon: the one thing moving says "touch me"."""
+        self._stop_touch_pulse()
+        self.touch_icon.opacity = 1
+        pulse = (Animation(opacity=0.45, duration=1.2, t='in_out_sine')
+                 + Animation(opacity=1, duration=1.2, t='in_out_sine'))
+        pulse.repeat = True
+        pulse.start(self.touch_icon)
+        self._touch_pulse = pulse
+
+    def _stop_touch_pulse(self):
+        if self._touch_pulse is not None:
+            self._touch_pulse.cancel(self.touch_icon)
+            self._touch_pulse = None
+        self.touch_icon.opacity = 1
+
     # --- the two corners -------------------------------------------------
 
     def _layout_corners(self, *args):
@@ -238,12 +485,6 @@ class StartScreen(BackgroundScreen):
             tab.caption.x = tab.x + inset if flush_right else tab.x + inset + button + gap
             tab.caption.y = tab.y + inset
             tab.caption.font_size = short_side(0.028)
-
-    def _fit_subtitle(self, label, size):
-        if not label.text or not label.width:
-            return
-        label.text_size = size
-        label.font_size = min(label.height * 0.7, label.width / len(label.text) * 1.9)
 
     # --- the slideshow ----------------------------------------------------
 
@@ -305,6 +546,7 @@ class StartScreen(BackgroundScreen):
             Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
             self._version_label = None  # only the first time, at power-up
         self.app.ringled.start_rainbow()
+        self._pulse_touch_icon()
         self._purge_when_idle()
 
         if self.app.has_remote_capture():
@@ -330,6 +572,7 @@ class StartScreen(BackgroundScreen):
         # After the popup, whose dismissal starts the idle count again.
         self._stop_slideshow(rearm=False)
         self._disarm_slideshow()
+        self._stop_touch_pulse()
         self.app.ringled.clear()
 
     # --- photos waiting from phones --------------------------------------

@@ -26,6 +26,19 @@ DEFAULT_WELCOME_BACKGROUND = PROJECT_ROOT / 'assets' / 'backgrounds' / 'bg_waiti
 
 DEFAULT_DATE_FORMAT = '%d/%m/%Y'
 
+# The welcome screen's lettering, one look per kind of evening. Each pairs a
+# title face with a plainer one for the subtitle: a script or a display serif
+# reads beautifully in large words and poorly in a line of names and a date.
+# All under the SIL Open Font License, shipped because the booth is offline.
+WELCOME_FONT_DIRECTORY = PROJECT_ROOT / 'assets' / 'fonts' / 'welcome'
+WELCOME_FONTS = {
+    'elegant': ('PlayfairDisplay.ttf', 'Montserrat-Medium.ttf'),
+    'script': ('GreatVibes-Regular.ttf', 'Montserrat-Medium.ttf'),
+    'modern': ('Montserrat-Bold.ttf', 'Montserrat-Medium.ttf'),
+    'playful': ('Fredoka-SemiBold.ttf', 'Fredoka-Medium.ttf'),
+}
+DEFAULT_WELCOME_FONT = 'elegant'
+
 # The words a template may put in its text: {event}, {date}, {time}. Anything
 # else between braces is left as written, so a stray brace in an event name, or
 # a placeholder from a newer version, prints as text instead of failing.
@@ -38,6 +51,12 @@ def welcome_background():
     if WELCOME_BACKGROUND_PATH.is_file():
         return WELCOME_BACKGROUND_PATH
     return DEFAULT_WELCOME_BACKGROUND
+
+
+def welcome_fonts(style):
+    """The (title, subtitle) font files for a lettering style, by path."""
+    title, subtitle = WELCOME_FONTS.get(style, WELCOME_FONTS[DEFAULT_WELCOME_FONT])
+    return str(WELCOME_FONT_DIRECTORY / title), str(WELCOME_FONT_DIRECTORY / subtitle)
 
 
 def text_values(event_name='', date_format=DEFAULT_DATE_FORMAT, now=None):

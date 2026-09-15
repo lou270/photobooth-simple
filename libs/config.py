@@ -4,6 +4,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
+from libs import event
 from libs.event import DEFAULT_DATE_FORMAT
 from libs.i18n import AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE
 from libs import timings
@@ -202,6 +203,14 @@ class Config:
 
     def get_welcome_subtitle(self):
         return self._get_raw_string('Event', 'WELCOME_SUBTITLE')
+
+    def get_welcome_font(self):
+        """The lettering style of the welcome title, one of event.WELCOME_FONTS."""
+        style = self._get_raw_string('Event', 'WELCOME_FONT').lower() or event.DEFAULT_WELCOME_FONT
+        if style not in event.WELCOME_FONTS:
+            Logger.warning('Config: unknown WELCOME_FONT=%r, using %r', style, event.DEFAULT_WELCOME_FONT)
+            return event.DEFAULT_WELCOME_FONT
+        return style
 
     def get_slideshow(self):
         """Whether the welcome screen shows the evening's photos while nobody is there."""

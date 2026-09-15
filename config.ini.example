@@ -47,11 +47,15 @@ ADMIN_PASSWORD = None
 # page, which is also where the photo behind the welcome screen is uploaded.
 # Applied on the next start of the booth.
 
-# The big words on the welcome screen. Empty keeps the booth's own title.
+# The big words on the welcome screen, a whole sentence if you like: it breaks
+# between words onto even lines. Empty keeps the booth's own title.
 WELCOME_TITLE =
 
 # A line under the title, such as the names and the date. Empty shows none.
 WELCOME_SUBTITLE =
+
+# The lettering of the title and subtitle: elegant, script, modern or playful.
+WELCOME_FONT = elegant
 
 # Printed wherever a template text says {event}
 EVENT_NAME =

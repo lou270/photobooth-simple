@@ -24,12 +24,12 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.uix.widget import Widget
 
-from libs import i18n
+from libs import event, i18n
 from libs.i18n import t
 from libs.screens import review
 from libs.screens import ReviewScreen, ScreenMgr, StartScreen
 from libs.screens.names import ScreenNames
-from libs.screens.start import CornerTab
+from libs.screens.start import break_lines, CornerTab
 from libs.screens.popups import QRCodePopup
 from libs.timings import TIMINGS
 from photoboothapp import PhotoboothApp
@@ -443,6 +443,7 @@ class WelcomeApp:
     SHARE = True
     WELCOME_TITLE = ''
     WELCOME_SUBTITLE = ''
+    WELCOME_FONT = event.DEFAULT_WELCOME_FONT
     SLIDESHOW = False
     SLIDESHOW_IDLE_SECONDS = 60
     SLIDESHOW_PHOTO_SECONDS = 6
@@ -615,6 +616,74 @@ def test_without_a_subtitle_there_is_no_empty_line_on_the_photo():
 
     assert screen.start_label.text == t('start.title')
     assert screen.subtitle_label is None
+
+
+def laid_out(screen, width=1024, height=600):
+    screen.overlay_layout.size = (width, height)
+    screen._layout_welcome()
+    return screen
+
+
+def test_a_sentence_breaks_between_its_words_and_fills_the_screen():
+    """The title was sized from its character count on one line: a whole
+    sentence came out as small print in the middle of an empty frame."""
+    sentence = 'Bienvenue au  mariage de Lou et Max '
+    screen = laid_out(dressed_welcome(title=sentence, subtitle='13 septembre 2026'))
+
+    lines = screen.start_label.text.split('\n')
+    assert len(lines) > 1
+    assert ' '.join(lines).split(' ') == sentence.split(), 'every word, once, in order, no empty gap'
+    # One line of 35 characters across 1024 pixels was about 40 pixels tall.
+    assert screen.start_label.font_size > 70
+    assert screen.start_label.width <= 1024
+    assert screen.start_label.top <= 600
+    assert screen.subtitle_label.top < screen.start_label.y, 'the subtitle sits under the last line'
+    assert screen.subtitle_label.y > screen.touch_icon.top
+
+
+def test_a_short_title_stays_on_one_line():
+    screen = laid_out(dressed_welcome(title='Lou & Max'))
+
+    assert screen.start_label.text == 'Lou & Max'
+
+
+def test_the_title_is_drawn_in_the_lettering_the_operator_chose():
+    app = WelcomeApp()
+    app.WELCOME_FONT = 'script'
+    app.has_remote_capture = lambda: False
+    screen = StartScreen(app, name='lettering-script')
+
+    title_font, subtitle_font = event.welcome_fonts('script')
+    assert screen.start_label.font_name == title_font
+
+
+def fixed_width(text):
+    return len(text) * 10
+
+
+def test_lines_are_as_even_as_the_words_allow():
+    lines, _scale = break_lines('aaaa bb cc dddd'.split(), fixed_width, 10, 20, 100, 1000, max_lines=2)
+
+    assert lines == ['aaaa bb', 'cc dddd']
+
+
+def test_a_line_is_only_added_when_it_draws_the_words_larger():
+    words = 'aaaa bbbb'.split()
+
+    wide_box, _ = break_lines(words, fixed_width, 10, 20, 1000, 60)
+    narrow_box, _ = break_lines(words, fixed_width, 10, 20, 50, 1000)
+    capped, _ = break_lines(words, fixed_width, 10, 20, 50, 1000, max_scale=0.5)
+
+    assert wide_box == ['aaaa bbbb']
+    assert narrow_box == ['aaaa', 'bbbb']
+    assert capped == ['aaaa bbbb'], 'at the size cap, a break gains nothing'
+
+
+def test_a_word_too_long_for_the_box_shrinks_instead_of_being_cut():
+    lines, scale = break_lines(['a' * 40], fixed_width, 10, 20, 100, 100)
+
+    assert lines == ['a' * 40]
+    assert scale == pytest.approx(100 / 400)
 
 
 def test_the_evening_s_photos_cover_the_welcome_screen_while_nobody_is_there(tmp_path):

@@ -84,7 +84,25 @@ def test_nothing_set_means_the_booth_s_own_welcome_and_no_slideshow(tmp_path, mo
     assert config.get_welcome_title() == ''
     assert config.get_welcome_subtitle() == ''
     assert config.get_date_format() == event.DEFAULT_DATE_FORMAT
+    assert config.get_welcome_font() == event.DEFAULT_WELCOME_FONT
     assert config.get_slideshow() is False
+
+
+def test_an_unknown_lettering_falls_back_to_the_booth_s_own(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Event]
+        WELCOME_FONT = Comic Sans
+    """)
+
+    assert config.get_welcome_font() == event.DEFAULT_WELCOME_FONT
+
+
+def test_every_lettering_ships_its_fonts():
+    """A style the admin page offers with a file missing would start the booth
+    on a font Kivy cannot open."""
+    for style in event.WELCOME_FONTS:
+        for path in event.welcome_fonts(style):
+            assert Path(path).is_file(), f'{style}: {path} is missing'
 
 
 def test_slideshow_delays_have_a_floor(tmp_path, monkeypatch):

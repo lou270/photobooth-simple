@@ -56,8 +56,11 @@ CONFIG_FORM_SECTIONS = (
     {
         'id': 'event',
         'fields': (
-            {'section': 'Event', 'option': 'WELCOME_TITLE', 'control': 'text', 'placeholder': 'PHOTO BOOTH', 'default': ''},
+            {'section': 'Event', 'option': 'WELCOME_TITLE', 'control': 'text', 'placeholder': 'Photo Booth', 'default': ''},
             {'section': 'Event', 'option': 'WELCOME_SUBTITLE', 'control': 'text', 'placeholder': 'Lou & Max, 13/09/2026', 'default': ''},
+            {'section': 'Event', 'option': 'WELCOME_FONT', 'control': 'select', 'default': 'elegant',
+             'choices': [('elegant', 'web.config.choices.welcome_font.elegant'), ('script', 'web.config.choices.welcome_font.script'),
+                         ('modern', 'web.config.choices.welcome_font.modern'), ('playful', 'web.config.choices.welcome_font.playful')]},
             {'section': 'Event', 'option': 'EVENT_NAME', 'control': 'text', 'placeholder': 'Lou & Max', 'default': ''},
             {'section': 'Event', 'option': 'DATE_FORMAT', 'control': 'text', 'placeholder': '%d/%m/%Y', 'default': '%d/%m/%Y'},
         ),

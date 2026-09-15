@@ -112,6 +112,7 @@ class PhotoboothApp(App):
         self.DATE_FORMAT = config.get_date_format()
         self.WELCOME_TITLE = config.get_welcome_title()
         self.WELCOME_SUBTITLE = config.get_welcome_subtitle()
+        self.WELCOME_FONT = config.get_welcome_font()
         self.SLIDESHOW = config.get_slideshow()
         self.SLIDESHOW_IDLE_SECONDS = config.get_slideshow_idle_seconds()
         self.SLIDESHOW_PHOTO_SECONDS = config.get_slideshow_photo_seconds()
