@@ -212,6 +212,12 @@ MAX_PRINTS = None
 # booth offers up to twice this many finished photos.
 MAX_COPIES = 3
 
+# Resolution the collage is assembled at: 300 or 600 dpi. Templates are drawn at
+# 300 dpi, what the printer prints, so 600 does not change the print: it makes
+# the saved collage sharper on a screen or a phone, at the cost of files about
+# four times larger and a slower collage on the Raspberry Pi.
+COLLAGE_DPI = 300
+
 # Seconds to wait for printer recovery before continuing without printing
 PRINTER_WAIT_TIMEOUT = 45
 

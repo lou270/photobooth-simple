@@ -160,6 +160,33 @@ def test_max_copies_is_clamped_to_something_a_guest_could_want(tmp_path, monkeyp
     assert config.get_max_copies() == 10
 
 
+def test_collages_are_assembled_at_print_resolution_by_default(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Print]
+    """)
+
+    assert config.get_collage_dpi() == 300
+
+
+def test_a_collage_can_be_assembled_at_600_dpi(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Print]
+        COLLAGE_DPI = 600
+    """)
+
+    assert config.get_collage_dpi() == 600
+
+
+@pytest.mark.parametrize('raw', ['450', '1200', 'high'])
+def test_a_resolution_templates_cannot_be_scaled_to_falls_back(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Print]
+        COLLAGE_DPI = {raw}
+    """)
+
+    assert config.get_collage_dpi() == 300
+
+
 @pytest.mark.parametrize('raw', ['abc', '', '5s', '1,5'])
 def test_a_malformed_number_falls_back_instead_of_raising(tmp_path, monkeypatch, raw):
     """The admin form rewrites this file on site; a typo must not brick the booth.

@@ -30,6 +30,13 @@ def template(**overrides):
     return TemplateCollage(template=definition)
 
 
+def cached_layer(collage, layer):
+    """The one size a layer has been cached at so far."""
+    sizes = [image for (name, _size), image in collage._layer_cache.items() if name == layer]
+    assert len(sizes) == 1
+    return sizes[0]
+
+
 @pytest.fixture
 def photo(tmp_path):
     path = tmp_path / 'shot.jpg'
@@ -43,7 +50,7 @@ def test_a_foreground_is_cached_at_page_size_not_source_size(photo):
 
     collage.assemble([photo])
 
-    assert collage._foreground_cache.shape[:2] == (PAGE['height'], PAGE['width'])
+    assert cached_layer(collage, 'foreground').shape[:2] == (PAGE['height'], PAGE['width'])
 
 
 def test_the_layer_is_decoded_and_resized_only_once(photo, monkeypatch):
@@ -65,7 +72,7 @@ def test_a_background_is_cached_at_page_size(photo):
 
     collage.assemble([photo])
 
-    assert collage._background_cache.shape[:2] == (PAGE['height'], PAGE['width'])
+    assert cached_layer(collage, 'background').shape[:2] == (PAGE['height'], PAGE['width'])
 
 
 def test_pasting_photos_never_writes_into_the_background_cache(photo):
@@ -73,10 +80,10 @@ def test_pasting_photos_never_writes_into_the_background_cache(photo):
     collage = template(background=png_data_uri(300, 200, channels=3))
 
     collage.assemble([photo])
-    cached_after_first = collage._background_cache.copy()
+    cached_after_first = cached_layer(collage, 'background').copy()
     collage.assemble([photo])
 
-    assert np.array_equal(collage._background_cache, cached_after_first)
+    assert np.array_equal(cached_layer(collage, 'background'), cached_after_first)
 
 
 def test_successive_collages_are_identical(photo):

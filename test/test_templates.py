@@ -62,6 +62,61 @@ def test_built_in_template_assembles_a_full_page(tmp_path):
     assert canvas.shape == (1200, 1800, 3)
 
 
+def test_at_600_dpi_the_whole_layout_is_doubled(tmp_path):
+    """Same print, twice the pixels: the photo lands where the template put it."""
+    template = TemplateCollage(template=DEFAULT_TEMPLATE, dpi=600)
+    photo = tmp_path / 'shot.jpg'
+    cv2.imwrite(str(photo), np.full((600, 900, 3), 0, dtype=np.uint8))
+
+    canvas = template.assemble([str(photo)])
+
+    assert canvas.shape == (2400, 3600, 3)
+    photo_area = np.argwhere(canvas.max(axis=2) < 30)
+    assert photo_area.min(axis=0).tolist() == [120, 180]
+    assert photo_area.max(axis=0).tolist() == [120 + 2160 - 1, 180 + 3240 - 1]
+
+
+def test_a_text_box_grows_with_the_resolution():
+    definition = dict(DEFAULT_TEMPLATE, texts=[{
+        'x': 100, 'y': 1100, 'width': 1600, 'height': 90,
+        'text': 'LOU & MAX', 'color': '#ff0000', 'align': 'center', 'bold': False,
+    }])
+    template = TemplateCollage(template=definition, dpi=600, text_values=lambda: {})
+
+    canvas = template.assemble([])
+
+    red = np.argwhere((canvas[:, :, 2] > 200) & (canvas[:, :, 1] < 80))
+    assert red[:, 0].min() >= 2200 and red[:, 0].max() < 2380
+    assert red[:, 0].max() - red[:, 0].min() > 90
+
+
+def test_previews_stay_at_the_template_s_own_resolution():
+    """The review screen rebuilds its preview on every filter a guest tries."""
+    template = TemplateCollage(template=DEFAULT_TEMPLATE, dpi=600)
+
+    assert template.assemble([], full_resolution=False).shape == (1200, 1800, 3)
+
+
+def test_a_strip_printed_twice_is_duplicated_at_600_dpi(tmp_path):
+    definition = {
+        'name': 'Strip', 'page': {'width': 600, 'height': 1800},
+        'photos': [{'x': 30, 'y': 30, 'width': 540, 'height': 520}],
+        'duplicate_horizontal': True,
+    }
+    template = TemplateCollage(template=definition, dpi=600)
+
+    canvas = template.assemble([], output_path=str(tmp_path / 'collage.jpg'), for_print=True)
+
+    assert canvas.shape == (3600, 2400, 3)
+    assert cv2.imread(str(tmp_path / 'collage.jpg')).shape == (3600, 1200, 3)
+
+
+def test_loaded_templates_carry_the_resolution(tmp_path):
+    templates = load_templates(str(tmp_path / 'absent'), dpi=600)
+
+    assert templates[0].assemble([]).shape == (2400, 3600, 3)
+
+
 def test_built_in_template_exposes_its_print_parameters():
     template = TemplateCollage(template=DEFAULT_TEMPLATE)
 

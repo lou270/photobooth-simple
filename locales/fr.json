@@ -322,6 +322,10 @@
           "90": "Quart de tour à droite (portrait)",
           "180": "À l'envers",
           "270": "Quart de tour à gauche (portrait)"
+        },
+        "collage_dpi": {
+          "300": "300 dpi (résolution d'impression)",
+          "600": "600 dpi (plus net à l'écran)"
         }
       },
       "sections": {
@@ -457,6 +461,10 @@
           "MAX_COPIES": {
             "label": "Copies maximum par impression",
             "help": "Nombre de feuilles qu'un invité peut demander d'un coup (10 au plus). Un modèle qui duplique son montage met deux photos par feuille. 1 masque le choix du nombre de copies."
+          },
+          "COLLAGE_DPI": {
+            "label": "Résolution du montage",
+            "help": "Les modèles sont dessinés à 300 dpi, la résolution de l'imprimante : 600 dpi ne change donc rien au tirage. Le montage est plus net dans la galerie et sur le téléphone des invités, mais les fichiers sont environ quatre fois plus lourds et le montage prend un peu plus de temps à construire."
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Attente si l'imprimante ne répond plus",

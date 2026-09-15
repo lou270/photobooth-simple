@@ -27,6 +27,12 @@ DEFAULT_TEMPLATE = {
     'print_params': {'PageSize': 'w288h432', 'print-scaling': 'fit'},
 }
 
+# Every template, the shipped ones and the editor's, is laid out in pixels at
+# 300 dpi: an 1800x1200 page is a 10x15 cm print. A booth set to a higher
+# resolution multiplies the whole layout when it assembles, so a template never
+# has to be redrawn for it.
+TEMPLATE_DPI = 300
+
 
 class TemplateCollage:
     """
@@ -36,7 +42,7 @@ class TemplateCollage:
     # Space between two lines of the same text, as a fraction of the font size.
     LINE_SPACING = 0.15
 
-    def __init__(self, template_path=None, template=None, text_values=None):
+    def __init__(self, template_path=None, template=None, text_values=None, dpi=TEMPLATE_DPI):
         """
         Initialize the collage from a JSON template file.
 
@@ -45,6 +51,9 @@ class TemplateCollage:
             text_values: Callable returning what {event}, {date} and {time}
                 stand for. Called at each assembly, so the date is the day the
                 photo was taken rather than the day the booth started.
+            dpi: Resolution the saved and printed collage is assembled at.
+                The printed size does not change with it, only how sharp the
+                file looks on a screen.
         """
         Logger.info('TemplateCollage: __init__(%s)', template_path or 'built-in')
 
@@ -75,6 +84,7 @@ class TemplateCollage:
         self._photos = self._template['photos']
         self._texts = self._template['texts']
         self._text_values = text_values or event.text_values
+        self._scale = max(1, round(dpi / TEMPLATE_DPI))
         self._fonts = {}
         self._print_params = self._template.get('print_params', {})
         self._margin_percent = self._template.get('margin_percent', 5)
@@ -96,9 +106,9 @@ class TemplateCollage:
         # Cache for preview image (generate once)
         self._preview_cache = None
         
-        # Cache for loaded background/foreground images
-        self._background_cache = None
-        self._foreground_cache = None
+        # Background and foreground at page size, keyed by that size: previews
+        # are assembled at 300 dpi whatever the saved collage is assembled at.
+        self._layer_cache = {}
     
     def get_name(self):
         """Return the template name."""
@@ -181,7 +191,7 @@ class TemplateCollage:
             Logger.warning(f'Image file could not be decoded: {path}')
         return image
 
-    def _get_page_layer(self, image_data, imread_flags, cache_attribute):
+    def _get_page_layer(self, image_data, imread_flags, layer, page_size):
         """Return a layer already scaled to the page, decoded and resized once.
 
         The source art is far larger than the page it is drawn on: the shipped
@@ -189,20 +199,36 @@ class TemplateCollage:
         page. It used to be copied out of the cache and resized again on every
         single collage. Caching it at page size removes both, and keeps the
         resident copy at page size instead of source size.
+
+        A booth assembling at 600 dpi draws at two sizes, the preview and the
+        collage, so it decodes each layer twice rather than keeping the source.
         """
-        cached = getattr(self, cache_attribute)
-        if cached is not None:
-            return cached
+        key = (layer, page_size)
+        if key in self._layer_cache:
+            return self._layer_cache[key]
 
         image = self._decode_image(image_data, imread_flags)
         if image is None:
             return None
 
-        if image.shape[1] != self._page_width or image.shape[0] != self._page_height:
-            image = cv2.resize(image, (self._page_width, self._page_height), interpolation=cv2.INTER_AREA)
+        width, height = page_size
+        if image.shape[1] != width or image.shape[0] != height:
+            image = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
 
-        setattr(self, cache_attribute, image)
+        self._layer_cache[key] = image
         return image
+
+    def _layout(self, full_resolution):
+        """Page size, photo slots and text boxes at the resolution to assemble at."""
+        scale = self._scale if full_resolution else 1
+        if scale == 1:
+            return (self._page_width, self._page_height), self._photos, self._texts
+
+        def scaled(box):
+            return dict(box, **{side: box[side] * scale for side in ('x', 'y', 'width', 'height')})
+
+        page_size = (self._page_width * scale, self._page_height * scale)
+        return page_size, [scaled(photo) for photo in self._photos], [scaled(text) for text in self._texts]
     
     def get_preview(self):
         """
@@ -221,7 +247,7 @@ class TemplateCollage:
         image_paths = [self._dummies[min(i, len(self._dummies) - 1)] for i in range(num_photos)]
         
         # Generate collage
-        collage = self.assemble(image_paths)
+        collage = self.assemble(image_paths, full_resolution=False)
         collage = FileUtils.resize(collage)
         
         # Dump to temp file. mkstemp hands back an open descriptor as well as a
@@ -235,11 +261,11 @@ class TemplateCollage:
         self._preview_cache = tmp_output
         return tmp_output
     
-    def assemble(self, image_paths, output_path=None, for_print=False, photo_filter=None):
+    def assemble(self, image_paths, output_path=None, for_print=False, photo_filter=None, full_resolution=True):
         """
         Assemble photos into a collage based on the template.
         Simple approach: create canvas, apply background, paste photos (clipping if needed), apply foreground.
-        
+
         Args:
             image_paths: List of paths to input images
             output_path: Optional path to save the output
@@ -247,25 +273,29 @@ class TemplateCollage:
             photo_filter: Optional callable applied to each photo as it is read.
                 Photos only: a frame or a logo that turned grey along with the
                 faces would be a change the guest never asked for.
-            
+            full_resolution: False assembles at the template's own 300 dpi,
+                for a collage that is only ever shown on the booth's screen.
+
         Returns:
             The assembled collage as a numpy array
         """
         Logger.info(f'TemplateCollage: assemble({len(image_paths)} images)')
-        
+        page_size, photos, texts = self._layout(full_resolution)
+        page_width, page_height = page_size
+
         # Step 1: Create canvas with white background
-        canvas = np.full((self._page_height, self._page_width, 3), 255, dtype=np.uint8)
-        
+        canvas = np.full((page_height, page_width, 3), 255, dtype=np.uint8)
+
         # Step 2: Apply background image if specified (already at canvas size)
         if self._background:
-            background = self._get_page_layer(self._background, cv2.IMREAD_COLOR, '_background_cache')
+            background = self._get_page_layer(self._background, cv2.IMREAD_COLOR, 'background', page_size)
             if background is not None:
                 # Copy: photos are pasted into the canvas, and the cache is shared
                 # with every later collage.
                 canvas = background.copy()
         
         # Step 3: Place each photo according to template (clip if needed)
-        for i, photo_spec in enumerate(self._photos):
+        for i, photo_spec in enumerate(photos):
             if i >= len(image_paths):
                 break
                 
@@ -288,8 +318,8 @@ class TemplateCollage:
             img_resized = FileUtils.resize_and_crop(img, (height, width))
             
             # Calculate actual dimensions we can paste (clip to canvas boundaries)
-            paste_height = min(height, self._page_height - y, img_resized.shape[0])
-            paste_width = min(width, self._page_width - x, img_resized.shape[1])
+            paste_height = min(height, page_height - y, img_resized.shape[0])
+            paste_width = min(width, page_width - x, img_resized.shape[1])
             
             # Only paste if there's space
             if paste_height > 0 and paste_width > 0:
@@ -297,14 +327,14 @@ class TemplateCollage:
         
         # Step 4: Apply foreground overlay if specified (already at canvas size)
         if self._foreground:
-            overlay = self._get_page_layer(self._foreground, cv2.IMREAD_UNCHANGED, '_foreground_cache')
+            overlay = self._get_page_layer(self._foreground, cv2.IMREAD_UNCHANGED, 'foreground', page_size)
             if overlay is not None:
                 # _apply_overlay only reads the overlay, so the cache can be shared.
                 canvas = self._apply_overlay(canvas, overlay)
 
         # Step 4b: Texts, over the frame: a name printed under a decoration
         # nobody can read is a name the guest never sees.
-        canvas = self._draw_texts(canvas)
+        canvas = self._draw_texts(canvas, texts)
 
         # Step 5: Save base collage (without duplication for web gallery)
         if output_path:
@@ -364,8 +394,8 @@ class TemplateCollage:
                 high = size - 1
         return low
 
-    def _draw_texts(self, canvas):
-        if not self._texts:
+    def _draw_texts(self, canvas, texts):
+        if not texts:
             return canvas
 
         try:
@@ -377,7 +407,7 @@ class TemplateCollage:
 
         image = None
         draw = None
-        for box in self._texts:
+        for box in texts:
             content = event.fill_placeholders(box['text'], values).strip()
             if not content:
                 continue
@@ -431,13 +461,14 @@ class TemplateCollage:
         return image
 
 
-def load_templates(templates_dir='templates', text_values=None):
+def load_templates(templates_dir='templates', text_values=None, dpi=TEMPLATE_DPI):
     """
     Load all template files from a directory.
 
     Args:
         templates_dir: Directory containing template JSON files
         text_values: Callable handed to every template, see TemplateCollage
+        dpi: Resolution collages are assembled at, see TemplateCollage
 
     Returns:
         List of TemplateCollage instances
@@ -457,7 +488,7 @@ def load_templates(templates_dir='templates', text_values=None):
         if filename.endswith('.json'):
             template_path = os.path.join(templates_path, filename)
             try:
-                template = TemplateCollage(template_path, text_values=text_values)
+                template = TemplateCollage(template_path, text_values=text_values, dpi=dpi)
                 templates.append(template)
                 Logger.info(f'Loaded template: {template.get_name()} from {filename}')
             except TemplateValidationError as e:
@@ -469,6 +500,6 @@ def load_templates(templates_dir='templates', text_values=None):
     # empty list and the booth always starts.
     if not templates:
         Logger.warning('TemplateCollage: no usable template found, using the built-in fallback')
-        templates.append(TemplateCollage(template=DEFAULT_TEMPLATE, text_values=text_values))
+        templates.append(TemplateCollage(template=DEFAULT_TEMPLATE, text_values=text_values, dpi=dpi))
 
     return templates

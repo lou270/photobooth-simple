@@ -20,6 +20,12 @@ Logger = logging.getLogger('kivy.photobooth')
 # runs the whole application with a synthetic camera and no hardware at all.
 CAMERA_BACKENDS = ('auto', 'gphoto2', 'picamera2', 'opencv', 'fake')
 
+# Resolutions COLLAGE_DPI accepts. Templates are laid out at 300 dpi, which is
+# what a dye-sub printer prints; 600 only makes the saved file sharper on a
+# screen, at four times the pixels to assemble.
+COLLAGE_DPIS = (300, 600)
+DEFAULT_COLLAGE_DPI = 300
+
 # Window size used when config.ini says nothing: the 7" Ingcool panel the booth
 # is built around. Below MIN_WINDOW_SIDE the interface, sized in fractions of
 # the shortest side, stops being touchable.
@@ -343,6 +349,15 @@ class Config:
         stepper on the review screen, so a mistouch cannot empty a ribbon.
         """
         return min(10, max(1, self._get_int(('Print', 'Picture'), 'MAX_COPIES', fallback=3)))
+
+    def get_collage_dpi(self):
+        """Resolution the saved and printed collage is assembled at."""
+        dpi = self._get_int(('Print', 'Picture'), 'COLLAGE_DPI', fallback=DEFAULT_COLLAGE_DPI)
+        if dpi not in COLLAGE_DPIS:
+            Logger.warning('Config: COLLAGE_DPI must be one of %s, got %d, using %d',
+                           ', '.join(str(value) for value in COLLAGE_DPIS), dpi, DEFAULT_COLLAGE_DPI)
+            return DEFAULT_COLLAGE_DPI
+        return dpi
 
     def get_camera_backend(self):
         backend = self._get_string(('Capture',), 'CAMERA', fallback='auto').strip().lower()

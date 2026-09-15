@@ -104,6 +104,7 @@ class PhotoboothApp(App):
         self.PRINTER = config.get_printer()
         self.MAX_PRINTS = config.get_max_prints()
         self.MAX_COPIES = config.get_max_copies()
+        self.COLLAGE_DPI = config.get_collage_dpi()
         self.CALIBRATION = config.get_calibration()
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
@@ -145,7 +146,7 @@ class PhotoboothApp(App):
         
         # Always at least one format: load_templates() falls back to a built-in
         # template rather than returning an empty list.
-        self.print_formats = load_templates('templates', text_values=self.get_text_values)
+        self.print_formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
 
         self.storage = SessionStorage(
             self.DCIM_DIRECTORY,
@@ -764,7 +765,8 @@ class PhotoboothApp(App):
         photo_filter = None
         if filter_key and filter_key != DEFAULT_FILTER:
             photo_filter = lambda image: apply_filter(image, filter_key)
-        collage = template.assemble(self._shot_paths(format_idx, small=True), photo_filter=photo_filter)
+        collage = template.assemble(self._shot_paths(format_idx, small=True), photo_filter=photo_filter,
+                                    full_resolution=False)
         return FileUtils.resize(collage)
 
     def finalize_session(self, format_idx, filter_key=DEFAULT_FILTER):

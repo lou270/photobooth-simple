@@ -322,6 +322,10 @@
           "90": "Quarter turn right (portrait)",
           "180": "Upside down",
           "270": "Quarter turn left (portrait)"
+        },
+        "collage_dpi": {
+          "300": "300 dpi (print resolution)",
+          "600": "600 dpi (sharper on screen)"
         }
       },
       "sections": {
@@ -457,6 +461,10 @@
           "MAX_COPIES": {
             "label": "Maximum copies per print",
             "help": "Sheets a guest can ask for at once (10 at most). A template that duplicates its collage puts two photos on each sheet. 1 hides the copies selector."
+          },
+          "COLLAGE_DPI": {
+            "label": "Collage resolution",
+            "help": "Templates are drawn at 300 dpi, the printer's own resolution, so 600 dpi does not change the print. It makes the collage sharper in the gallery and on guests' phones, but files are about four times larger and the collage takes a little longer to build."
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Wait when the printer stops answering",
