@@ -35,6 +35,7 @@ KivyConfig.set('graphics', 'rotation', str(WINDOW_ROTATION))
 # os.environ['KIVY_NO_CONSOLELOG'] = '1'
 from kivy.app import App
 from kivy.clock import Clock
+from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.uix.screenmanager import FadeTransition
 
@@ -45,7 +46,7 @@ from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
 from libs import event, i18n
 from libs.net_utils import build_url, build_wifi_payload
-from libs.screens import ScreenMgr
+from libs.screens import LoadingScreen, ScreenMgr
 from libs.screens.theme import ICON_ERROR_TRIGGER
 from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
@@ -119,15 +120,20 @@ class PhotoboothApp(App):
         self.SLIDESHOW_PHOTO_SECONDS = config.get_slideshow_photo_seconds()
         self._log_retention_days = config.get_log_retention_days()
         self._log_max_files = config.get_log_max_files()
+        # The rest of the settings are read by the startup steps.
+        self._config = config
 
         self._rotate_logs()
-        
+
         # Always a usable object: a ring light that cannot be driven degrades to
         # a no-op instead of stopping the booth from starting.
         RINGLED = create_led(enabled=config.get_ringled(), num_pixels=config.get_ringled_pixels())
 
         # Assign local variables
         self.sm = None
+        self.loading = None
+        self._startup_steps = []
+        self._startup_step_count = 0
         self._requested_screen = None
         self._requested_kwargs = None
         self.pending_photo_tasks = []
@@ -135,7 +141,64 @@ class PhotoboothApp(App):
         self._pending_photo_lock = threading.Lock()
         self.process_runner = ProcessRunner()
         self.usb_transfer = None
+        self.web_server = None
+        self.devices = None
         self.ringled = RINGLED
+
+    # --- getting ready ------------------------------------------------------
+
+    def build(self):
+        """Put the loading screen up; the booth itself is built once it shows.
+
+        Everything that makes the booth usable - the camera, the templates, the
+        web server, the screens - takes seconds on a Pi, and used to happen
+        before the window had anything to draw: after the boot splash, guests
+        watched a black window. Only the settings are read before this point.
+        """
+        Logger.info('PhotoboothApp: build().')
+        if self.FULLSCREEN: Window.fullscreen = True
+        _title_font, text_font = event.welcome_fonts(self.WELCOME_FONT)
+        self.loading = LoadingScreen(font_name=text_font)
+        return self.loading
+
+    def on_start(self):
+        self._startup_steps = [
+            ('loading.camera', self._open_devices),
+            ('loading.templates', self._load_templates),
+            ('loading.storage', self._open_storage),
+            ('loading.services', self._start_services),
+            ('loading.screens', self._build_screens),
+        ]
+        self._startup_step_count = len(self._startup_steps)
+        self._announce_startup_step()
+
+    def _announce_startup_step(self):
+        if not self._startup_steps:
+            self._show_booth()
+            return
+        key, _step = self._startup_steps[0]
+        done = self._startup_step_count - len(self._startup_steps)
+        self.loading.show_step(i18n.t(key), done / self._startup_step_count)
+        # A step holds the main loop while it runs, so nothing is drawn during
+        # one: it starts only once the frame naming it is on the screen.
+        # Scheduling it straight from here is not enough - the first step, the
+        # camera, then ran before its caption had ever been drawn.
+        Window.bind(on_flip=self._on_startup_step_shown)
+
+    def _on_startup_step_shown(self, *args):
+        Window.unbind(on_flip=self._on_startup_step_shown)
+        Clock.schedule_once(self._run_startup_step, 0)
+
+    def _run_startup_step(self, dt):
+        key, step = self._startup_steps.pop(0)
+        started_at = time.monotonic()
+        # An exception here ends the application, as it did when this work ran
+        # in __init__, and systemd starts it again.
+        step()
+        Logger.info('PhotoboothApp: startup step %s took %.2fs', key, time.monotonic() - started_at)
+        self._announce_startup_step()
+
+    def _open_devices(self):
         self.devices = DeviceUtils(
             printer_name=self.PRINTER,
             zoom=self.CALIBRATION,
@@ -143,11 +206,14 @@ class PhotoboothApp(App):
             dslr_capture_params=self._dslr_capture_params,
             camera_backend=self.CAMERA_BACKEND,
         )
-        
+
+    def _load_templates(self):
         # Always at least one format: load_templates() falls back to a built-in
         # template rather than returning an empty list.
         self.print_formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
 
+    def _open_storage(self):
+        config = self._config
         self.storage = SessionStorage(
             self.DCIM_DIRECTORY,
             min_free_gb=self.DISK_MIN_FREE_GB,
@@ -185,6 +251,9 @@ class PhotoboothApp(App):
                 min_upload_interval=config.get_remote_min_upload_interval(),
             )
             Logger.info('PhotoboothApp: remote camera enabled, phones send photos to %s', self.get_remote_url())
+
+    def _start_services(self):
+        config = self._config
 
         # Start USB transfer
         if self.USB_EXPORT:
@@ -233,15 +302,20 @@ class PhotoboothApp(App):
             self._requested_kwargs = self._disk_maintenance_kwargs()
         self._log_runtime_snapshot('startup')
 
-    def build(self):
-        Logger.info('PhotoboothApp: build().')
+    def _build_screens(self):
         self.sm = ScreenMgr(self, transition=FadeTransition(duration=0.08))
+
+    def _show_booth(self):
+        """Swap the loading screen for the booth, on the screen it should open on."""
+        Window.remove_widget(self.loading)
+        self.loading = None
+        self.root = self.sm
+        Window.add_widget(self.sm)
         if self._requested_screen:
             self.sm.current = self._requested_screen
         self.sm.current_screen.on_entry()
         if self._requested_screen and self._requested_kwargs:
             self.sm.current_screen.on_entry(self._requested_kwargs)
-        return self.sm
 
     def on_stop(self):
         self._log_runtime_snapshot('shutdown')

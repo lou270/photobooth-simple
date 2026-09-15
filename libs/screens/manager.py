@@ -49,7 +49,7 @@ class ScreenMgr(ScreenNames, ScreenManager):
         for screen in self.pb_screens.values(): self.add_widget(screen)
 
         self.current = self.START
-        if self.app.FULLSCREEN: Window.fullscreen = True
+        # Fullscreen is set by the app, before the loading screen shows.
         Window.bind(on_key_down=self._on_key_down)
 
     def _on_key_down(self, window, keycode, scancode, codepoint, modifiers):

@@ -66,3 +66,12 @@ LED_RING=yes
 # Install the systemd unit that starts the booth at boot and restarts it on
 # crash. Needs systemd; works on any Linux, not just a Pi.
 AUTOSTART=yes
+
+# --- Boot splash ------------------------------------------------------------
+
+# Show the welcome picture instead of kernel messages while the booth starts:
+# a Plymouth theme built from config.ini, the kernel told to be quiet (Pi
+# cmdline.txt, or a GRUB drop-in on a mini PC), and the same picture as desktop
+# wallpaper. The picture is baked in at install time: re-run the installer after
+# changing the welcome photo.
+BOOT_SPLASH=yes

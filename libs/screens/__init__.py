@@ -5,6 +5,7 @@ from libs.screens.confirm_capture import ConfirmCaptureScreen
 from libs.screens.copying import CopyingScreen
 from libs.screens.countdown import CountdownScreen
 from libs.screens.error import ErrorScreen
+from libs.screens.loading import LoadingScreen
 from libs.screens.manager import ScreenMgr
 from libs.screens.names import ScreenNames
 from libs.screens.popups import QRCodePopup
@@ -20,4 +21,5 @@ __all__ = [
     'StartScreen', 'SelectFormatScreen', 'ErrorScreen', 'CountdownScreen',
     'ConfirmCaptureScreen', 'ProcessingScreen', 'ReviewScreen',
     'CopyingScreen', 'RemoteGalleryScreen', 'PrintingScreen', 'QRCodePopup',
+    'LoadingScreen',
 ]
