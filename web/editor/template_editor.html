@@ -137,8 +137,65 @@
         }
 
         .template-item-name,
-        .template-item-desc {
+        .template-item-desc,
+        .template-item-file {
             overflow-wrap: anywhere;
+        }
+
+        .template-item-file {
+            margin-top: 4px;
+            font-size: 11px;
+            font-family: ui-monospace, Consolas, monospace;
+            color: var(--text-muted);
+        }
+
+        .template-section-title {
+            margin: 12px 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .template-section-title:first-child {
+            margin-top: 2px;
+        }
+
+        .template-list-note {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            border: 1px dashed var(--panel-border-strong);
+            border-radius: 10px;
+        }
+
+        .template-item.draft {
+            border-style: dashed;
+            border-color: var(--panel-border-strong);
+        }
+
+        .size-cm {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
+        }
+
+        .toolbar input[type="number"]:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .size-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .size-row input {
+            width: 90px;
         }
 
         .template-item-icon-btn {
@@ -479,10 +536,11 @@
                 <option value="custom">{{ t('web.editor.custom') }}</option>
             </select>
 
-            <label>{{ t('web.editor.size') }}</label>
-            <input type="number" id="widthInput" value="1800" onchange="updatePageDimensions()">
+            <label title="{{ t('web.editor.size_info') }}">{{ t('web.editor.size') }}</label>
+            <input type="number" id="widthInput" value="1800" min="1" max="{{ page_limits.side }}" title="{{ t('web.editor.size_info') }}" onchange="updatePageDimensions()">
             <span style="color: var(--text-muted); margin: 0 2px;">×</span>
-            <input type="number" id="heightInput" value="1200" onchange="updatePageDimensions()">
+            <input type="number" id="heightInput" value="1200" min="1" max="{{ page_limits.side }}" title="{{ t('web.editor.size_info') }}" onchange="updatePageDimensions()">
+            <span class="size-cm" id="sizeCm"></span>
 
             <input type="checkbox" id="gridToggle" checked onchange="toggleGrid()">
             <label for="gridToggle">{{ t('web.editor.grid') }}</label>
@@ -650,13 +708,29 @@
                 <input type="text" id="newTemplateDesc" placeholder="{{ t('web.editor.new_desc_placeholder') }}">
             </div>
             <div class="prop-group">
-                <label>{{ t('web.editor.starting_format') }}</label>
-                <select id="newTemplateFormat">
-                    <option value="10x15-landscape">{{ t('web.editor.format_10x15_landscape') }}</option>
-                    <option value="10x15-portrait">{{ t('web.editor.format_10x15_portrait') }}</option>
-                    <option value="5x15">{{ t('web.editor.format_5x15') }}</option>
+                <label>{{ t('web.editor.starting_point') }}</label>
+                <select id="newTemplateStarter" onchange="updateNewTemplateStarter()">
+                    <option value="empty_landscape">{{ t('web.editor.starter_empty_landscape') }}</option>
+                    <option value="empty_portrait">{{ t('web.editor.starter_empty_portrait') }}</option>
+                    <option value="empty_strip">{{ t('web.editor.starter_empty_strip') }}</option>
+                    <option value="full_landscape">{{ t('web.editor.starter_full_landscape') }}</option>
+                    <option value="full_portrait">{{ t('web.editor.starter_full_portrait') }}</option>
+                    <option value="strip_portrait">{{ t('web.editor.starter_strip_portrait') }}</option>
+                    <option value="strip_landscape">{{ t('web.editor.starter_strip_landscape') }}</option>
+                    <option value="custom">{{ t('web.editor.starter_custom') }}</option>
                 </select>
             </div>
+            <div class="prop-group" id="newTemplateSizeGroup" hidden>
+                <label>{{ t('web.editor.size') }}</label>
+                <div class="size-row">
+                    <input type="number" id="newTemplateWidth" value="1800" min="1" max="{{ page_limits.side }}" oninput="updateNewTemplateStarter()">
+                    <span>×</span>
+                    <input type="number" id="newTemplateHeight" value="1200" min="1" max="{{ page_limits.side }}" oninput="updateNewTemplateStarter()">
+                    <span class="size-cm" id="newTemplateSizeCm"></span>
+                </div>
+                <div class="info-text">{{ t('web.editor.size_info') }}</div>
+            </div>
+            <div class="info-text">{{ t('web.editor.starter_info') }}</div>
             <div class="modal-actions">
                 <button class="btn btn-secondary" onclick="closeNewTemplateModal()">{{ t('web.editor.cancel') }}</button>
                 <button class="btn btn-primary" onclick="confirmNewTemplate()">{{ t('web.editor.create') }}</button>
@@ -695,97 +769,84 @@
         let scale = 1;
         let backgroundImage = null;
         let foregroundImage = null;
+        // templates/<file> for a template read from or saved to the booth, null
+        // for a draft that only lives in this page until it is saved.
         let templateSourceFiles = [];
-        let builtInTemplateCount = 0;
+        // Why the booth's list could not be read, shown instead of an empty list
+        // that would claim the booth has no template.
+        let boothLoadError = null;
+        // Templates whose page the operator sized by hand. Their format stays
+        // "custom" even when the size happens to match a preset, instead of
+        // the select jumping back to 10x15 under the operator's pointer.
+        const customFormatTemplates = new WeakSet();
+
+        // 300 dpi, as the booth lays templates out.
+        const TEMPLATE_DPI = 300;
+        const PAGE_LIMITS = {{ page_limits|tojson }};
+        const PRESET_FORMATS = {
+            '10x15': { long: 1800, short: 1200 },
+            '5x15': { long: 1800, short: 600 },
+        };
+        const PRINT_10X15 = { PageSize: 'w288h432', 'print-scaling': 'fit' };
+        const PRINT_STRIP = { PageSize: 'w288h432-div2', 'print-scaling': 'fit' };
+
+        // Starting points for a new template. None of them is a file: they only
+        // exist in the new-template dialog, and what they give is a draft.
+        const STARTERS = {
+            empty_landscape: () => ({ page: { width: 1800, height: 1200 }, photos: [], print_params: PRINT_10X15 }),
+            empty_portrait: () => ({ page: { width: 1200, height: 1800 }, photos: [], print_params: PRINT_10X15 }),
+            empty_strip: () => ({
+                page: { width: 600, height: 1800 }, photos: [], print_params: PRINT_STRIP, duplicate_horizontal: true
+            }),
+            full_landscape: () => ({
+                page: { width: 1800, height: 1200 },
+                photos: [{ x: 60, y: 60, width: 1680, height: 1080 }],
+                print_params: PRINT_10X15
+            }),
+            full_portrait: () => ({
+                page: { width: 1200, height: 1800 },
+                photos: [{ x: 60, y: 60, width: 1080, height: 1680 }],
+                print_params: PRINT_10X15
+            }),
+            strip_portrait: () => ({
+                page: { width: 600, height: 1800 },
+                photos: [
+                    { x: 30, y: 30, width: 540, height: 540 },
+                    { x: 30, y: 600, width: 540, height: 540 },
+                    { x: 30, y: 1170, width: 540, height: 540 }
+                ],
+                print_params: PRINT_STRIP,
+                duplicate_horizontal: true
+            }),
+            strip_landscape: () => ({
+                page: { width: 1800, height: 600 },
+                photos: [
+                    { x: 30, y: 30, width: 540, height: 540 },
+                    { x: 630, y: 30, width: 540, height: 540 },
+                    { x: 1230, y: 30, width: 540, height: 540 }
+                ],
+                print_params: PRINT_STRIP,
+                duplicate_vertical: true
+            }),
+            custom: () => ({ page: readNewTemplateSize(), photos: [], print_params: PRINT_10X15 }),
+        };
 
         const canvas = document.getElementById('canvas');
         const ctx = canvas.getContext('2d');
         const canvasWrapper = document.getElementById('canvasWrapper');
 
         async function init() {
-            templates = [
-                {
-                    "name": I18N.builtin_empty_name,
-                    "description": I18N.builtin_empty_description,
-                    "page": { "width": 1800, "height": 1200 },
-                    "photos": [],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                }, {
-                    "name": I18N.builtin_full_landscape,
-                    "description": I18N.builtin_full_description,
-                    "page": { "width": 1800, "height": 1200 },
-                    "photos": [
-                        { "x": 60, "y": 60, "width": 1680, "height": 1080 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                },
-                {
-                    "name": I18N.builtin_full_portrait,
-                    "description": I18N.builtin_full_description,
-                    "page": { "width": 1200, "height": 1800 },
-                    "photos": [
-                        { "x": 60, "y": 60, "width": 1080, "height": 1680 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                },
-                {
-                    "name": I18N.builtin_strip_portrait,
-                    "description": I18N.builtin_strip_description,
-                    "page": { "width": 600, "height": 1800 },
-                    "photos": [
-                        { "x": 30, "y": 30, "width": 540, "height": 540 },
-                        { "x": 30, "y": 600, "width": 540, "height": 540 },
-                        { "x": 30, "y": 1170, "width": 540, "height": 540 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432-div2",
-                        "print-scaling": "fit"
-                    },
-                    "duplicate_horizontal": true
-                },
-                {
-                    "name": I18N.builtin_strip_landscape,
-                    "description": I18N.builtin_strip_description,
-                    "page": { "width": 1800, "height": 600 },
-                    "photos": [
-                        { "x": 30, "y": 30, "width": 540, "height": 540 },
-                        { "x": 630, "y": 30, "width": 540, "height": 540 },
-                        { "x": 1230, "y": 30, "width": 540, "height": 540 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432-div2",
-                        "print-scaling": "fit"
-                    },
-                    "duplicate_vertical": true
-                }
-            ];
-
-            builtInTemplateCount = templates.length;
-            templateSourceFiles = new Array(templates.length).fill(null);
-
             await loadTemplatesFromServer();
 
             renderTemplateList();
-            selectTemplate(0);
+            if (templates.length > 0) {
+                selectTemplate(0);
+            } else {
+                loadTemplate();
+                if (!boothLoadError) {
+                    createNewTemplate();
+                }
+            }
         }
 
         async function loadTemplatesFromServer() {
@@ -802,49 +863,92 @@
                 }
 
                 serverTemplates.forEach((entry) => {
-                    if (!entry || typeof entry !== 'object' || !entry.template) {
+                    if (!entry || typeof entry !== 'object' || !entry.template || !entry.filename) {
                         return;
                     }
 
                     templates.push(entry.template);
-                    templateSourceFiles.push(entry.filename || null);
+                    templateSourceFiles.push(entry.filename);
                 });
             } catch (error) {
                 console.warn('Could not load templates from server:', error);
+                boothLoadError = error.message;
             }
+        }
+
+        function isDraft(index) {
+            return !templateSourceFiles[index];
         }
 
         function renderTemplateList() {
             const listEl = document.getElementById('templateList');
             listEl.innerHTML = '';
 
-            templates.forEach((template, index) => {
-                const isBuiltInTemplate = index < builtInTemplateCount;
-                const item = document.createElement('div');
-                item.className = 'template-item' + (index === currentTemplateIndex ? ' active' : '');
-                item.onclick = () => selectTemplate(index);
+            const boothIndexes = templates.map((_, index) => index).filter(index => !isDraft(index));
+            const draftIndexes = templates.map((_, index) => index).filter(index => isDraft(index));
 
-                item.innerHTML = `
-                    <div class="template-item-row">
-                        <div class="template-item-meta">
-                            <div class="template-item-name"></div>
-                            <div class="template-item-desc"></div>
-                        </div>
-                        <div class="template-item-actions">
-                            <button class="btn btn-secondary template-item-icon-btn" title="${I18N.duplicate_template}" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
-                            ${isBuiltInTemplate ? '' : `<button class="btn btn-danger template-item-icon-btn" title="${I18N.delete_template}" onclick="event.stopPropagation(); deleteTemplate(${index})">×</button>`}
-                        </div>
+            appendSectionTitle(listEl, I18N.section_booth);
+            if (boothLoadError) {
+                appendListNote(listEl, fmt(I18N.booth_load_failed, { error: boothLoadError }));
+            } else if (boothIndexes.length === 0) {
+                appendListNote(listEl, I18N.booth_empty);
+            }
+            boothIndexes.forEach(index => listEl.appendChild(templateListItem(index)));
+
+            if (draftIndexes.length > 0) {
+                appendSectionTitle(listEl, I18N.section_drafts);
+                draftIndexes.forEach(index => listEl.appendChild(templateListItem(index)));
+            }
+        }
+
+        function appendSectionTitle(listEl, text) {
+            const title = document.createElement('div');
+            title.className = 'template-section-title';
+            title.textContent = text;
+            listEl.appendChild(title);
+        }
+
+        function appendListNote(listEl, text) {
+            const note = document.createElement('div');
+            note.className = 'template-list-note';
+            note.textContent = text;
+            listEl.appendChild(note);
+        }
+
+        function templateListItem(index) {
+            const template = templates[index];
+            const item = document.createElement('div');
+            item.className = 'template-item'
+                + (isDraft(index) ? ' draft' : '')
+                + (index === currentTemplateIndex ? ' active' : '');
+            item.onclick = () => selectTemplate(index);
+
+            item.innerHTML = `
+                <div class="template-item-row">
+                    <div class="template-item-meta">
+                        <div class="template-item-name"></div>
+                        <div class="template-item-desc"></div>
+                        <div class="template-item-file"></div>
                     </div>
-                `;
+                    <div class="template-item-actions">
+                        <button class="btn btn-secondary template-item-icon-btn" title="${I18N.duplicate_template}" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
+                        <button class="btn btn-danger template-item-icon-btn" title="${I18N.delete_template}" onclick="event.stopPropagation(); deleteTemplate(${index})">×</button>
+                    </div>
+                </div>
+            `;
 
-                // Names and descriptions come from template files: never
-                // interpolate them into markup, or a crafted template runs
-                // script with the admin session that opened this editor.
-                item.querySelector('.template-item-name').textContent = template.name || '';
-                item.querySelector('.template-item-desc').textContent = template.description || '';
-
-                listEl.appendChild(item);
-            });
+            // Names, descriptions and file names come from template files:
+            // never interpolate them into markup, or a crafted template runs
+            // script with the admin session that opened this editor.
+            item.querySelector('.template-item-name').textContent = template.name || '';
+            item.querySelector('.template-item-desc').textContent = template.description || '';
+            const fileEl = item.querySelector('.template-item-file');
+            if (isDraft(index)) {
+                fileEl.remove();
+            } else {
+                fileEl.textContent = 'templates/' + templateSourceFiles[index];
+            }
+            return item;
         }
 
         function selectTemplate(index) {
@@ -911,19 +1015,49 @@
                 document.getElementById('orientationSelect').value = 'portrait';
             }
 
-            if (template.page.width === 1800 && template.page.height === 1200) {
-                document.getElementById('formatSelect').value = '10x15';
-            } else if (template.page.width === 1200 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '10x15';
-            } else if (template.page.width === 600 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '5x15';
-            } else if (template.page.width === 900 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '5x15';
-            } else {
-                document.getElementById('formatSelect').value = 'custom';
-            }
+            const format = customFormatTemplates.has(template) ? 'custom' : detectFormat(template.page);
+            document.getElementById('formatSelect').value = format;
+            // The size is the format's own unless the format is custom: typing
+            // 1000 into a 10x15 page would silently stop it being 10x15.
+            document.getElementById('widthInput').disabled = format !== 'custom';
+            document.getElementById('heightInput').disabled = format !== 'custom';
+            document.getElementById('sizeCm').textContent = sizeInCm(template.page.width, template.page.height);
 
             renderCanvas();
+        }
+
+        // Which preset a page size is, in either orientation, or 'custom'.
+        function detectFormat(page) {
+            const long = Math.max(page.width, page.height);
+            const short = Math.min(page.width, page.height);
+            for (const [name, preset] of Object.entries(PRESET_FORMATS)) {
+                if (preset.long === long && preset.short === short) {
+                    return name;
+                }
+            }
+            return 'custom';
+        }
+
+        function sizeInCm(width, height) {
+            const cm = pixels => {
+                const value = pixels / TEMPLATE_DPI * 2.54;
+                return (Math.round(value * 10) / 10).toLocaleString(document.documentElement.lang || undefined);
+            };
+            return (width > 0 && height > 0) ? `≈ ${cm(width)} × ${cm(height)} cm` : '';
+        }
+
+        function pageSizeIsAllowed(width, height) {
+            return Number.isInteger(width) && Number.isInteger(height)
+                && width >= 1 && height >= 1
+                && width <= PAGE_LIMITS.side && height <= PAGE_LIMITS.side
+                && width * height <= PAGE_LIMITS.pixels;
+        }
+
+        function alertPageTooLarge() {
+            alert(fmt(I18N.page_too_large, {
+                side: PAGE_LIMITS.side.toLocaleString(),
+                pixels: PAGE_LIMITS.pixels.toLocaleString()
+            }));
         }
 
         function renderCanvas() {
@@ -1447,30 +1581,17 @@
             const pageHeight = template.page.height;
 
             // Texts too: the booth refuses a template whose boxes leave the page.
-            template.photos.concat(textsOf(template)).forEach(photo => {
-                if (photo.x + photo.width > pageWidth || photo.y + photo.height > pageHeight) {
-                    if (photo.width > pageWidth) {
-                        photo.width = pageWidth - 60;
-                    }
-                    if (photo.height > pageHeight) {
-                        photo.height = pageHeight - 60;
-                    }
-
-                    if (photo.x + photo.width > pageWidth) {
-                        photo.x = Math.max(30, pageWidth - photo.width - 30);
-                    }
-                    if (photo.y + photo.height > pageHeight) {
-                        photo.y = Math.max(30, pageHeight - photo.height - 30);
-                    }
-
-                    photo.x = Math.max(0, photo.x);
-                    photo.y = Math.max(0, photo.y);
-
-                    photo.x = snapToGrid(photo.x);
-                    photo.y = snapToGrid(photo.y);
-                    photo.width = snapToGrid(photo.width);
-                    photo.height = snapToGrid(photo.height);
+            // Snapping comes before the clamp, never after: a snapped box on a
+            // page that is not a multiple of the grid could step back outside.
+            template.photos.concat(textsOf(template)).forEach(box => {
+                if (box.x + box.width <= pageWidth && box.y + box.height <= pageHeight) {
+                    return;
                 }
+
+                box.width = Math.max(1, Math.min(snapToGrid(box.width), pageWidth));
+                box.height = Math.max(1, Math.min(snapToGrid(box.height), pageHeight));
+                box.x = Math.max(0, Math.min(snapToGrid(box.x), pageWidth - box.width));
+                box.y = Math.max(0, Math.min(snapToGrid(box.y), pageHeight - box.height));
             });
         }
 
@@ -1479,20 +1600,20 @@
 
             const format = document.getElementById('formatSelect').value;
             const template = templates[currentTemplateIndex];
-            const orientation = document.getElementById('orientationSelect').value;
 
-            if (format === '10x15') {
-                if (orientation === 'landscape') {
-                    template.page.width = 1800;
-                    template.page.height = 1200;
-                } else {
-                    template.page.width = 1200;
-                    template.page.height = 1800;
-                }
-            } else if (format === '5x15') {
-                template.page.width = 600;
-                template.page.height = 1800;
+            if (format === 'custom') {
+                // Nothing to resize yet: unlock the size fields and hand them over.
+                customFormatTemplates.add(template);
+                loadTemplate();
+                document.getElementById('widthInput').focus();
+                return;
             }
+
+            customFormatTemplates.delete(template);
+            const preset = PRESET_FORMATS[format];
+            const landscape = document.getElementById('orientationSelect').value === 'landscape';
+            template.page.width = landscape ? preset.long : preset.short;
+            template.page.height = landscape ? preset.short : preset.long;
 
             adjustPhotosToCanvasBounds();
             loadTemplate();
@@ -1502,10 +1623,18 @@
             if (currentTemplateIndex < 0) return;
 
             const template = templates[currentTemplateIndex];
-            template.page.width = parseInt(document.getElementById('widthInput').value) || 1800;
-            template.page.height = parseInt(document.getElementById('heightInput').value) || 1200;
+            const width = Number(document.getElementById('widthInput').value);
+            const height = Number(document.getElementById('heightInput').value);
 
-            document.getElementById('formatSelect').value = 'custom';
+            if (!pageSizeIsAllowed(width, height)) {
+                alertPageTooLarge();
+                loadTemplate();
+                return;
+            }
+
+            template.page.width = width;
+            template.page.height = height;
+            customFormatTemplates.add(template);
 
             adjustPhotosToCanvasBounds();
             loadTemplate();
@@ -1681,19 +1810,19 @@
         function duplicateTemplate(index) {
             const template = JSON.parse(JSON.stringify(templates[index]));
             template.name = fmt(I18N.copy_name, { name: template.name });
+            if (customFormatTemplates.has(templates[index])) {
+                customFormatTemplates.add(template);
+            }
             templates.push(template);
             templateSourceFiles.push(null);
-            renderTemplateList();
             selectTemplate(templates.length - 1);
         }
 
         function deleteTemplate(index) {
-            if (index < builtInTemplateCount) {
-                alert(I18N.builtin_not_deletable);
-                return;
-            }
-
-            if (templates.length <= 1) {
+            // A draft can always go. The last file on the booth cannot: with
+            // none left the booth falls back to a bare single-photo page.
+            const boothFileCount = templates.filter((_, i) => !isDraft(i)).length;
+            if (!isDraft(index) && boothFileCount <= 1) {
                 alert(I18N.keep_one_template);
                 return;
             }
@@ -1727,12 +1856,16 @@
                 templates.splice(index, 1);
                 templateSourceFiles.splice(index, 1);
 
-                if (currentTemplateIndex >= templates.length) {
-                    currentTemplateIndex = templates.length - 1;
+                if (index < currentTemplateIndex || currentTemplateIndex >= templates.length) {
+                    currentTemplateIndex -= 1;
                 }
 
-                renderTemplateList();
-                loadTemplate();
+                if (currentTemplateIndex >= 0) {
+                    selectTemplate(currentTemplateIndex);
+                } else {
+                    renderTemplateList();
+                    loadTemplate();
+                }
             } catch (error) {
                 alert(fmt(I18N.delete_failed, { error: error.message }));
             }
@@ -1742,50 +1875,60 @@
             document.getElementById('newTemplateModal').classList.add('show');
             document.getElementById('newTemplateName').value = '';
             document.getElementById('newTemplateDesc').value = '';
+            updateNewTemplateStarter();
         }
 
         function closeNewTemplateModal() {
             document.getElementById('newTemplateModal').classList.remove('show');
         }
 
+        function readNewTemplateSize() {
+            return {
+                width: Number(document.getElementById('newTemplateWidth').value),
+                height: Number(document.getElementById('newTemplateHeight').value)
+            };
+        }
+
+        function updateNewTemplateStarter() {
+            const custom = document.getElementById('newTemplateStarter').value === 'custom';
+            document.getElementById('newTemplateSizeGroup').hidden = !custom;
+            const size = readNewTemplateSize();
+            document.getElementById('newTemplateSizeCm').textContent = sizeInCm(size.width, size.height);
+        }
+
         function confirmNewTemplate() {
             const name = document.getElementById('newTemplateName').value || I18N.new_template_name;
             const desc = document.getElementById('newTemplateDesc').value || I18N.new_template_description;
-            const format = document.getElementById('newTemplateFormat').value;
+            const starterName = document.getElementById('newTemplateStarter').value;
+            // A fresh copy: the starters share their print settings objects.
+            const starter = JSON.parse(JSON.stringify(STARTERS[starterName]()));
 
-            let width = 1800, height = 1200;
-
-            if (format === '10x15-landscape') {
-                width = 1800;
-                height = 1200;
-            } else if (format === '10x15-portrait') {
-                width = 1200;
-                height = 1800;
-            } else if (format === '5x15') {
-                width = 600;
-                height = 1800;
+            if (!pageSizeIsAllowed(starter.page.width, starter.page.height)) {
+                alertPageTooLarge();
+                return;
             }
 
             const newTemplate = {
                 name: name,
                 description: desc,
-                page: { width: width, height: height },
-                photos: [],
+                page: starter.page,
+                photos: starter.photos,
                 texts: [],
                 background: null,
                 foreground: null,
-                print_params: {
-                    PageSize: 'w288h432',
-                    'print-scaling': 'fit'
-                },
-                margin_percent: 5
+                print_params: starter.print_params,
+                margin_percent: 5,
+                duplicate_horizontal: !!starter.duplicate_horizontal,
+                duplicate_vertical: !!starter.duplicate_vertical
             };
 
             templates.push(newTemplate);
             templateSourceFiles.push(null);
-            renderTemplateList();
-            selectTemplate(templates.length - 1);
+            if (starterName === 'custom') {
+                customFormatTemplates.add(newTemplate);
+            }
             closeNewTemplateModal();
+            selectTemplate(templates.length - 1);
         }
 
         async function saveTemplateToServer() {
@@ -1812,6 +1955,8 @@
                 }
 
                 templateSourceFiles[currentTemplateIndex] = payload.filename || sourceFilename;
+                // A saved draft is a file on the booth now: move it to that list.
+                renderTemplateList();
                 alert(fmt(I18N.saved, { file: templateSourceFiles[currentTemplateIndex] }));
             } catch (error) {
                 alert(fmt(I18N.save_failed, { error: error.message }));

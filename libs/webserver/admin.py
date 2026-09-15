@@ -8,7 +8,7 @@ import numpy as np
 from flask import Blueprint, Response, g, redirect, render_template, request, send_file, session
 from kivy.logger import Logger
 
-from libs import event, i18n
+from libs import event, i18n, template_schema
 from libs.file_utils import FileUtils
 from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
@@ -32,13 +32,12 @@ LOGS_PAGE_JS_KEYS = {
     'logs_deleted_template': 'web.admin.logs_deleted_template',
 }
 
-# Same for editor/template_editor.html: alerts, confirmations and the names of
-# the built-in templates are all built by its script.
+# Same for editor/template_editor.html: alerts, confirmations and the headings
+# of its template list are all built by its script.
 EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
-    'sample_event', 'builtin_empty_name', 'builtin_empty_description', 'builtin_full_landscape',
-    'builtin_full_portrait', 'builtin_full_description', 'builtin_strip_portrait', 'builtin_strip_landscape',
-    'builtin_strip_description', 'duplicate_template', 'delete_template', 'embedded_image', 'canvas_photo',
-    'canvas_text', 'copy_name', 'builtin_not_deletable', 'keep_one_template', 'confirm_delete_with_file',
+    'sample_event', 'section_booth', 'section_drafts', 'booth_empty', 'booth_load_failed', 'page_too_large',
+    'duplicate_template', 'delete_template', 'embedded_image', 'canvas_photo',
+    'canvas_text', 'copy_name', 'keep_one_template', 'confirm_delete_with_file',
     'confirm_delete', 'delete_failed', 'new_template_name', 'new_template_description', 'saved', 'save_failed',
     'invalid_file', 'imported', 'parse_failed', 'no_background', 'no_foreground',
 )}
@@ -58,7 +57,13 @@ def create_blueprint(server):
         if not os.path.exists(server.template_editor_path):
             return 'Template editor not found', 404
 
-        return render_template('editor/template_editor.html', js_i18n=i18n.bundle(g.lang, EDITOR_PAGE_JS_KEYS))
+        return render_template(
+            'editor/template_editor.html',
+            js_i18n=i18n.bundle(g.lang, EDITOR_PAGE_JS_KEYS),
+            # The limits a saved template is checked against, so a custom page
+            # size is refused while it is typed rather than at save time.
+            page_limits={'side': template_schema.MAX_PAGE_SIDE, 'pixels': template_schema.MAX_PAGE_PIXELS},
+        )
 
     @blueprint.route('/admin/editor/fonts/<variant>')
     def editor_font(variant):
