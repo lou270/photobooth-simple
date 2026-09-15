@@ -205,6 +205,13 @@ are present. For a Pi camera, `libcamera-still --list-cameras` after a reboot.
 For a DSLR, `gphoto2 --capture-image`; if it reports the device is busy, the
 gvfs handlers are back - the installer disables them.
 
+**DSLR preview stays black, or the log counts "Could not find the requested
+device" (-52).** The booth takes the camera out of live view after a minute
+with no guest, so nothing keeps the body awake any more: set its auto power off
+to Disable. The booth reopens a camera that comes back on the USB bus by
+itself, but a body that has switched itself off stays gone until someone
+touches it.
+
 **Printer not working.** `./setup/doctor.sh` reports whether CUPS has a queue
 under the configured name and lists the ones it does have. A registered but
 paused queue: `cupsenable <name>`.

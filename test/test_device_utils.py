@@ -1,5 +1,6 @@
 import sys
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -254,22 +255,8 @@ def test_the_dslr_preview_loop_advances_its_frame_id():
     Built with __new__ and driven by hand: the real constructor needs a camera
     on the USB bus.
     """
-    camera = Gphoto2Camera.__new__(Gphoto2Camera)
-    camera._preview_lock = threading.Lock()
-    camera._camera_lock = threading.Lock()
-    camera._preview_frame = None
-    camera._preview_frame_id = 0
-    camera._preview_failures = 0
-    camera._preview_stop = False
-    camera._preview_fps = 1000                    # do not sleep through the test
-    camera._imread_preview = cv2.IMREAD_COLOR
-
-    encoded = cv2.imencode('.jpg', np.zeros((32, 48, 3), dtype=np.uint8))[1].tobytes()
+    camera = _bare_dslr_preview()
     frames_left = [3]
-
-    class FakeFile:
-        def get_data(self, auto_clean=True):
-            return encoded
 
     class FakeInstance:
         def capture_preview(self):
@@ -277,7 +264,7 @@ def test_the_dslr_preview_loop_advances_its_frame_id():
                 camera._preview_stop = True
                 raise RuntimeError('the camera stopped answering')
             frames_left[0] -= 1
-            return FakeFile()
+            return _PreviewFile()
 
     camera._instance = FakeInstance()
     camera._preview_loop()
@@ -294,6 +281,8 @@ def _bare_dslr_preview():
     camera._preview_frame_id = 0
     camera._preview_failures = 0
     camera._last_reopen_at = None
+    camera._preview_wanted_at = time.monotonic()
+    camera._liveview_ended = False
     camera._preview_stop = False
     camera._preview_fps = 1000                    # do not sleep through the test
     camera._imread_preview = cv2.IMREAD_COLOR
@@ -307,6 +296,168 @@ class _PreviewFile:
 
     def get_data(self, auto_clean=True):
         return self.encoded
+
+
+# --- live view goes idle when no screen shows it ---------------------------
+
+class _Widget:
+    def __init__(self, value=None):
+        self.value = value
+
+    def get_value(self):
+        return self.value
+
+    def set_value(self, value):
+        self.value = value
+
+
+class _Config:
+    def __init__(self, widgets):
+        self.widgets = widgets
+
+    def get_path(self, path):
+        return self.widgets.get(path)
+
+
+class _IdleDslr:
+    """A body in live view, recording what the preview thread asks of it."""
+
+    def __init__(self, manufacturer, switches):
+        self.widgets = {'/main/status/manufacturer': _Widget(manufacturer)}
+        self.widgets.update({path: _Widget(1) for path in switches})
+        self.commits = 0
+        self.previews = 0
+
+    def get_config(self):
+        return _Config(self.widgets)
+
+    def commit_config(self, config):
+        self.commits += 1
+
+    def capture_preview(self):
+        self.previews += 1
+        return _PreviewFile()
+
+
+def _idle(camera):
+    camera._preview_wanted_at = time.monotonic() - camera.PREVIEW_IDLE_SECONDS - 1
+    camera._preview_frame = np.zeros((32, 48, 3), dtype=np.uint8)
+
+
+def _stop_after_idle_polls(monkeypatch, camera, polls, on_poll=None):
+    count = [0]
+    real_sleep = time.sleep
+
+    def sleep(seconds):
+        if seconds == camera.PREVIEW_IDLE_POLL_SECONDS:
+            count[0] += 1
+            if on_poll:
+                on_poll(count[0])
+            if count[0] >= polls:
+                camera._preview_stop = True
+        else:
+            real_sleep(0)
+
+    monkeypatch.setattr('libs.device_utils.time.sleep', sleep)
+
+
+@pytest.mark.parametrize('switch', ['/main/actions/viewfinder', '/main/actions/eosviewfinder'])
+def test_an_idle_preview_takes_a_canon_out_of_live_view_once(monkeypatch, switch):
+    """Not calling capture_preview() is not enough: the body stays in live view.
+
+    'eosviewfinder' is the same switch in libgphoto2 releases before the rename.
+    """
+    camera = _bare_dslr_preview()
+    camera._instance = dslr = _IdleDslr('Canon Inc.', [switch])
+    _idle(camera)
+    _stop_after_idle_polls(monkeypatch, camera, polls=5)
+
+    camera._preview_loop()
+
+    assert dslr.widgets[switch].value == 0
+    assert dslr.commits == 1, 'ended once, not on every poll'
+    assert dslr.previews == 0
+    assert camera._preview_frame is None, 'a minutes-old frame is not live'
+
+
+def test_a_screen_asking_for_frames_brings_live_view_back(monkeypatch):
+    camera = _bare_dslr_preview()
+    camera._instance = dslr = _IdleDslr('Canon Inc.', ['/main/actions/viewfinder'])
+    _idle(camera)
+
+    def screen_shows_the_preview(poll):
+        if poll == 2:
+            camera.get_preview_frame_id()      # what the widget polls on each tick
+
+    _stop_after_idle_polls(monkeypatch, camera, polls=100, on_poll=screen_shows_the_preview)
+    real_capture = dslr.capture_preview
+
+    def capture_preview():
+        camera._preview_stop = True
+        return real_capture()
+
+    dslr.capture_preview = capture_preview
+
+    camera._preview_loop()
+
+    assert dslr.previews == 1
+    assert camera._preview_frame_id == 1
+    assert camera._liveview_ended is False, 'the next idle spell must end it again'
+
+
+def test_a_body_without_a_live_view_switch_is_left_alone(monkeypatch):
+    camera = _bare_dslr_preview()
+    camera._instance = dslr = _IdleDslr('Sony Corporation', [])
+    _idle(camera)
+    _stop_after_idle_polls(monkeypatch, camera, polls=3)
+
+    camera._preview_loop()
+
+    assert dslr.commits == 0
+    assert dslr.previews == 0
+
+
+def test_a_preview_being_shown_keeps_live_view_on(monkeypatch):
+    camera = _bare_dslr_preview()
+    camera._instance = dslr = _IdleDslr('Canon Inc.', ['/main/actions/viewfinder'])
+    real_capture = dslr.capture_preview
+
+    def capture_preview():
+        camera.get_preview_frame_id()
+        if dslr.previews >= 5:
+            camera._preview_stop = True
+        return real_capture()
+
+    dslr.capture_preview = capture_preview
+
+    camera._preview_loop()
+
+    assert dslr.commits == 0
+    assert dslr.previews == 6
+
+
+def test_a_session_wakes_the_preview_before_its_first_screen():
+    calls = []
+    app = SimpleNamespace(
+        devices=SimpleNamespace(wake_preview=lambda: calls.append('wake')),
+        print_formats=[object()],
+        transition_to=lambda screen, **kwargs: calls.append(screen),
+    )
+
+    PhotoboothApp.start_session(app)
+
+    assert calls[0] == 'wake'
+
+
+def test_the_preview_widget_does_not_start_on_the_last_sessions_frame():
+    widget = KivyCamera(app=SimpleNamespace(devices=None), fps=15, blur=False)
+    widget.size = (48, 32)
+    last_session = widget.texture
+
+    widget.start()
+    widget.stop()
+
+    assert widget.texture is not last_session
 
 
 def test_a_dslr_lost_from_the_usb_bus_is_reopened_and_the_preview_moves_again():

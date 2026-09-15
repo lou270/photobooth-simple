@@ -168,6 +168,11 @@ class KivyCamera(Image):
         self._frame_count = 0
         self._last_frame_id = None
         self._reset_stats()
+        # The texture still holds the previous session's last frame. A camera
+        # that answers at once replaces it within a tick, but a DSLR waking from
+        # idle takes a second or two, and a still of the last guest shown as
+        # live reads as a frozen preview.
+        self.create_empty_texture()
         self._clock = Clock.schedule_once(self._update, 1.0 / self._fps)
 
     def _reset_stats(self):

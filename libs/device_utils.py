@@ -142,10 +142,19 @@ class Gphoto2Camera(Camera):
     REOPEN_INTERVAL_SECONDS = 2.0
     # One stray I/O error must not cost a reopen and a liveview restart.
     REOPEN_AFTER_FAILURES = 3
+    # Live view keeps the sensor exposed and warming, and the Pi decoding frames
+    # nobody sees. It ends once no screen has asked for a frame for this long:
+    # longer than a guest takes between the shots of a strip, since restarting
+    # it costs a Canon one to two seconds of black screen.
+    PREVIEW_IDLE_SECONDS = 60
+    # How often an idle preview thread checks whether a screen wants frames again.
+    PREVIEW_IDLE_POLL_SECONDS = 0.1
 
     def __init__(self, dslr_liveview_params=None, dslr_capture_params=None):
         self._preview_failures = 0
         self._last_reopen_at = None
+        self._preview_wanted_at = time.monotonic()
+        self._liveview_ended = False
         if gp:
             # List connected DSLR cameras
             if gp.cameraList().count():
@@ -204,6 +213,9 @@ class Gphoto2Camera(Camera):
     DSLR_PROFILES = {
         'Canon Inc.': {
             'mode_path': '/main/capturesettings/autoexposuremode',
+            # The switch that ends live view: 'viewfinder' in current libgphoto2,
+            # 'eosviewfinder' in the releases before it was renamed.
+            'viewfinder_paths': ('/main/actions/viewfinder', '/main/actions/eosviewfinder'),
             'SHUTTERSPEED': ('/main/capturesettings/shutterspeed', ('Manual', 'TV')),
             'APERTURE': ('/main/capturesettings/aperture', ('Manual', 'AV')),
             'FOCUSMODE': ('/main/capturesettings/focusmode', None),
@@ -211,6 +223,7 @@ class Gphoto2Camera(Camera):
         },
         'Nikon Corporation': {
             'mode_path': '/main/capturesettings/expprogram',
+            'viewfinder_paths': ('/main/actions/viewfinder',),
             'SHUTTERSPEED': ('/main/capturesettings/shutterspeed', ('M', 'S')),
             'APERTURE': ('/main/capturesettings/f-number', ('M', 'A')),
             'FOCUSMODE': ('/main/capturesettings/focusmode', None),
@@ -289,6 +302,12 @@ class Gphoto2Camera(Camera):
     def _preview_loop(self):
         """Dedicated thread: continuous capture + decode so as not to block the UI."""
         while not self._preview_stop:
+            if time.monotonic() - self._preview_wanted_at > self.PREVIEW_IDLE_SECONDS:
+                self._end_liveview_once()
+                time.sleep(self.PREVIEW_IDLE_POLL_SECONDS)
+                continue
+            # capture_preview() starts live view again by itself.
+            self._liveview_ended = False
             try:
                 with self._camera_lock:
                     cfile = self._instance.capture_preview()
@@ -309,6 +328,48 @@ class Gphoto2Camera(Camera):
                     Logger.debug('Gphoto2Camera preview thread: %s', e)
                 self._reopen_if_lost(e)
                 time.sleep(1.0 / self._preview_fps)
+
+    def _end_liveview_once(self):
+        """Take the camera out of live view the first time the preview goes idle.
+
+        Stopping the capture_preview() calls is not enough: a Canon stays in
+        live view, mirror up and sensor warming, until told otherwise.
+        """
+        if self._liveview_ended:
+            return
+        self._liveview_ended = True
+
+        # The last frame is minutes old by the time a screen asks again, and
+        # would be shown as live until the camera sends a new one.
+        with self._preview_lock:
+            self._preview_frame = None
+
+        with self._camera_lock:
+            try:
+                ended = self._end_liveview()
+            except Exception as e:
+                Logger.info('Gphoto2Camera: could not end live view: %s', e)
+                return
+        if ended:
+            Logger.info('Gphoto2Camera: no preview wanted for %ss, live view ended', self.PREVIEW_IDLE_SECONDS)
+
+    def _end_liveview(self):
+        config = self._instance.get_config()
+        manufacturer = self._read_config(config, '/main/status/manufacturer')
+        profile = self.DSLR_PROFILES.get(manufacturer) or {}
+        for path in profile.get('viewfinder_paths', ()):
+            widget = config.get_path(path)
+            if widget is not None:
+                widget.set_value(0)
+                self._instance.commit_config(config)
+                return True
+        Logger.info('Gphoto2Camera: %s exposes no live view switch, live view left on', manufacturer)
+        return False
+
+    def wake_preview(self):
+        """Start live view now, so it is running by the time the countdown shows."""
+        self._preview_wanted_at = time.monotonic()
+        self._start_preview_thread()
 
     def _reopen_if_lost(self, error):
         """Reopen the camera when the preview failed because the handle lost it.
@@ -368,11 +429,16 @@ class Gphoto2Camera(Camera):
         Without it this class inherited Camera's constant 0, and KivyCamera read
         that as "no new frame" for every frame after the first: a booth whose
         only camera is the DSLR showed a still image for the whole countdown.
+
+        The widget polls this on every tick while it is on screen, so it is
+        also what keeps live view from going idle.
         """
+        self._preview_wanted_at = time.monotonic()
         with self._preview_lock:
             return self._preview_frame_id
 
     def get_preview(self, aspect_ratio=None, zoom=None):
+        self._preview_wanted_at = time.monotonic()
         self._start_preview_thread()
         with self._preview_lock:
             im = (self._preview_frame.copy() if self._preview_frame is not None else None)
@@ -726,6 +792,9 @@ class DeviceUtils:
 
     def get_preview(self, aspect_ratio=None):
         return self._preview.get_preview(aspect_ratio=aspect_ratio, zoom=self._zoom)
+
+    def wake_preview(self):
+        return self._preview.wake_preview()
 
     def capture(self, output_name, aspect_ratio=None, flash_fn=None):
         return self._capture.capture(output_name, aspect_ratio, self._zoom, flash_fn)

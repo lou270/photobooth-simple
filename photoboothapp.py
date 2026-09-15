@@ -287,6 +287,12 @@ class PhotoboothApp(App):
         installed, the format screen would be one tap asking nothing, so the
         booth goes straight to the camera.
         """
+        # A DSLR idles out of live view between guests and takes a second or
+        # two to come back: start it now rather than when the countdown shows.
+        try:
+            self.devices.wake_preview()
+        except Exception as exc:
+            Logger.warning('PhotoboothApp: could not wake the preview: %s', exc)
         if len(self.print_formats) == 1:
             self.transition_to(ScreenMgr.COUNTDOWN, shot=0, format=0)
         else:

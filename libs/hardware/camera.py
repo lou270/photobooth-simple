@@ -39,6 +39,12 @@ class Camera:
     def get_preview(self, aspect_ratio=None, zoom=None):
         raise NotImplementedError
 
+    def wake_preview(self):
+        """A preview is about to be shown: get it ready ahead of the screen.
+
+        Only a backend that is slow to start its preview needs to act on this.
+        """
+
     # --- capture ---------------------------------------------------------
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
