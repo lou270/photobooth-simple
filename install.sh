@@ -306,13 +306,27 @@ if enabled "$CAMERA_DSLR"; then
     fi
 
     # gvfs grabs the camera as a storage volume the moment it is plugged in, and
-    # then libgphoto2 cannot claim the USB device.
-    for gvfs_binary in /usr/lib/gvfs/gvfs-gphoto2-volume-monitor /usr/lib/gvfs/gvfsd-gphoto2; do
-        if [ -x "$gvfs_binary" ]; then
-            run sudo chmod -x "$gvfs_binary"
-            print_success "Disabled $(basename "$gvfs_binary")"
+    # then libgphoto2 cannot claim the USB device (-53). Older releases ship the
+    # handlers in /usr/lib/gvfs, Bookworm in /usr/libexec: looking only in the
+    # first found nothing there and said nothing, leaving the camera unusable.
+    gvfs_found=no
+    for gvfs_binary in /usr/lib/gvfs/gvfs-gphoto2-volume-monitor /usr/lib/gvfs/gvfsd-gphoto2 \
+                       /usr/libexec/gvfs-gphoto2-volume-monitor /usr/libexec/gvfsd-gphoto2; do
+        if [ -e "$gvfs_binary" ]; then
+            gvfs_found=yes
+            if [ -x "$gvfs_binary" ]; then
+                run sudo chmod -x "$gvfs_binary"
+                print_success "Disabled $(basename "$gvfs_binary")"
+            fi
         fi
     done
+    if [ "$gvfs_found" = yes ]; then
+        # chmod only stops the next launch; a handler already running keeps
+        # holding the camera until it exits.
+        run sudo pkill -f 'gvfs-gphoto2-volume-monitor|gvfsd-gphoto2' || true
+    else
+        print_skip "No gvfs gphoto2 handler installed"
+    fi
 else
     print_skip "DSLR support not requested"
 fi
