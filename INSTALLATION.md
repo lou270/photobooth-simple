@@ -82,6 +82,40 @@ one answer is safe.
 | Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
 | LED ring | firmware config | Enables SPI, installs `spidev` |
 | Autostart | systemd | `photobooth.service`, restarts on crash, starts at boot |
+| Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
+
+### The boot splash
+
+From power-on to the welcome screen, a booth goes through three things guests
+would otherwise watch: kernel messages, the desktop, and the application
+loading. With `BOOT_SPLASH=yes` all three show the welcome picture, dimmed:
+
+- **Plymouth** draws it in place of the messages. The theme is built by
+  `tools/boot_splash.py` from `config.ini` - the welcome photo, `WINDOW_WIDTH`
+  and `WINDOW_HEIGHT`, and `ROTATION`, since Plymouth draws on the panel as it is
+  mounted - and installed in `/usr/share/plymouth/themes/photobooth`.
+- **The kernel** is told to stay quiet. On a Pi, `quiet splash loglevel=3
+  logo.nologo vt.global_cursor_default=0 plymouth.ignore-serial-consoles` is
+  added to `cmdline.txt` and `disable_splash=1` to the firmware config (block
+  `photobooth:boot-splash`). On a mini PC, the same arguments and a hidden menu
+  go into `/etc/default/grub.d/photobooth-splash.cfg`; hold Shift or press Esc
+  during boot to reach the GRUB menu. The maker's logo before that belongs to
+  the firmware: turn on its "quiet boot" option.
+- **The desktop** gets the picture as wallpaper, wherever pcmanfm already has a
+  settings file.
+- **The application** then shows its own loading screen on the same picture,
+  with each step it is at, until the welcome screen is ready.
+
+The picture is copied into the initramfs, so a new welcome photo reaches the
+boot splash only when the installer runs again:
+
+```bash
+./install.sh --profile setup/booth.conf --yes
+```
+
+To go back to the boot messages on a Pi, remove the `photobooth:boot-splash`
+block and the arguments above from `cmdline.txt`; on a mini PC, delete the GRUB
+drop-in and run `sudo update-grub`.
 
 ### The virtual environment
 

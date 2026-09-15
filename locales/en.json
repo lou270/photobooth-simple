@@ -1,4 +1,12 @@
 {
+  "loading": {
+    "title": "Getting the photo booth ready",
+    "camera": "Connecting to the camera…",
+    "templates": "Preparing the layouts…",
+    "storage": "Opening the photo gallery…",
+    "services": "Starting sharing…",
+    "screens": "Almost ready…"
+  },
   "start": {
     "title": "Photo Booth",
     "version": "Version {version}",

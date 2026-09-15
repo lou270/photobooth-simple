@@ -1,4 +1,12 @@
 {
+  "loading": {
+    "title": "Préparation du photobooth",
+    "camera": "Connexion à l'appareil photo…",
+    "templates": "Préparation des mises en page…",
+    "storage": "Ouverture de la galerie…",
+    "services": "Démarrage du partage…",
+    "screens": "Presque prêt…"
+  },
   "start": {
     "title": "Photo Booth",
     "version": "Version {version}",

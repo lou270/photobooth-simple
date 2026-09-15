@@ -43,6 +43,7 @@ PRINTER_URI=""
 PRINTER_PPD="doc/DS620.ppd"
 LED_RING=ask
 AUTOSTART=ask
+BOOT_SPLASH=ask
 
 PROFILE=""
 ASSUME_YES=false
@@ -99,7 +100,7 @@ is_dry_run && print_warning "Dry run: nothing will be modified."
 
 resolve_unanswered() {
     local var
-    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART; do
+    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH; do
         if [ "${!var}" = "ask" ]; then
             printf -v "$var" 'no'
         fi
@@ -124,6 +125,7 @@ else
     ask_yes_no_var PRINTER_SETUP "Install printer support (CUPS)?"
     ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
     ask_yes_no_var AUTOSTART "Start the booth automatically on boot?"
+    ask_yes_no_var BOOT_SPLASH "Show the welcome picture instead of boot messages while the booth starts?"
 fi
 
 # ---------------------------------------------------------------------------
@@ -442,6 +444,118 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Boot splash
+# ---------------------------------------------------------------------------
+
+print_info "Boot splash"
+
+# Between power-on and the welcome screen, a booth prints its kernel messages,
+# shows a desktop, then loads. Plymouth replaces the messages with the welcome
+# picture, the desktop gets the same picture as wallpaper, and the application
+# carries on with its own loading screen over it (libs/screens/loading.py).
+PLYMOUTH_THEME_DIR=/usr/share/plymouth/themes/photobooth
+KERNEL_SPLASH_ARGUMENTS="quiet splash loglevel=3 logo.nologo vt.global_cursor_default=0"
+
+if enabled "$BOOT_SPLASH"; then
+    apt_ensure plymouth plymouth-themes
+
+    # The theme is built from config.ini as it stands: the welcome photo, the
+    # panel's mode and its ROTATION, none of which Plymouth knows about.
+    if is_dry_run; then
+        print_dry "build the Plymouth theme with tools/boot_splash.py into $PLYMOUTH_THEME_DIR"
+        print_dry "sudo plymouth-set-default-theme -R photobooth"
+    else
+        SPLASH_BUILD="$(mktemp -d)"
+        "$PHOTOBOOTH_PYTHON" "$PHOTOBOOTH_DIR/tools/boot_splash.py" "$SPLASH_BUILD" "$PLYMOUTH_THEME_DIR" > /dev/null
+        SPLASH_CHANGED=false
+        for splash_file in "$SPLASH_BUILD"/*; do
+            write_root_file "$PLYMOUTH_THEME_DIR/$(basename "$splash_file")" 0644 < "$splash_file"
+            if [ "$ROOT_FILE_CHANGED" = true ]; then
+                SPLASH_CHANGED=true
+            fi
+        done
+        rm -rf "$SPLASH_BUILD"
+
+        # Selecting the theme rebuilds the initramfs, which is a minute on a Pi:
+        # only when there is something new to put in it.
+        if [ "$SPLASH_CHANGED" = true ] || [ "$(sudo plymouth-set-default-theme 2>/dev/null)" != photobooth ]; then
+            if sudo plymouth-set-default-theme -R photobooth; then
+                print_success "Plymouth theme 'photobooth' selected"
+                NEED_REBOOT=true
+            else
+                print_warning "Could not select the Plymouth theme; try: sudo plymouth-set-default-theme -R photobooth"
+            fi
+        else
+            print_skip "Plymouth theme already selected and up to date"
+        fi
+    fi
+
+    if has_boot_config; then
+        BOOT_CONFIG="$(boot_config_path)"
+        managed_block "$BOOT_CONFIG" "boot-splash" <<'SPLASH_BLOCK'
+# No rainbow square from the firmware before the booth's own splash.
+disable_splash=1
+SPLASH_BLOCK
+        KERNEL_CMDLINE="$(dirname "$BOOT_CONFIG")/cmdline.txt"
+        if [ -f "$KERNEL_CMDLINE" ]; then
+            # plymouth.ignore-serial-consoles: with a serial console on the
+            # command line, as Raspberry Pi OS ships it, Plymouth shows its
+            # text mode instead of the theme.
+            # shellcheck disable=SC2086 # one argument per word
+            kernel_cmdline_set "$KERNEL_CMDLINE" $KERNEL_SPLASH_ARGUMENTS plymouth.ignore-serial-consoles
+        else
+            print_warning "No $KERNEL_CMDLINE; the kernel will keep printing its messages."
+        fi
+        NEED_REBOOT=true
+    elif has_grub; then
+        # A drop-in rather than an edit of /etc/default/grub, which belongs to
+        # the operator. The menu stays reachable: hold Shift, or press Esc, while
+        # the machine starts.
+        write_root_file /etc/default/grub.d/photobooth-splash.cfg 0644 <<GRUB_SPLASH
+# Written by install.sh (BOOT_SPLASH): straight to the booth's splash, no menu
+# and no kernel messages. Delete this file and run update-grub to undo.
+GRUB_TIMEOUT=0
+GRUB_TIMEOUT_STYLE=hidden
+GRUB_RECORDFAIL_TIMEOUT=0
+GRUB_CMDLINE_LINUX_DEFAULT="\$GRUB_CMDLINE_LINUX_DEFAULT $KERNEL_SPLASH_ARGUMENTS"
+GRUB_SPLASH
+        if [ "$ROOT_FILE_CHANGED" = true ]; then
+            run sudo update-grub
+            NEED_REBOOT=true
+        fi
+        print_info "The maker's logo before GRUB is the firmware's: turn on 'quiet boot' in its setup."
+    else
+        print_warning "Neither a Pi firmware config nor GRUB here; the kernel will keep printing its messages."
+    fi
+
+    # The desktop shows for a few seconds between the splash and the booth.
+    # pcmanfm draws it on Raspberry Pi OS (X11, Wayfire and labwc alike): only
+    # the settings files that already exist are changed, so a desktop this
+    # does not know is left alone.
+    SPLASH_WALLPAPER="$PLYMOUTH_THEME_DIR/splash.png"
+    wallpaper_set=false
+    for desktop_items in "$HOME"/.config/pcmanfm/*/desktop-items-*.conf /etc/xdg/pcmanfm/*/desktop-items-*.conf; do
+        [ -f "$desktop_items" ] || continue
+        as_owner=()
+        case "$desktop_items" in
+            /etc/*) as_owner=(sudo) ;;
+        esac
+        run "${as_owner[@]}" sed -i \
+            -e "s|^wallpaper=.*|wallpaper=$SPLASH_WALLPAPER|" \
+            -e 's|^wallpaper_mode=.*|wallpaper_mode=crop|' \
+            "$desktop_items"
+        wallpaper_set=true
+    done
+    if [ "$wallpaper_set" = true ]; then
+        print_success "Desktop wallpaper set to the splash picture"
+    else
+        print_skip "No pcmanfm desktop settings found; wallpaper left as it is"
+    fi
+else
+    print_skip "Boot splash not requested"
+fi
+
+# ---------------------------------------------------------------------------
 # Save the profile
 # ---------------------------------------------------------------------------
 
@@ -463,6 +577,7 @@ PRINTER_URI=$PRINTER_URI
 PRINTER_PPD=$PRINTER_PPD
 LED_RING=$LED_RING
 AUTOSTART=$AUTOSTART
+BOOT_SPLASH=$BOOT_SPLASH
 PROFILE_OUT
     print_success "Saved your answers to setup/booth.conf"
 fi

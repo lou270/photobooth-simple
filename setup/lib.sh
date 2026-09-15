@@ -83,12 +83,16 @@ apt_ensure() {
 
 # write_root_file <destination> [mode] - content on stdin, written with sudo.
 # Creates parent directories. Under --dry-run it prints the content instead.
+# Sets ROOT_FILE_CHANGED to true or false, for a caller whose follow-up is
+# expensive enough to skip when nothing changed (rebuilding an initramfs).
+ROOT_FILE_CHANGED=false
 write_root_file() {
     local dest="$1"
     local mode="${2:-0644}"
     local tmp
     tmp="$(mktemp)"
     cat > "$tmp"
+    ROOT_FILE_CHANGED=false
 
     if is_dry_run; then
         print_dry "write $dest (mode $mode):"
@@ -107,6 +111,7 @@ write_root_file() {
 
     sudo install -D -m "$mode" "$tmp" "$dest"
     rm -f "$tmp"
+    ROOT_FILE_CHANGED=true
     print_success "Wrote $dest"
 }
 
@@ -140,6 +145,47 @@ managed_block() {
 
     write_root_file "$dest" "$mode" < "$tmp"
     rm -f "$tmp"
+}
+
+# kernel_cmdline_set <cmdline.txt> <argument...> - make the Pi's kernel command
+# line carry each argument, replacing an earlier one with the same name
+# (loglevel=7 gives way to loglevel=3). managed_block cannot do this job: the
+# kernel reads the first line of the file only, so everything has to stay on
+# it. Arguments the booth does not name are kept as they are, in their order,
+# which is also why a second run writes the same line.
+kernel_cmdline_set() {
+    local dest="$1"
+    shift
+    local current wanted
+    current="$(sudo head -n 1 "$dest")"
+    wanted="$(printf '%s\n' "$current" | awk -v add="$*" '
+        function name_of(argument) { sub(/=.*/, "", argument); return argument }
+        BEGIN {
+            count = split(add, arguments, " ")
+            for (i = 1; i <= count; i++) replaced[name_of(arguments[i])] = 1
+        }
+        {
+            line = ""
+            for (i = 1; i <= NF; i++) {
+                if (!(name_of($i) in replaced)) line = line (line == "" ? "" : " ") $i
+            }
+            for (i = 1; i <= count; i++) line = line (line == "" ? "" : " ") arguments[i]
+            print line
+        }')"
+
+    # A command line without its root= does not boot. Whatever went wrong to
+    # produce one, it must not be what the Pi finds next time it starts.
+    case " $wanted " in
+        *" root="*) ;;
+        *)
+            print_error "Refusing to write $dest without a root= argument: $wanted"
+            return 1
+            ;;
+    esac
+
+    # Redirected rather than piped: a pipe would run write_root_file in a
+    # subshell, and ROOT_FILE_CHANGED would never reach the caller.
+    write_root_file "$dest" "$(stat -c '%a' "$dest" 2>/dev/null || echo 755)" <<< "$wanted"
 }
 
 # require_vars <NAME...> - fail loudly when a value a template depends on is
@@ -212,6 +258,10 @@ boot_config_path() {
 has_boot_config() { boot_config_path > /dev/null; }
 
 has_wayfire() { [ -f /etc/wayfire/defaults.ini ]; }
+
+# GRUB as Debian and Ubuntu package it: /etc/default/grub.d/*.cfg is read after
+# /etc/default/grub, which is what lets the booth add to it without editing it.
+has_grub() { [ -f /etc/default/grub ] && command -v update-grub > /dev/null 2>&1; }
 
 has_systemd() { command -v systemctl > /dev/null 2>&1; }
 
