@@ -223,15 +223,15 @@ USB_MIN_FREE_GB = 1.0
 [DSLR_Liveview]
 # Parameters applied to the DSLR during liveview (preview).
 # Leave empty or None to leave the camera setting unchanged.
-SHUTTERSPEED =
-APERTURE =
+SHUTTERSPEED = 1/30
+APERTURE = 8
 FOCUSMODE =
-ISO =
+ISO = 1600
 
 [DSLR_Capture]
 # Parameters applied to the DSLR right before each photo capture.
 # Leave empty or None to leave the setting unchanged.
 SHUTTERSPEED = 1/125
-APERTURE = 13
-FOCUSMODE = One Shot
-ISO = 100
+APERTURE = 8
+FOCUSMODE =
+ISO = 400

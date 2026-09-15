@@ -638,7 +638,29 @@ def test_a_sentence_breaks_between_its_words_and_fills_the_screen():
     assert screen.start_label.width <= 1024
     assert screen.start_label.top <= 600
     assert screen.subtitle_label.top < screen.start_label.y, 'the subtitle sits under the last line'
-    assert screen.subtitle_label.y > screen.touch_icon.top
+    assert screen.subtitle_label.y > screen.touch_hint.top
+
+
+@pytest.mark.parametrize('width, height', [(1280, 800), (800, 1280)])
+def test_the_touch_icon_sits_between_the_tabs(width, height):
+    screen = laid_out(welcome(width, height), width, height)
+
+    hint = screen.touch_hint
+    tab = screen.tab_remote_qr
+    assert hint.right <= tab.x, 'clear of the tab'
+    assert hint.x >= width - tab.x, 'and of the queue tab, which comes and goes'
+    assert screen.start_label.y > hint.top
+
+
+def test_the_wave_only_moves_while_the_welcome_screen_is_up():
+    """Every screen is built at startup; a wave left running would redraw
+    thirty times a second behind the camera preview."""
+    screen = laid_out(welcome())
+
+    screen.touch_hint.start()
+    assert screen.touch_hint._clock is not None
+    screen.touch_hint.stop()
+    assert screen.touch_hint._clock is None
 
 
 def test_a_short_title_stays_on_one_line():

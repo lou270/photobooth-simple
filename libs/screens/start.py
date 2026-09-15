@@ -9,16 +9,17 @@ from kivy.animation import Animation
 from kivy.clock import Clock
 from kivy.core.text import Label as CoreLabel
 from kivy.core.window import Window
-from kivy.graphics import Color, Rectangle, RoundedRectangle
+from kivy.graphics import Color, Line, Rectangle, RoundedRectangle
 from kivy.graphics.texture import Texture
 from kivy.logger import Logger
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.label import Label
+from kivy.uix.widget import Widget
 
 from libs import event
 from libs.i18n import t
 from libs.kivywidgets import (
-    FeedbackButtonBehavior, LayoutButton, make_icon_button, short_side,
+    FeedbackButtonBehavior, is_offscreen, LayoutButton, make_icon_button, short_side,
 )
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
@@ -241,10 +242,102 @@ class WelcomeText(Label):
         # Down a little, as a light from above would throw it.
         drop = self.font_size * 0.03
         self._shadow.size = (width + 2 * padding, height + 2 * padding)
+        # From x and y, not center_x and center_y: those are cached and still
+        # hold the old position while a move is being announced.
         self._shadow.pos = (
-            int(self.center_x - width / 2.0) - padding,
-            int(self.center_y - height / 2.0) - padding - drop,
+            int(self.x + (self.width - width) / 2.0) - padding,
+            int(self.y + (self.height - height) / 2.0) - padding - drop,
         )
+
+
+class TouchHint(Widget):
+    """The touch icon, with a quiet wave under it that says "touch here".
+
+    The icon alone at the foot of a photo read as decoration. A soft glow
+    breathes behind it and, every few seconds, thin rings spread out from under
+    it and fade, the way water answers a fingertip: enough movement to catch an
+    eye across a room, not so much that it competes with the event's words.
+
+    It takes no touch of its own: a press on it reaches the screen beneath and
+    starts a session like a press anywhere else.
+    """
+
+    PERIOD = 3.2  # seconds between two waves
+    RING_SECONDS = 2.0
+    RINGS = 2
+    RING_DELAY = 0.45
+
+    def __init__(self, **kwargs):
+        super(TouchHint, self).__init__(size_hint=(None, None), **kwargs)
+        self._phase = 0.0
+        self._clock = None
+
+        with self.canvas.before:
+            self._glow_color = Color(1, 1, 1, 0.3)
+            self._glow = Rectangle(texture=self._glow_texture())
+            self._rings = []
+            for _ in range(self.RINGS):
+                self._rings.append((Color(1, 1, 1, 0), Line(width=1.2)))
+
+        self.icon = Label(font_name=ICON_TTF, text=ICON_TOUCH, size_hint=(None, None))
+        self.add_widget(self.icon)
+        self.bind(pos=self._draw, size=self._draw)
+
+    @staticmethod
+    def _glow_texture(size=64):
+        """A white disc fading to nothing at its edge, drawn once."""
+        axis = np.linspace(-1.0, 1.0, size, dtype=np.float32)
+        distance = np.sqrt(axis[None, :] ** 2 + axis[:, None] ** 2)
+        pixels = np.full((size, size, 4), 255, dtype=np.uint8)
+        pixels[:, :, 3] = (np.clip(1.0 - distance, 0.0, 1.0) ** 2 * 255).astype(np.uint8)
+        texture = Texture.create(size=(size, size), colorfmt='rgba')
+        texture.blit_buffer(pixels.tobytes(), colorfmt='rgba', bufferfmt='ubyte')
+        return texture
+
+    def start(self):
+        self.stop()
+        self._clock = Clock.schedule_interval(self._tick, 1 / 30.0)
+
+    def stop(self):
+        if self._clock is not None:
+            Clock.unschedule(self._clock)
+            self._clock = None
+        self._phase = 0.0
+        self._draw()
+
+    def _tick(self, dt):
+        # Nobody sees it under the slideshow or on another screen.
+        if is_offscreen(self):
+            return
+        self._phase = (self._phase + dt / self.PERIOD) % 1.0
+        self._draw()
+
+    def _draw(self, *args):
+        if not self.width:
+            return
+        # From x and y, not the cached centres, which lag a move (see WelcomeText).
+        middle_x = self.x + self.width / 2.0
+        middle_y = self.y + self.height / 2.0
+        self.icon.size = self.size
+        self.icon.font_size = self.width * 0.85
+        self.icon.pos = self.pos
+
+        seconds = self._phase * self.PERIOD
+        breath = 0.5 - 0.5 * math.cos(self._phase * 2 * math.pi)
+        glow = self.width * (1.7 + 0.15 * breath)
+        self._glow_color.a = 0.22 + 0.16 * breath
+        self._glow.size = (glow, glow)
+        self._glow.pos = (middle_x - glow / 2.0, middle_y - glow / 2.0)
+
+        for index, (color, line) in enumerate(self._rings):
+            age = (seconds - index * self.RING_DELAY) / self.RING_SECONDS
+            if self._clock is None or not 0.0 <= age <= 1.0:
+                color.a = 0
+                continue
+            radius = self.width * (0.5 + 0.55 * (1 - (1 - age) ** 3))
+            color.a = 0.55 * (1 - age) ** 2
+            line.width = max(1.0, self.width * 0.02 * (1 - age))
+            line.circle = (middle_x, middle_y, radius)
 
 
 class StartScreen(BackgroundScreen):
@@ -291,13 +384,8 @@ class StartScreen(BackgroundScreen):
             overlay_layout.add_widget(self.subtitle_label)
 
         # The touch icon, between the two corner tabs.
-        self.touch_icon = Label(
-            size_hint=(None, None),
-            font_name=ICON_TTF,
-            text=ICON_TOUCH,
-        )
-        overlay_layout.add_widget(self.touch_icon)
-        self._touch_pulse = None
+        self.touch_hint = TouchHint()
+        overlay_layout.add_widget(self.touch_hint)
 
         # Version: useful to the operator powering the booth up, and to nobody
         # else. Shown at startup, then faded out before the first guest arrives.
@@ -380,7 +468,7 @@ class StartScreen(BackgroundScreen):
         side = min(width, height)
         # The tabs and the touch icon take the bottom of the screen; the
         # version label and some air, the top.
-        bottom = side * 0.22
+        bottom = max(side * 0.22, self._place_touch_hint(width, side) + side * 0.06)
         top = height - side * 0.07
         room = top - bottom
         text_width = width * 0.84
@@ -420,27 +508,12 @@ class StartScreen(BackgroundScreen):
             self._rule_shadow.size = (rule_width, rule_thickness * 3)
             self._rule_shadow.pos = (width / 2.0 - rule_width / 2.0, rule_y - rule_thickness * 1.5)
 
-        icon = side * 0.13
-        self.touch_icon.size = (icon, icon)
-        self.touch_icon.font_size = side * 0.11
-        self.touch_icon.center_x = width / 2.0
-        self.touch_icon.y = side * 0.05
-
-    def _pulse_touch_icon(self):
-        """A slow breath on the icon: the one thing moving says "touch me"."""
-        self._stop_touch_pulse()
-        self.touch_icon.opacity = 1
-        pulse = (Animation(opacity=0.45, duration=1.2, t='in_out_sine')
-                 + Animation(opacity=1, duration=1.2, t='in_out_sine'))
-        pulse.repeat = True
-        pulse.start(self.touch_icon)
-        self._touch_pulse = pulse
-
-    def _stop_touch_pulse(self):
-        if self._touch_pulse is not None:
-            self._touch_pulse.cancel(self.touch_icon)
-            self._touch_pulse = None
-        self.touch_icon.opacity = 1
+    def _place_touch_hint(self, width, side):
+        """The icon at the foot of the screen, between the corner tabs."""
+        icon = side * 0.12
+        self.touch_hint.size = (icon, icon)
+        self.touch_hint.pos = (width / 2.0 - icon / 2.0, side * 0.045)
+        return self.touch_hint.top
 
     # --- the two corners -------------------------------------------------
 
@@ -546,7 +619,7 @@ class StartScreen(BackgroundScreen):
             Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
             self._version_label = None  # only the first time, at power-up
         self.app.ringled.start_rainbow()
-        self._pulse_touch_icon()
+        self.touch_hint.start()
         self._purge_when_idle()
 
         if self.app.has_remote_capture():
@@ -572,7 +645,7 @@ class StartScreen(BackgroundScreen):
         # After the popup, whose dismissal starts the idle count again.
         self._stop_slideshow(rearm=False)
         self._disarm_slideshow()
-        self._stop_touch_pulse()
+        self.touch_hint.stop()
         self.app.ringled.clear()
 
     # --- photos waiting from phones --------------------------------------
