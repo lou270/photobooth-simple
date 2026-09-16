@@ -42,7 +42,7 @@ class TemplateCollage:
     # Space between two lines of the same text, as a fraction of the font size.
     LINE_SPACING = 0.15
 
-    def __init__(self, template_path=None, template=None, text_values=None, dpi=TEMPLATE_DPI):
+    def __init__(self, template_path=None, template=None, text_values=None, dpi=TEMPLATE_DPI, template_dir=None):
         """
         Initialize the collage from a JSON template file.
 
@@ -54,17 +54,19 @@ class TemplateCollage:
             dpi: Resolution the saved and printed collage is assembled at.
                 The printed size does not change with it, only how sharp the
                 file looks on a screen.
+            template_dir: Where image file names are looked up, for a template
+                given as data rather than read from a file.
         """
         Logger.info('TemplateCollage: __init__(%s)', template_path or 'built-in')
 
         if template is None and template_path is None:
             raise ValueError('TemplateCollage requires either template_path or template')
-        
+
         self._template_path = template_path
         self._module_dir = os.path.dirname(os.path.abspath(__file__))
         self._template_dir = (
             os.path.dirname(os.path.abspath(template_path)) if template_path
-            else os.path.join(self._module_dir, '..', 'templates')
+            else template_dir or os.path.join(self._module_dir, '..', 'templates')
         )
         
         # Load template
@@ -274,13 +276,7 @@ class TemplateCollage:
         if self._preview_cache is not None:
             return self._preview_cache
         
-        # Use dummy images for preview
-        num_photos = self.get_photos_required()
-        image_paths = [self._dummies[min(i, len(self._dummies) - 1)] for i in range(num_photos)]
-        
-        # Generate collage
-        collage = self.assemble(image_paths, full_resolution=False)
-        collage = FileUtils.resize(collage)
+        collage = FileUtils.resize(self.assemble_with_dummies())
         
         # Dump to temp file. mkstemp hands back an open descriptor as well as a
         # path; leaving it open leaked one per template and, on Windows, stopped
@@ -292,7 +288,12 @@ class TemplateCollage:
         # Cache the result
         self._preview_cache = tmp_output
         return tmp_output
-    
+
+    def assemble_with_dummies(self):
+        """The collage at 300 dpi with the sample photos in every slot."""
+        image_paths = [self._dummies[min(i, len(self._dummies) - 1)] for i in range(self.get_photos_required())]
+        return self.assemble(image_paths, full_resolution=False)
+
     def assemble(self, image_paths, output_path=None, for_print=False, photo_filter=None, full_resolution=True):
         """
         Assemble photos into a collage based on the template.

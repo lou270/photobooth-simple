@@ -20,6 +20,8 @@ LOG_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
 # route, so the downloads and the archive stay unaware it exists rather than
 # each having to learn to skip it.
 THUMBNAIL_FILENAME = 'collage_small.jpg'
+# An image of a designed template, named by the booth after its content.
+TEMPLATE_ASSET_PATTERN = re.compile(r'^[0-9a-f]{32}\.(?:png|jpg|webp)$')
 
 
 def is_valid_session(session):
@@ -76,6 +78,27 @@ def safe_log_path(logs_directory, filename):
         return None
 
     base_path = os.path.realpath(logs_directory)
+    requested_path = os.path.realpath(os.path.join(base_path, filename))
+
+    if os.path.dirname(requested_path) != base_path:
+        return None
+
+    if not os.path.isfile(requested_path):
+        return None
+
+    return requested_path
+
+
+def safe_template_asset_path(assets_directory, filename):
+    """Resolve an image of the template assets folder, or None.
+
+    Asset names are made by the booth from their content, so anything else is
+    not one of them: no need to guess what a looser name was meant to reach.
+    """
+    if not isinstance(filename, str) or not TEMPLATE_ASSET_PATTERN.fullmatch(filename):
+        return None
+
+    base_path = os.path.realpath(assets_directory)
     requested_path = os.path.realpath(os.path.join(base_path, filename))
 
     if os.path.dirname(requested_path) != base_path:
