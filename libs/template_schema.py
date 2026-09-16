@@ -268,19 +268,42 @@ def _validate_stack(stack, page, photos, texts):
     return validated
 
 
+def _design_images(value):
+    """Every embedded image string anywhere inside the design."""
+    if isinstance(value, dict):
+        return [image for item in value.values() for image in _design_images(item)]
+    if isinstance(value, list):
+        return [image for item in value for image in _design_images(item)]
+    if isinstance(value, str) and value[:11].lower() == 'data:image/':
+        return [value]
+    return []
+
+
 def _validate_design(design):
+    """The editor's own description of the design, kept to open it again.
+
+    Its images are references to assets, except in a file exported to carry
+    a template to another booth, where they travel inside it. Those count
+    with the template's other embedded images, not against the size of the
+    description itself.
+    """
     if design is None:
-        return None
+        return None, []
     if not isinstance(design, dict):
         raise TemplateValidationError('design must be an object')
     try:
         encoded = json.dumps(design, ensure_ascii=False, allow_nan=False)
     except (TypeError, ValueError):
         raise TemplateValidationError('design must be plain JSON') from None
-    if len(encoded.encode('utf-8')) > MAX_DESIGN_BYTES:
+
+    images = _design_images(design)
+    for index, image in enumerate(images):
+        _validate_layer(image, f'design image {index}')
+    described = len(encoded.encode('utf-8')) - sum(len(image) for image in images)
+    if described > MAX_DESIGN_BYTES:
         raise TemplateValidationError(f'design is above the {MAX_DESIGN_BYTES} byte limit')
     # A round trip, so what is stored is exactly what was checked.
-    return json.loads(encoded)
+    return json.loads(encoded), images
 
 
 def _validate_print_params(print_params):
@@ -352,10 +375,11 @@ def validate_template(data):
         # Two descriptions of the same drawing would leave the booth guessing
         # which one the editor meant.
         raise TemplateValidationError('a template with a stack puts its images in it, not in background or foreground')
-    template['design'] = _validate_design(data.get('design'))
+    template['design'], design_images = _validate_design(data.get('design'))
 
     images = [template[key] for key in LAYER_KEYS]
     images += [entry['src'] for entry in template['stack'] or () if entry['type'] == 'image']
+    images += design_images
     total = sum(_embedded_bytes(image) for image in images)
     if total > MAX_EMBEDDED_TOTAL_BYTES:
         raise TemplateValidationError(

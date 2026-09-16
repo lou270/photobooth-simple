@@ -9,3 +9,6 @@
 *.ppd           text eol=lf
 config.ini.example text eol=lf
 setup/booth.conf.example text eol=lf
+
+# Third-party files kept byte for byte as published, and never diffed.
+web/assets/vendor/** -text -diff

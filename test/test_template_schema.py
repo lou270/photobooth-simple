@@ -209,7 +209,29 @@ def test_the_editor_design_is_kept_as_plain_json():
     assert validate_template(minimal_template(design=design))['design'] == design
 
 
-@pytest.mark.parametrize('design', ['levels', {'size': float('nan')}, {'blob': 'x' * (MAX_DESIGN_BYTES + 1)}])
+@pytest.mark.parametrize('design', [
+    'levels',
+    {'size': float('nan')},
+    {'blob': 'x' * (MAX_DESIGN_BYTES + 1)},
+    {'levels': [{'elements': [{'kind': 'image', 'src': 'data:image/png;base64,not base64!!'}]}]},
+])
 def test_a_design_that_is_not_small_plain_json_is_rejected(design):
     with pytest.raises(TemplateValidationError):
         validate_template(minimal_template(design=design))
+
+
+def test_images_carried_inside_an_exported_design_count_as_images_not_as_description():
+    """An exported template brings its pictures along, so another booth can take the file as it is."""
+    picture = data_uri(MAX_DESIGN_BYTES)
+    design = {'levels': [{'elements': [{'kind': 'image', 'src': picture}]}]}
+
+    assert validate_template(minimal_template(design=design))['design'] == design
+
+    too_many = {'levels': [{'elements': [{'kind': 'image', 'src': data_uri(MAX_EMBEDDED_TOTAL_BYTES // 2)}] * 3}]}
+    with pytest.raises(TemplateValidationError, match='add up'):
+        validate_template(minimal_template(design=too_many))
+
+
+def test_a_fixed_text_that_merely_starts_like_a_link_is_just_text():
+    design = {'levels': [{'elements': [{'kind': 'label', 'text': 'data: le grand jour'}]}]}
+    assert validate_template(minimal_template(design=design))['design'] == design

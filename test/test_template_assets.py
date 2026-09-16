@@ -148,6 +148,25 @@ def test_the_booth_draws_a_template_whose_image_is_an_asset(client, server):
     assert red > 200 and green < 60 and blue < 60
 
 
+def test_the_editor_gets_the_letterings_and_the_sample_photos(client):
+    assert client.get('/admin/editor/fonts/lettering/GreatVibes-Regular.ttf').status_code == 200
+    assert client.get('/admin/editor/samples/0').mimetype == 'image/png'
+
+
+@pytest.mark.parametrize('path', [
+    '/admin/editor/fonts/lettering/OFL-Fredoka.txt',
+    '/admin/editor/fonts/lettering/..%2F..%2F..%2Fconfig.ini.example',
+    '/admin/editor/samples/4',
+])
+def test_the_editor_routes_serve_nothing_else(client, path):
+    assert client.get(path).status_code == 404
+
+
+@pytest.mark.parametrize('path', ['/admin/editor/fonts/lettering/GreatVibes-Regular.ttf', '/admin/editor/samples/0'])
+def test_the_editor_routes_are_for_the_admin_only(server, path):
+    assert server.app.test_client().get(path).status_code == 302
+
+
 def test_a_preview_of_an_invalid_template_says_why(client):
     response = client.post('/api/templates/preview', json={'template': {'name': 'Broken'}})
 
