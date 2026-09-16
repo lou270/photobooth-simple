@@ -6,8 +6,8 @@
     <title>PhotoBooth - {{ t('web.editor.page_title') }}</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='theme.css') }}">
     <style>
-        /* The font the booth prints text in, served by the booth itself, so a
-           text box looks here the way it will on paper. */
+        /* The font the booth prints variable text in, served by the booth itself,
+           so a text box looks here the way it will on paper. */
         @font-face {
             font-family: 'PrintFont';
             src: url('/admin/editor/fonts/regular') format('truetype');
@@ -19,6 +19,23 @@
             src: url('/admin/editor/fonts/bold') format('truetype');
             font-weight: bold;
         }
+
+        /* Letterings a design's fixed text may use. Named without spaces:
+           Fabric writes the family into a canvas font string as it is. */
+        {% for font in design_fonts %}
+        @font-face {
+            font-family: 'design-{{ font.id }}';
+            src: url('{{ font.regular }}') format('truetype');
+            font-weight: normal;
+        }
+        {% if font.bold %}
+        @font-face {
+            font-family: 'design-{{ font.id }}';
+            src: url('{{ font.bold }}') format('truetype');
+            font-weight: bold;
+        }
+        {% endif %}
+        {% endfor %}
 
         body {
             display: flex;
@@ -33,47 +50,43 @@
             min-height: 0;
         }
 
-        .prop-group textarea {
-            width: 100%;
-            min-height: 60px;
-            padding: 8px;
-            font: inherit;
-            border: 1px solid var(--panel-border-strong);
-            border-radius: 8px;
-            resize: vertical;
-        }
-
-        .placeholder-buttons {
-            display: flex;
-            gap: 5px;
-            margin-top: 6px;
-        }
-
-        .placeholder-buttons .btn {
-            flex: 1;
-            padding: 4px 6px;
-            min-height: 30px;
-            font-size: 12px;
-        }
+        /* --- templates, on the left ------------------------------------- */
 
         .sidebar {
-            width: 300px;
+            width: 260px;
+            flex-shrink: 0;
             background: var(--panel-bg);
             border-right: 1px solid var(--panel-border);
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            min-height: 0;
         }
 
         .sidebar-header {
-            padding: 20px;
+            padding: 16px;
             border-bottom: 1px solid var(--panel-border);
         }
 
         .sidebar-header h1 {
-            font-size: 18px;
-            margin-bottom: 10px;
+            font-size: 17px;
+            margin: 0 0 10px;
             color: var(--text-primary);
+        }
+
+        .sidebar-actions {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .sidebar-actions .btn {
+            min-height: 36px;
+            padding: 6px 8px;
+            font-size: 13px;
+        }
+
+        .sidebar-actions .btn-primary {
+            grid-column: 1 / -1;
         }
 
         .template-list {
@@ -82,14 +95,39 @@
             padding: 10px;
         }
 
+        .template-section-title {
+            margin: 12px 4px 8px;
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .template-section-title:first-child {
+            margin-top: 2px;
+        }
+
+        .template-list-note {
+            padding: 10px 12px;
+            margin-bottom: 8px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-secondary);
+            border: 1px dashed var(--panel-border-strong);
+            border-radius: 10px;
+        }
+
         .template-item {
-            padding: 12px;
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            padding: 10px 12px;
             margin-bottom: 8px;
             background: var(--panel-muted);
             border-radius: 10px;
             cursor: pointer;
             border: 1px solid transparent;
-            transition: all 0.2s;
         }
 
         .template-item:hover {
@@ -101,285 +139,545 @@
             background: var(--accent-soft);
         }
 
-        .template-item-name {
-            font-weight: 600;
-            margin-bottom: 4px;
-            color: var(--text-primary);
+        .template-item.draft {
+            border-style: dashed;
+            border-color: var(--panel-border-strong);
         }
 
-        .template-item-desc {
+        .template-item.draft.active {
+            border-color: var(--champagne);
+        }
+
+        .template-item-meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .template-item-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            overflow-wrap: anywhere;
+        }
+
+        .template-item-name .dirty {
+            color: var(--warning);
+            margin-left: 4px;
+        }
+
+        .template-item-desc,
+        .template-item-file {
             font-size: 12px;
             color: var(--text-secondary);
+            overflow-wrap: anywhere;
+        }
+
+        .template-item-file {
+            margin-top: 3px;
+            font-size: 11px;
+            font-family: var(--font-mono);
+            color: var(--text-muted);
+        }
+
+        .template-item-error {
+            margin-top: 4px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--danger);
+            overflow-wrap: anywhere;
         }
 
         .template-item-actions {
-            margin-top: 8px;
             display: flex;
             gap: 4px;
         }
 
-        .template-item-actions button {
-            min-height: 32px;
-            padding: 4px 8px;
-            font-size: 12px;
-        }
+        /* --- the workspace, in the middle ------------------------------- */
 
-        .template-item-row {
-            display: flex;
-            align-items: flex-start;
-            justify-content: space-between;
-            gap: 8px;
-        }
-
-        .template-item-meta {
-            min-width: 0;
-            flex: 1;
-        }
-
-        .template-item-name,
-        .template-item-desc {
-            overflow-wrap: anywhere;
-        }
-
-        .template-item-icon-btn {
-            padding: 4px 8px;
-            min-width: 32px;
-            line-height: 1;
-        }
-
-        .main-content {
+        .workspace {
             flex: 1;
             display: flex;
             flex-direction: column;
-            overflow: hidden;
+            min-width: 0;
+            min-height: 0;
         }
 
         .toolbar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 14px;
+            padding: 8px 12px;
             background: var(--panel-bg);
             border-bottom: 1px solid var(--panel-border);
-            padding: 10px 20px;
-            display: flex;
-            gap: 16px;
-            align-items: center;
-            flex-wrap: nowrap;
         }
 
-        .toolbar label {
+        .tool-group {
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .tool-group + .tool-group {
+            padding-left: 14px;
+            border-left: 1px solid var(--panel-border);
+        }
+
+        .tool-spacer {
+            flex: 1;
+        }
+
+        .tool-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 34px;
+            height: 34px;
+            padding: 0 8px;
+            border: 1px solid transparent;
+            border-radius: 8px;
+            background: transparent;
+            color: var(--text-primary);
+            font: inherit;
             font-size: 13px;
-            color: var(--text-secondary);
-            font-weight: 500;
+            cursor: pointer;
+        }
+
+        .tool-button:hover:not(:disabled) {
+            background: var(--accent-soft);
+            border-color: var(--panel-border);
+        }
+
+        .tool-button:disabled {
+            opacity: 0.35;
+            cursor: default;
+        }
+
+        .tool-button svg {
+            width: 18px;
+            height: 18px;
+            flex-shrink: 0;
+        }
+
+        .tool-button .tool-label {
             white-space: nowrap;
         }
 
-        .toolbar select,
-        .toolbar input[type="number"] {
-            padding: 5px 10px;
+        .zoom-label {
+            min-width: 48px;
+            text-align: center;
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .page-bar {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 14px;
+            padding: 6px 12px;
+            background: var(--panel-muted);
+            border-bottom: 1px solid var(--panel-border);
+            font-size: 13px;
+        }
+
+        .page-bar label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+            white-space: nowrap;
+        }
+
+        .page-bar select,
+        .page-bar input[type="number"] {
+            padding: 4px 8px;
             border: 1px solid var(--panel-border);
             border-radius: 8px;
             font-size: 13px;
             background: var(--panel-bg);
-            transition: border-color 0.2s;
         }
 
-        .toolbar select:focus,
-        .toolbar input[type="number"]:focus {
-            outline: none;
-            border-color: var(--accent);
+        .page-bar input[type="number"] {
+            width: 76px;
         }
 
-        .toolbar select {
-            min-width: 110px;
-            cursor: pointer;
+        .page-bar input[type="number"]:disabled {
+            opacity: 0.6;
         }
 
-        .toolbar input[type="number"] {
-            width: 70px;
-            text-align: center;
+        .size-cm {
+            font-size: 12px;
+            color: var(--text-muted);
+            white-space: nowrap;
         }
 
-        .toolbar input[type="checkbox"] {
-            width: 16px;
-            height: 16px;
-            cursor: pointer;
-            margin: 0 4px 0 8px;
-        }
-
-        .canvas-container {
+        .canvas-area {
+            position: relative;
             flex: 1;
-            overflow: auto;
-            padding: 40px;
+            min-height: 0;
+            overflow: hidden;
+            background: #e2ddd5;
+        }
+
+        .canvas-area.panning,
+        .canvas-area.panning * {
+            cursor: grabbing !important;
+        }
+
+        .canvas-area.space-held,
+        .canvas-area.space-held * {
+            cursor: grab !important;
+        }
+
+        .canvas-area.dropping::after {
+            content: attr(data-drop-label);
+            position: absolute;
+            inset: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
-            background: var(--app-bg);
+            border: 3px dashed var(--accent);
+            border-radius: 16px;
+            background: rgba(74, 67, 181, 0.08);
+            color: var(--accent);
+            font-weight: 600;
+            pointer-events: none;
         }
 
-        .canvas-wrapper {
-            position: relative;
-            background: var(--panel-bg);
-            box-shadow: var(--shadow-card);
-            transform-origin: center center;
-            border-radius: 10px;
-        }
-
-        .canvas {
-            display: block;
-            cursor: crosshair;
-            border-radius: 10px;
-        }
-
-        .scale-info {
+        .status-bar {
             position: absolute;
+            left: 12px;
             bottom: 10px;
-            right: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 4px 8px;
-            border-radius: 4px;
-            font-size: 11px;
+            max-width: calc(100% - 24px);
+            padding: 5px 10px;
+            border-radius: 8px;
+            background: rgba(29, 32, 51, 0.78);
+            color: #fff;
+            font-size: 12px;
             pointer-events: none;
         }
 
-        .photo-frame {
+        .empty-canvas {
             position: absolute;
-            border: 2px solid var(--indigo);
-            background: rgba(74, 67, 181, 0.12);
-            cursor: move;
-            box-sizing: border-box;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            color: var(--text-secondary);
+            text-align: center;
         }
 
-        .photo-frame:hover {
-            background: rgba(74, 67, 181, 0.22);
-            border-color: var(--accent);
-        }
+        /* --- levels and properties, on the right ------------------------ */
 
-        .photo-frame.selected {
-            border-color: var(--champagne);
-            background: rgba(212, 163, 115, 0.25);
-        }
-
-        .photo-frame-label {
-            position: absolute;
-            top: 4px;
-            left: 4px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 2px 6px;
-            font-size: 11px;
-            border-radius: 2px;
-            pointer-events: none;
-        }
-
-        .resize-handle {
-            position: absolute;
-            width: 10px;
-            height: 10px;
-            background: white;
-            border: 2px solid var(--champagne);
-            border-radius: 50%;
-            z-index: 10;
-        }
-
-        .resize-handle.nw { top: -5px; left: -5px; cursor: nw-resize; }
-        .resize-handle.ne { top: -5px; right: -5px; cursor: ne-resize; }
-        .resize-handle.sw { bottom: -5px; left: -5px; cursor: sw-resize; }
-        .resize-handle.se { bottom: -5px; right: -5px; cursor: se-resize; }
-
-        .duplicate-preview {
-            opacity: 0.3;
-            pointer-events: none;
-        }
-
-        .properties-panel {
+        .inspector {
             width: 320px;
-            background: var(--panel-bg);
-            border-left: 1px solid var(--panel-border);
+            flex-shrink: 0;
             display: flex;
             flex-direction: column;
-            overflow-y: auto;
-            padding: 20px;
+            background: var(--panel-bg);
+            border-left: 1px solid var(--panel-border);
+            min-height: 0;
         }
 
-        .properties-panel h3 {
-            margin-bottom: 15px;
-            font-size: 16px;
+        .inspector-block {
+            padding: 14px 16px;
+            border-bottom: 1px solid var(--panel-border);
+        }
+
+        .inspector-block.levels {
+            max-height: 45%;
+            display: flex;
+            flex-direction: column;
+            min-height: 140px;
+        }
+
+        .inspector-block.properties {
+            flex: 1;
+            overflow-y: auto;
+            border-bottom: none;
+        }
+
+        .block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            margin-bottom: 8px;
+        }
+
+        .block-header h2,
+        .inspector h3 {
+            margin: 0;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.04em;
+            text-transform: uppercase;
+            color: var(--text-secondary);
+        }
+
+        .level-list {
+            overflow-y: auto;
+            margin: 0 -6px;
+            padding: 0 6px;
+        }
+
+        .level {
+            margin-bottom: 6px;
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            background: var(--panel-muted);
+        }
+
+        .level.active {
+            border-color: var(--champagne);
+        }
+
+        .level.hidden-level .level-name,
+        .level.hidden-level .element-row {
+            opacity: 0.45;
+        }
+
+        .level-head,
+        .element-row {
+            display: flex;
+            align-items: center;
+            gap: 2px;
+            padding: 3px 4px;
+            min-height: 32px;
+        }
+
+        .level-head {
+            cursor: pointer;
+        }
+
+        .level-name {
+            flex: 1;
+            min-width: 0;
+            padding: 0 4px;
+            font-size: 13px;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .level-opacity {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+
+        .element-row {
+            padding-left: 30px;
+            border-top: 1px solid var(--panel-border);
+            cursor: pointer;
+            font-size: 12px;
+        }
+
+        .element-row:hover {
+            background: var(--accent-soft);
+        }
+
+        .element-row.selected {
+            background: rgba(212, 163, 115, 0.22);
+        }
+
+        .element-icon {
+            width: 16px;
+            color: var(--text-muted);
+            flex-shrink: 0;
+        }
+
+        .element-name {
+            flex: 1;
+            min-width: 0;
+            padding: 0 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .row-button {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            padding: 0;
+            border: none;
+            border-radius: 6px;
+            background: transparent;
+            color: var(--text-secondary);
+            cursor: pointer;
+            flex-shrink: 0;
+        }
+
+        .row-button:hover:not(:disabled) {
+            background: var(--panel-bg);
             color: var(--text-primary);
         }
 
-        .prop-group {
-            margin-bottom: 15px;
+        .row-button:disabled {
+            opacity: 0.3;
+            cursor: default;
         }
 
-        .prop-group label {
-            display: block;
-            font-size: 13px;
+        .row-button svg {
+            width: 15px;
+            height: 15px;
+        }
+
+        .row-button.off {
+            color: var(--text-muted);
+            opacity: 0.55;
+        }
+
+        .row-button.on {
+            color: var(--warning);
+        }
+
+        .level-empty {
+            padding: 6px 12px 8px 34px;
+            border-top: 1px solid var(--panel-border);
+            font-size: 12px;
+            color: var(--text-muted);
+        }
+
+        .prop-section + .prop-section {
+            margin-top: 18px;
+        }
+
+        .prop-section h3 {
+            margin-bottom: 10px;
+        }
+
+        .prop-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px 10px;
+        }
+
+        .prop-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin-bottom: 10px;
+            font-size: 12px;
             color: var(--text-secondary);
-            margin-bottom: 5px;
-            font-weight: 500;
         }
 
-        .prop-group input,
-        .prop-group select {
+        .prop-grid .prop-row {
+            margin-bottom: 0;
+        }
+
+        .prop-row input[type="text"],
+        .prop-row input[type="number"],
+        .prop-row select,
+        .prop-row textarea {
             width: 100%;
-            padding: 8px;
+            padding: 7px 8px;
             border: 1px solid var(--panel-border);
             border-radius: 8px;
-            font-size: 14px;
+            font: inherit;
+            font-size: 13px;
+            color: var(--text-primary);
             background: var(--panel-bg);
         }
 
-        .prop-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 15px;
+        .prop-row textarea {
+            min-height: 64px;
+            resize: vertical;
         }
 
-        .prop-actions button {
-            flex: 1;
+        .prop-row input[type="color"] {
+            width: 100%;
+            height: 34px;
+            padding: 2px;
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            background: var(--panel-bg);
         }
 
-        .grid-toggle {
+        .prop-inline {
             display: flex;
             align-items: center;
             gap: 8px;
         }
 
-        .grid-toggle input[type="checkbox"] {
-            width: auto;
+        .prop-inline input[type="range"] {
+            flex: 1;
+        }
+
+        .prop-inline output {
+            min-width: 40px;
+            text-align: right;
+            font-variant-numeric: tabular-nums;
+        }
+
+        .prop-check {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 8px;
+            font-size: 13px;
+            color: var(--text-primary);
+        }
+
+        .prop-buttons {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 12px;
+        }
+
+        .prop-buttons .btn {
+            min-height: 34px;
+            padding: 5px 10px;
+            font-size: 13px;
+        }
+
+        .placeholder-buttons {
+            display: flex;
+            gap: 5px;
+        }
+
+        .placeholder-buttons .btn {
+            flex: 1;
+            min-height: 28px;
+            padding: 3px 6px;
+            font-size: 12px;
         }
 
         .info-text {
-            font-size: 12px;
-            color: var(--text-secondary);
             margin-top: 10px;
             padding: 10px;
+            font-size: 12px;
+            line-height: 1.5;
+            color: var(--text-secondary);
             background: var(--panel-muted);
             border: 1px solid var(--panel-border);
             border-radius: 8px;
-            line-height: 1.5;
         }
 
-        .export-panel {
-            margin-top: 20px;
-            padding-top: 20px;
-            border-top: 1px solid var(--panel-border);
+        .shortcut-list {
+            margin: 0;
+            padding-left: 18px;
         }
 
-        input[type="checkbox"] {
-            cursor: pointer;
-        }
+        /* --- dialogs ---------------------------------------------------- */
 
         .modal {
             display: none;
             position: fixed;
             z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
+            inset: 0;
             background-color: rgba(15, 23, 42, 0.45);
             align-items: center;
             justify-content: center;
+            padding: 16px;
         }
 
         .modal.show {
@@ -388,20 +686,22 @@
 
         .modal-content {
             background: var(--panel-bg);
-            padding: 30px;
+            padding: 26px;
             border-radius: 16px;
             max-width: 500px;
-            width: 90%;
+            width: 100%;
+            max-height: 100%;
+            overflow-y: auto;
             box-shadow: var(--shadow-soft);
         }
 
-        .modal-content h2 {
-            margin-bottom: 20px;
-            color: var(--text-primary);
+        .modal-content.wide {
+            max-width: 1100px;
         }
 
-        .modal-content .prop-group {
-            margin-bottom: 15px;
+        .modal-content h2 {
+            margin: 0 0 18px;
+            color: var(--text-primary);
         }
 
         .modal-actions {
@@ -411,7 +711,91 @@
             justify-content: flex-end;
         }
 
+        .size-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .size-row input {
+            width: 90px;
+        }
+
+        .preview-pair {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .preview-pair figure {
+            margin: 0;
+        }
+
+        .preview-pair figcaption {
+            margin-bottom: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .preview-pair img {
+            display: block;
+            max-width: 100%;
+            max-height: 65vh;
+            margin: 0 auto;
+            border: 1px solid var(--panel-border);
+            background: repeating-conic-gradient(#eee 0% 25%, #fff 0% 50%) 50% / 20px 20px;
+        }
+
+        .busy {
+            position: fixed;
+            inset: 0;
+            z-index: 2000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(15, 23, 42, 0.35);
+        }
+
+        .busy-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 22px;
+            border-radius: 12px;
+            background: var(--panel-bg);
+            box-shadow: var(--shadow-soft);
+            font-weight: 600;
+        }
+
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 3px solid var(--panel-border);
+            border-top-color: var(--accent);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         @media (max-width: 1180px) {
+            .sidebar {
+                width: 210px;
+            }
+
+            .inspector {
+                width: 280px;
+            }
+
+            .tool-button .tool-label {
+                display: none;
+            }
+        }
+
+        @media (max-width: 900px) {
             body {
                 height: auto;
                 min-height: 100vh;
@@ -423,18 +807,27 @@
             }
 
             .sidebar,
-            .properties-panel {
+            .inspector {
                 width: 100%;
                 border: none;
                 border-bottom: 1px solid var(--panel-border);
             }
 
-            .toolbar {
-                flex-wrap: wrap;
+            .template-list {
+                max-height: 220px;
             }
 
-            .canvas-container {
-                min-height: 50vh;
+            .canvas-area {
+                flex: none;
+                height: 65vh;
+            }
+
+            .inspector-block.levels {
+                max-height: none;
+            }
+
+            .preview-pair {
+                grid-template-columns: 1fr;
             }
         }
     </style>
@@ -444,1483 +837,182 @@
     {% include 'partials/admin_topbar.html' %}
 
     <div class="editor-app">
-    <div class="sidebar">
-        <div class="sidebar-header">
-            <h1>{{ t('web.editor.templates') }}</h1>
-            <div style="display: grid; gap: 10px;">
-                <button class="btn btn-primary" onclick="createNewTemplate()" style="width: 100%;">{{ t('web.editor.new_template') }}</button>
-                <input type="file" id="importJsonFile" accept="application/json,.json" onchange="importTemplate()" style="display: none;">
-                <button class="btn btn-primary" onclick="document.getElementById('importJsonFile').click()" style="width: 100%;">
-                    📤 {{ t('web.editor.import_json') }}
-                </button>
-                <button class="btn btn-success" onclick="exportTemplate()" style="width: 100%;">
-                    📥 {{ t('web.editor.export_json') }}
-                </button>
-                <button class="btn btn-warning" onclick="saveTemplateToServer()" style="width: 100%;">
-                    💾 {{ t('web.editor.save_to_server') }}
-                </button>
-            </div>
-        </div>
-        <div class="template-list" id="templateList"></div>
-    </div>
-
-    <div class="main-content">
-        <div class="toolbar">
-            <label>{{ t('web.editor.orientation') }}</label>
-            <select id="orientationSelect" onchange="changeOrientation()">
-                <option value="landscape">{{ t('web.editor.landscape') }}</option>
-                <option value="portrait">{{ t('web.editor.portrait') }}</option>
-            </select>
-
-            <label>{{ t('web.editor.format') }}</label>
-            <select id="formatSelect" onchange="changeFormat()">
-                <option value="10x15">10x15 cm</option>
-                <option value="5x15">5x15 cm</option>
-                <option value="custom">{{ t('web.editor.custom') }}</option>
-            </select>
-
-            <label>{{ t('web.editor.size') }}</label>
-            <input type="number" id="widthInput" value="1800" onchange="updatePageDimensions()">
-            <span style="color: var(--text-muted); margin: 0 2px;">×</span>
-            <input type="number" id="heightInput" value="1200" onchange="updatePageDimensions()">
-
-            <input type="checkbox" id="gridToggle" checked onchange="toggleGrid()">
-            <label for="gridToggle">{{ t('web.editor.grid') }}</label>
-
-            <label>{{ t('web.editor.step') }}</label>
-            <input type="number" id="gridSizeInput" value="30" min="5" max="100" step="5" onchange="updateGridSize()">
-        </div>
-
-        <div class="canvas-container">
-            <div class="canvas-wrapper" id="canvasWrapper">
-                <canvas id="canvas" class="canvas"></canvas>
-                <div class="scale-info" id="scaleInfo">100%</div>
-            </div>
-        </div>
-    </div>
-
-    <div class="properties-panel">
-        <h3>{{ t('web.editor.template_properties') }}</h3>
-        <div class="prop-group">
-            <label>{{ t('web.editor.name') }}</label>
-            <input type="text" id="templateName" oninput="updateTemplateName()">
-        </div>
-        <div class="prop-group">
-            <label>{{ t('web.editor.description') }}</label>
-            <input type="text" id="templateDesc" oninput="updateTemplateDesc()">
-        </div>
-
-        <div class="prop-group">
-            <label>{{ t('web.editor.background') }}</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="text" id="templateBackground" placeholder="path/to/background.png" oninput="updateTemplateBackground()" style="flex: 1;">
-                <input type="file" id="backgroundFile" accept="image/*" onchange="loadBackgroundImage()" style="display: none;">
-                <button class="btn btn-secondary" title="{{ t('web.editor.choose_image') }}" aria-label="{{ t('web.editor.choose_image') }}" onclick="document.getElementById('backgroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
-                <button class="btn btn-secondary" title="{{ t('web.editor.download_image') }}" aria-label="{{ t('web.editor.download_image') }}" onclick="downloadImageLayer('background')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
-            </div>
-        </div>
-
-        <div class="prop-group">
-            <label>{{ t('web.editor.foreground') }}</label>
-            <div style="display: flex; gap: 5px;">
-                <input type="text" id="templateForeground" placeholder="../overlays/frame.png" oninput="updateTemplateForeground()" style="flex: 1;">
-                <input type="file" id="foregroundFile" accept="image/*" onchange="loadForegroundImage()" style="display: none;">
-                <button class="btn btn-secondary" title="{{ t('web.editor.choose_image') }}" aria-label="{{ t('web.editor.choose_image') }}" onclick="document.getElementById('foregroundFile').click()" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">📁</button>
-                <button class="btn btn-secondary" title="{{ t('web.editor.download_image') }}" aria-label="{{ t('web.editor.download_image') }}" onclick="downloadImageLayer('foreground')" style="padding: 6px 12px; font-size: 12px; min-height: 36px;">💾</button>
-            </div>
-        </div>
-
-        <div class="prop-group">
-            <button class="btn btn-success" onclick="addPhotoFrame()" style="width: 100%;">+ {{ t('web.editor.add_photo_frame') }}</button>
-        </div>
-
-        <div class="prop-group">
-            <button class="btn btn-success" onclick="addTextBox()" style="width: 100%;">+ {{ t('web.editor.add_text') }}</button>
-        </div>
-
-        <div class="prop-group">
-            <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="duplicateHorizontal" onchange="updateDuplication()" style="width: auto;">
-                {{ t('web.editor.duplicate_horizontal') }}
-            </label>
-        </div>
-
-        <div class="prop-group">
-            <label style="display: flex; align-items: center; gap: 8px;">
-                <input type="checkbox" id="duplicateVertical" onchange="updateDuplication()" style="width: auto;">
-                {{ t('web.editor.duplicate_vertical') }}
-            </label>
-        </div>
-
-        <div id="frameProperties" style="display: none;">
-            <h3 style="margin-top: 20px;">{{ t('web.editor.selected_frame') }}</h3>
-            <div class="prop-group">
-                <label>{{ t('web.editor.x') }}</label>
-                <input type="number" id="frameX" onchange="updateFrameProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.y') }}</label>
-                <input type="number" id="frameY" onchange="updateFrameProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.width') }}</label>
-                <input type="number" id="frameWidth" onchange="updateFrameProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.height') }}</label>
-                <input type="number" id="frameHeight" onchange="updateFrameProperties()">
-            </div>
-            <div class="prop-actions">
-                <button class="btn btn-danger" onclick="deleteSelectedFrame()">{{ t('web.editor.delete') }}</button>
-            </div>
-        </div>
-
-        <div id="textProperties" style="display: none;">
-            <h3 style="margin-top: 20px;">{{ t('web.editor.selected_text') }}</h3>
-            <div class="prop-group">
-                <label>{{ t('web.editor.text') }}</label>
-                <textarea id="textContent" oninput="updateTextProperties()"></textarea>
-                <div class="placeholder-buttons">
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{event}')" title="{{ t('web.editor.placeholder_event_title') }}">{event}</button>
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{date}')" title="{{ t('web.editor.placeholder_date_title') }}">{date}</button>
-                    <button class="btn btn-secondary" onclick="insertPlaceholder('{time}')" title="{{ t('web.editor.placeholder_time_title') }}">{time}</button>
+        <aside class="sidebar">
+            <div class="sidebar-header">
+                <h1>{{ t('web.editor.templates') }}</h1>
+                <div class="sidebar-actions">
+                    <button class="btn btn-primary" id="newTemplateButton">{{ t('web.editor.new_template') }}</button>
+                    <input type="file" id="importJsonFile" accept="application/json,.json" hidden>
+                    <button class="btn btn-secondary" id="importButton" title="{{ t('web.editor.import_json') }}">📤 {{ t('web.editor.import') }}</button>
+                    <button class="btn btn-secondary" id="exportButton" title="{{ t('web.editor.export_json') }}">📥 {{ t('web.editor.export') }}</button>
                 </div>
             </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.color') }}</label>
-                <input type="color" id="textColor" oninput="updateTextProperties()">
+            <div class="template-list" id="templateList"></div>
+        </aside>
+
+        <main class="workspace">
+            <div class="toolbar" role="toolbar" aria-label="{{ t('web.editor.toolbar') }}">
+                <div class="tool-group">
+                    <button class="tool-button" id="undoButton" data-icon="undo" title="{{ t('web.editor.undo') }} (Ctrl+Z)"></button>
+                    <button class="tool-button" id="redoButton" data-icon="redo" title="{{ t('web.editor.redo') }} (Ctrl+Y)"></button>
+                </div>
+                <div class="tool-group">
+                    <input type="file" id="imageFile" accept="image/png,image/jpeg,image/webp" multiple hidden>
+                    <button class="tool-button" data-add="image" data-icon="image" title="{{ t('web.editor.add_image') }}"><span class="tool-label">{{ t('web.editor.tool_image') }}</span></button>
+                    <button class="tool-button" data-add="rect" data-icon="rect" title="{{ t('web.editor.add_rect') }}"></button>
+                    <button class="tool-button" data-add="ellipse" data-icon="ellipse" title="{{ t('web.editor.add_ellipse') }}"></button>
+                    <button class="tool-button" data-add="line" data-icon="line" title="{{ t('web.editor.add_line') }}"></button>
+                    <button class="tool-button" data-add="label" data-icon="label" title="{{ t('web.editor.add_label') }}"><span class="tool-label">{{ t('web.editor.tool_label') }}</span></button>
+                    <button class="tool-button" data-add="photo" data-icon="photo" title="{{ t('web.editor.add_photo') }}"><span class="tool-label">{{ t('web.editor.tool_photo') }}</span></button>
+                    <button class="tool-button" data-add="field" data-icon="field" title="{{ t('web.editor.add_field') }}"><span class="tool-label">{{ t('web.editor.tool_field') }}</span></button>
+                </div>
+                <div class="tool-group">
+                    <button class="tool-button" data-align="left" data-icon="alignLeft" title="{{ t('web.editor.align_left') }}"></button>
+                    <button class="tool-button" data-align="center" data-icon="alignCenter" title="{{ t('web.editor.align_center') }}"></button>
+                    <button class="tool-button" data-align="right" data-icon="alignRight" title="{{ t('web.editor.align_right') }}"></button>
+                    <button class="tool-button" data-align="top" data-icon="alignTop" title="{{ t('web.editor.align_top') }}"></button>
+                    <button class="tool-button" data-align="middle" data-icon="alignMiddle" title="{{ t('web.editor.align_middle') }}"></button>
+                    <button class="tool-button" data-align="bottom" data-icon="alignBottom" title="{{ t('web.editor.align_bottom') }}"></button>
+                    <button class="tool-button" data-distribute="horizontal" data-icon="distributeH" title="{{ t('web.editor.distribute_horizontal') }}"></button>
+                    <button class="tool-button" data-distribute="vertical" data-icon="distributeV" title="{{ t('web.editor.distribute_vertical') }}"></button>
+                </div>
+                <div class="tool-group">
+                    <button class="tool-button" id="zoomOutButton" data-icon="zoomOut" title="{{ t('web.editor.zoom_out') }}"></button>
+                    <span class="zoom-label" id="zoomLabel">100%</span>
+                    <button class="tool-button" id="zoomInButton" data-icon="zoomIn" title="{{ t('web.editor.zoom_in') }}"></button>
+                    <button class="tool-button" id="fitButton" data-icon="fit" title="{{ t('web.editor.zoom_fit') }}"></button>
+                </div>
+                <div class="tool-spacer"></div>
+                <div class="tool-group">
+                    <button class="btn btn-secondary" id="previewButton" title="{{ t('web.editor.preview_title') }}">{{ t('web.editor.preview') }}</button>
+                    <button class="btn btn-warning" id="saveButton" title="Ctrl+S">💾 {{ t('web.editor.save_to_server') }}</button>
+                </div>
             </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.alignment') }}</label>
-                <select id="textAlign" onchange="updateTextProperties()">
-                    <option value="left">{{ t('web.editor.align_left') }}</option>
-                    <option value="center">{{ t('web.editor.align_center') }}</option>
-                    <option value="right">{{ t('web.editor.align_right') }}</option>
-                </select>
-            </div>
-            <div class="prop-group">
-                <label style="display: flex; align-items: center; gap: 8px;">
-                    <input type="checkbox" id="textBold" onchange="updateTextProperties()" style="width: auto;">
-                    {{ t('web.editor.bold') }}
+
+            <div class="page-bar">
+                <label>{{ t('web.editor.orientation') }}
+                    <select id="orientationSelect">
+                        <option value="landscape">{{ t('web.editor.landscape') }}</option>
+                        <option value="portrait">{{ t('web.editor.portrait') }}</option>
+                    </select>
+                </label>
+                <label>{{ t('web.editor.format') }}
+                    <select id="formatSelect">
+                        <option value="10x15">10x15 cm</option>
+                        <option value="5x15">5x15 cm</option>
+                        <option value="custom">{{ t('web.editor.custom') }}</option>
+                    </select>
+                </label>
+                <label title="{{ t('web.editor.size_info') }}">{{ t('web.editor.size') }}
+                    <input type="number" id="widthInput" min="1" max="{{ page_limits.side }}">
+                    ×
+                    <input type="number" id="heightInput" min="1" max="{{ page_limits.side }}">
+                    <span class="size-cm" id="sizeCm"></span>
+                </label>
+                <label><input type="checkbox" id="duplicateHorizontal"> {{ t('web.editor.duplicate_horizontal') }}</label>
+                <label><input type="checkbox" id="duplicateVertical"> {{ t('web.editor.duplicate_vertical') }}</label>
+                <label><input type="checkbox" id="gridToggle"> {{ t('web.editor.grid') }}</label>
+                <label>{{ t('web.editor.step') }}
+                    <input type="number" id="gridSizeInput" value="30" min="5" max="200" step="5">
                 </label>
             </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.x') }}</label>
-                <input type="number" id="textX" onchange="updateTextProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.y') }}</label>
-                <input type="number" id="textY" onchange="updateTextProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.width') }}</label>
-                <input type="number" id="textWidth" onchange="updateTextProperties()">
-            </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.height') }}</label>
-                <input type="number" id="textHeight" onchange="updateTextProperties()">
-            </div>
-            <div class="info-text">
-                {{ t('web.editor.text_info') }}
-            </div>
-            <div class="prop-actions">
-                <button class="btn btn-danger" onclick="deleteSelectedFrame()">{{ t('web.editor.delete') }}</button>
-            </div>
-        </div>
 
-        <div class="info-text">
-            <strong>{{ t('web.editor.shortcuts') }}</strong><br>
-            - {{ t('web.editor.shortcut_select') }}<br>
-            - {{ t('web.editor.shortcut_move') }}<br>
-            - {{ t('web.editor.shortcut_resize') }}<br>
-            - {{ t('web.editor.shortcut_delete') }}
-        </div>
-    </div>
+            <div class="canvas-area" id="canvasArea" data-drop-label="{{ t('web.editor.drop_image') }}">
+                <canvas id="designCanvas"></canvas>
+                <div class="empty-canvas" id="emptyCanvas" hidden>{{ t('web.editor.no_template_open') }}</div>
+                <div class="status-bar" id="statusBar"></div>
+            </div>
+        </main>
+
+        <aside class="inspector">
+            <section class="inspector-block levels">
+                <div class="block-header">
+                    <h2>{{ t('web.editor.levels') }}</h2>
+                    <button class="btn btn-secondary" id="addLevelButton" style="min-height: 30px; padding: 3px 10px; font-size: 12px;">+ {{ t('web.editor.add_level') }}</button>
+                </div>
+                <div class="level-list" id="levelList"></div>
+            </section>
+            <section class="inspector-block properties" id="properties"></section>
+        </aside>
     </div>
 
     <div id="newTemplateModal" class="modal">
         <div class="modal-content">
             <h2>{{ t('web.editor.new_template') }}</h2>
-            <div class="prop-group">
-                <label>{{ t('web.editor.name') }}</label>
+            <div class="prop-row">
+                <span>{{ t('web.editor.name') }}</span>
                 <input type="text" id="newTemplateName" placeholder="{{ t('web.editor.new_name_placeholder') }}">
             </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.description') }}</label>
+            <div class="prop-row">
+                <span>{{ t('web.editor.description') }}</span>
                 <input type="text" id="newTemplateDesc" placeholder="{{ t('web.editor.new_desc_placeholder') }}">
             </div>
-            <div class="prop-group">
-                <label>{{ t('web.editor.starting_format') }}</label>
-                <select id="newTemplateFormat">
-                    <option value="10x15-landscape">{{ t('web.editor.format_10x15_landscape') }}</option>
-                    <option value="10x15-portrait">{{ t('web.editor.format_10x15_portrait') }}</option>
-                    <option value="5x15">{{ t('web.editor.format_5x15') }}</option>
+            <div class="prop-row">
+                <span>{{ t('web.editor.starting_point') }}</span>
+                <select id="newTemplateStarter">
+                    <option value="empty_landscape">{{ t('web.editor.starter_empty_landscape') }}</option>
+                    <option value="empty_portrait">{{ t('web.editor.starter_empty_portrait') }}</option>
+                    <option value="empty_strip">{{ t('web.editor.starter_empty_strip') }}</option>
+                    <option value="full_landscape">{{ t('web.editor.starter_full_landscape') }}</option>
+                    <option value="full_portrait">{{ t('web.editor.starter_full_portrait') }}</option>
+                    <option value="strip_portrait">{{ t('web.editor.starter_strip_portrait') }}</option>
+                    <option value="strip_landscape">{{ t('web.editor.starter_strip_landscape') }}</option>
+                    <option value="custom">{{ t('web.editor.starter_custom') }}</option>
                 </select>
             </div>
+            <div class="prop-row" id="newTemplateSizeGroup" hidden>
+                <span>{{ t('web.editor.size') }}</span>
+                <div class="size-row">
+                    <input type="number" id="newTemplateWidth" value="1800" min="1" max="{{ page_limits.side }}">
+                    <span>×</span>
+                    <input type="number" id="newTemplateHeight" value="1200" min="1" max="{{ page_limits.side }}">
+                    <span class="size-cm" id="newTemplateSizeCm"></span>
+                </div>
+                <div class="info-text">{{ t('web.editor.size_info') }}</div>
+            </div>
+            <div class="info-text">{{ t('web.editor.starter_info') }}</div>
             <div class="modal-actions">
-                <button class="btn btn-secondary" onclick="closeNewTemplateModal()">{{ t('web.editor.cancel') }}</button>
-                <button class="btn btn-primary" onclick="confirmNewTemplate()">{{ t('web.editor.create') }}</button>
+                <button class="btn btn-secondary" id="cancelNewTemplate">{{ t('web.editor.cancel') }}</button>
+                <button class="btn btn-primary" id="confirmNewTemplate">{{ t('web.editor.create') }}</button>
             </div>
         </div>
     </div>
 
+    <div id="previewModal" class="modal">
+        <div class="modal-content wide">
+            <h2>{{ t('web.editor.preview_heading') }}</h2>
+            <div class="preview-pair">
+                <figure>
+                    <figcaption>{{ t('web.editor.preview_editor') }}</figcaption>
+                    <img id="previewEditorImage" alt="">
+                </figure>
+                <figure>
+                    <figcaption>{{ t('web.editor.preview_booth') }}</figcaption>
+                    <img id="previewBoothImage" alt="">
+                </figure>
+            </div>
+            <div class="info-text">{{ t('web.editor.preview_info') }}</div>
+            <div class="modal-actions">
+                <button class="btn btn-primary" id="closePreview">{{ t('web.editor.close') }}</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="busy" id="busy" hidden>
+        <div class="busy-card"><span class="spinner"></span><span id="busyMessage"></span></div>
+    </div>
+
     <script>
-        // Words the script builds itself, in the booth's language. A {name} in
-        // one of them is filled by fmt(); the template placeholders {event},
-        // {date} and {time} are left alone, since no caller passes them.
-        const I18N = {{ js_i18n|tojson }};
-
-        function fmt(text, values) {
-            return text.replace(/\{(\w+)\}/g, (match, key) => (key in values ? values[key] : match));
-        }
-
-        // State
-        let templates = [];
-        let currentTemplateIndex = -1;
-        let selectedFrameIndex = -1;
-        // What selectedFrameIndex indexes into: 'photo' (template.photos) or
-        // 'text' (template.texts).
-        let selectedKind = 'photo';
-        // Today's {event}, {date} and {time}, sent by the booth with the templates.
-        let textValues = { event: I18N.sample_event, date: '13/09/2026', time: '21:47' };
-        const TEXT_LINE_SPACING = 0.15;
-        const MIN_TEXT_BOX = 20;
-        let gridSize = 30;
-        let gridEnabled = true;
-        let isDragging = false;
-        let isResizing = false;
-        let resizeHandle = null;
-        let resizeStartFrame = null;
-        let dragStart = { x: 0, y: 0 };
-        let scale = 1;
-        let backgroundImage = null;
-        let foregroundImage = null;
-        let templateSourceFiles = [];
-        let builtInTemplateCount = 0;
-
-        const canvas = document.getElementById('canvas');
-        const ctx = canvas.getContext('2d');
-        const canvasWrapper = document.getElementById('canvasWrapper');
-
-        async function init() {
-            templates = [
-                {
-                    "name": I18N.builtin_empty_name,
-                    "description": I18N.builtin_empty_description,
-                    "page": { "width": 1800, "height": 1200 },
-                    "photos": [],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                }, {
-                    "name": I18N.builtin_full_landscape,
-                    "description": I18N.builtin_full_description,
-                    "page": { "width": 1800, "height": 1200 },
-                    "photos": [
-                        { "x": 60, "y": 60, "width": 1680, "height": 1080 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                },
-                {
-                    "name": I18N.builtin_full_portrait,
-                    "description": I18N.builtin_full_description,
-                    "page": { "width": 1200, "height": 1800 },
-                    "photos": [
-                        { "x": 60, "y": 60, "width": 1080, "height": 1680 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432",
-                        "print-scaling": "fit"
-                    }
-                },
-                {
-                    "name": I18N.builtin_strip_portrait,
-                    "description": I18N.builtin_strip_description,
-                    "page": { "width": 600, "height": 1800 },
-                    "photos": [
-                        { "x": 30, "y": 30, "width": 540, "height": 540 },
-                        { "x": 30, "y": 600, "width": 540, "height": 540 },
-                        { "x": 30, "y": 1170, "width": 540, "height": 540 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432-div2",
-                        "print-scaling": "fit"
-                    },
-                    "duplicate_horizontal": true
-                },
-                {
-                    "name": I18N.builtin_strip_landscape,
-                    "description": I18N.builtin_strip_description,
-                    "page": { "width": 1800, "height": 600 },
-                    "photos": [
-                        { "x": 30, "y": 30, "width": 540, "height": 540 },
-                        { "x": 630, "y": 30, "width": 540, "height": 540 },
-                        { "x": 1230, "y": 30, "width": 540, "height": 540 }
-                    ],
-                    "background": null,
-                    "foreground": null,
-                    "print_params": {
-                        "PageSize": "w288h432-div2",
-                        "print-scaling": "fit"
-                    },
-                    "duplicate_vertical": true
-                }
-            ];
-
-            builtInTemplateCount = templates.length;
-            templateSourceFiles = new Array(templates.length).fill(null);
-
-            await loadTemplatesFromServer();
-
-            renderTemplateList();
-            selectTemplate(0);
-        }
-
-        async function loadTemplatesFromServer() {
-            try {
-                const response = await fetch('/api/templates');
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}`);
-                }
-
-                const payload = await response.json();
-                const serverTemplates = Array.isArray(payload.templates) ? payload.templates : [];
-                if (payload.text_values && typeof payload.text_values === 'object') {
-                    textValues = payload.text_values;
-                }
-
-                serverTemplates.forEach((entry) => {
-                    if (!entry || typeof entry !== 'object' || !entry.template) {
-                        return;
-                    }
-
-                    templates.push(entry.template);
-                    templateSourceFiles.push(entry.filename || null);
-                });
-            } catch (error) {
-                console.warn('Could not load templates from server:', error);
-            }
-        }
-
-        function renderTemplateList() {
-            const listEl = document.getElementById('templateList');
-            listEl.innerHTML = '';
-
-            templates.forEach((template, index) => {
-                const isBuiltInTemplate = index < builtInTemplateCount;
-                const item = document.createElement('div');
-                item.className = 'template-item' + (index === currentTemplateIndex ? ' active' : '');
-                item.onclick = () => selectTemplate(index);
-
-                item.innerHTML = `
-                    <div class="template-item-row">
-                        <div class="template-item-meta">
-                            <div class="template-item-name"></div>
-                            <div class="template-item-desc"></div>
-                        </div>
-                        <div class="template-item-actions">
-                            <button class="btn btn-secondary template-item-icon-btn" title="${I18N.duplicate_template}" onclick="event.stopPropagation(); duplicateTemplate(${index})">⧉</button>
-                            ${isBuiltInTemplate ? '' : `<button class="btn btn-danger template-item-icon-btn" title="${I18N.delete_template}" onclick="event.stopPropagation(); deleteTemplate(${index})">×</button>`}
-                        </div>
-                    </div>
-                `;
-
-                // Names and descriptions come from template files: never
-                // interpolate them into markup, or a crafted template runs
-                // script with the admin session that opened this editor.
-                item.querySelector('.template-item-name').textContent = template.name || '';
-                item.querySelector('.template-item-desc').textContent = template.description || '';
-
-                listEl.appendChild(item);
-            });
-        }
-
-        function selectTemplate(index) {
-            currentTemplateIndex = index;
-            selectedFrameIndex = -1;
-            selectedKind = 'photo';
-            backgroundImage = null;
-            foregroundImage = null;
-            renderTemplateList();
-            loadTemplate();
-        }
-
-        function loadTemplate() {
-            if (currentTemplateIndex < 0 || currentTemplateIndex >= templates.length) return;
-
-            const template = templates[currentTemplateIndex];
-
-            canvas.width = template.page.width;
-            canvas.height = template.page.height;
-            canvasWrapper.style.width = template.page.width + 'px';
-            canvasWrapper.style.height = template.page.height + 'px';
-
-            let displayWidth = template.page.width;
-            let displayHeight = template.page.height;
-
-            if (template.duplicate_horizontal) {
-                displayWidth = template.page.width * 2;
-            }
-            if (template.duplicate_vertical) {
-                displayHeight = template.page.height * 2;
-            }
-
-            const containerWidth = document.querySelector('.canvas-container').clientWidth - 100;
-            const containerHeight = document.querySelector('.canvas-container').clientHeight - 100;
-
-            scale = Math.min(
-                containerWidth / displayWidth,
-                containerHeight / displayHeight,
-                1
-            );
-
-            canvasWrapper.style.transform = `scale(${scale})`;
-            document.getElementById('scaleInfo').textContent = Math.round(scale * 100) + '%';
-
-            document.getElementById('templateName').value = template.name;
-            document.getElementById('templateDesc').value = template.description;
-            document.getElementById('templateBackground').value = template.background || '';
-            document.getElementById('templateForeground').value = template.foreground || '';
-            document.getElementById('widthInput').value = template.page.width;
-            document.getElementById('heightInput').value = template.page.height;
-            document.getElementById('duplicateHorizontal').checked = template.duplicate_horizontal || false;
-            document.getElementById('duplicateVertical').checked = template.duplicate_vertical || false;
-
-            if (template.background && template.background !== null) {
-                loadImageFromPath(template.background, 'background');
-            }
-            if (template.foreground && template.foreground !== null) {
-                loadImageFromPath(template.foreground, 'foreground');
-            }
-
-            if (template.page.width > template.page.height) {
-                document.getElementById('orientationSelect').value = 'landscape';
-            } else {
-                document.getElementById('orientationSelect').value = 'portrait';
-            }
-
-            if (template.page.width === 1800 && template.page.height === 1200) {
-                document.getElementById('formatSelect').value = '10x15';
-            } else if (template.page.width === 1200 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '10x15';
-            } else if (template.page.width === 600 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '5x15';
-            } else if (template.page.width === 900 && template.page.height === 1800) {
-                document.getElementById('formatSelect').value = '5x15';
-            } else {
-                document.getElementById('formatSelect').value = 'custom';
-            }
-
-            renderCanvas();
-        }
-
-        function renderCanvas() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-
-            let canvasDisplayWidth = template.page.width;
-            let canvasDisplayHeight = template.page.height;
-
-            if (template.duplicate_horizontal) {
-                canvasDisplayWidth = template.page.width * 2;
-            }
-            if (template.duplicate_vertical) {
-                canvasDisplayHeight = template.page.height * 2;
-            }
-
-            canvas.width = canvasDisplayWidth;
-            canvas.height = canvasDisplayHeight;
-            canvasWrapper.style.width = canvasDisplayWidth + 'px';
-            canvasWrapper.style.height = canvasDisplayHeight + 'px';
-
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            if (backgroundImage) {
-                ctx.drawImage(backgroundImage, 0, 0, template.page.width, template.page.height);
-
-                if (template.duplicate_horizontal) {
-                    ctx.drawImage(backgroundImage, template.page.width, 0, template.page.width, template.page.height);
-                }
-                if (template.duplicate_vertical) {
-                    ctx.drawImage(backgroundImage, 0, template.page.height, template.page.width, template.page.height);
-                }
-            }
-
-            if (template.duplicate_horizontal || template.duplicate_vertical) {
-                ctx.strokeStyle = '#ff0000';
-                ctx.lineWidth = 2;
-                ctx.setLineDash([10, 5]);
-
-                if (template.duplicate_horizontal) {
-                    ctx.beginPath();
-                    ctx.moveTo(template.page.width, 0);
-                    ctx.lineTo(template.page.width, canvas.height);
-                    ctx.stroke();
-                }
-
-                if (template.duplicate_vertical) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, template.page.height);
-                    ctx.lineTo(canvas.width, template.page.height);
-                    ctx.stroke();
-                }
-
-                ctx.setLineDash([]);
-            }
-
-            if (gridEnabled) {
-                ctx.strokeStyle = '#e0e0e0';
-                ctx.lineWidth = 1;
-
-                for (let x = 0; x <= canvas.width; x += gridSize) {
-                    ctx.beginPath();
-                    ctx.moveTo(x, 0);
-                    ctx.lineTo(x, canvas.height);
-                    ctx.stroke();
-                }
-
-                for (let y = 0; y <= canvas.height; y += gridSize) {
-                    ctx.beginPath();
-                    ctx.moveTo(0, y);
-                    ctx.lineTo(canvas.width, y);
-                    ctx.stroke();
-                }
-            }
-
-            template.photos.forEach((photo, index) => {
-                drawPhotoFrame(photo, index, false);
-            });
-
-            if (template.duplicate_horizontal) {
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                template.photos.forEach((photo, index) => {
-                    const duplicatedPhoto = {
-                        x: template.page.width + (template.page.width - photo.x - photo.width),
-                        y: photo.y,
-                        width: photo.width,
-                        height: photo.height
-                    };
-                    drawPhotoFrame(duplicatedPhoto, index, true);
-                });
-                ctx.restore();
-            }
-
-            if (template.duplicate_vertical) {
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                template.photos.forEach((photo, index) => {
-                    const duplicatedPhoto = {
-                        x: photo.x,
-                        y: template.page.height + (template.page.height - photo.y - photo.height),
-                        width: photo.width,
-                        height: photo.height
-                    };
-                    drawPhotoFrame(duplicatedPhoto, index, true);
-                });
-                ctx.restore();
-            }
-
-            if (foregroundImage) {
-                ctx.drawImage(foregroundImage, 0, 0, template.page.width, template.page.height);
-
-                if (template.duplicate_horizontal) {
-                    ctx.drawImage(foregroundImage, template.page.width, 0, template.page.width, template.page.height);
-                }
-                if (template.duplicate_vertical) {
-                    ctx.drawImage(foregroundImage, 0, template.page.height, template.page.width, template.page.height);
-                }
-            }
-
-            // Texts last, over the foreground, as the booth draws them. The
-            // copies are translated, not mirrored: printing duplicates the
-            // whole sheet as it is.
-            textsOf(template).forEach((box, index) => drawTextBox(box, index, 0, 0, false));
-            if (template.duplicate_horizontal || template.duplicate_vertical) {
-                ctx.save();
-                ctx.globalAlpha = 0.3;
-                const dx = template.duplicate_horizontal ? template.page.width : 0;
-                const dy = template.duplicate_vertical ? template.page.height : 0;
-                textsOf(template).forEach((box, index) => drawTextBox(box, index, dx, dy, true));
-                ctx.restore();
-            }
-
-            const selected = selectedBox();
-            if (selected) {
-                drawResizeHandles(selected);
-            }
-
-            updateFramePropertiesPanel();
-        }
-
-        // --- texts ------------------------------------------------------------
-
-        function textsOf(template) {
-            if (!Array.isArray(template.texts)) {
-                template.texts = [];
-            }
-            return template.texts;
-        }
-
-        function boxesOfKind(template, kind) {
-            return kind === 'text' ? textsOf(template) : template.photos;
-        }
-
-        function selectedBox() {
-            if (selectedFrameIndex < 0 || currentTemplateIndex < 0) return null;
-            return boxesOfKind(templates[currentTemplateIndex], selectedKind)[selectedFrameIndex] || null;
-        }
-
-        function fillPlaceholders(text) {
-            return (text || '').replace(/\{(event|date|time)\}/g, (match, key) => textValues[key] || '');
-        }
-
-        function fontFor(size, bold) {
-            return `${bold ? 'bold ' : ''}${size}px PrintFont, sans-serif`;
-        }
-
-        function measureTextBlock(lines, size, bold) {
-            ctx.font = fontFor(size, bold);
-            let width = 0;
-            let ascent = size * 0.93;
-            let descent = size * 0.24;
-            lines.forEach(line => {
-                const metrics = ctx.measureText(line);
-                width = Math.max(width, metrics.width);
-                if (metrics.fontBoundingBoxAscent !== undefined) {
-                    ascent = metrics.fontBoundingBoxAscent;
-                    descent = metrics.fontBoundingBoxDescent;
-                }
-            });
-            const lineHeight = ascent + descent;
-            const spacing = Math.floor(size * TEXT_LINE_SPACING);
-            return { width, height: lineHeight * lines.length + spacing * (lines.length - 1), lineHeight, ascent, spacing };
-        }
-
-        // Same search the booth runs: the largest size the lines fit the box in.
-        function fitTextSize(lines, box) {
-            let low = 1;
-            let high = Math.max(1, box.height);
-            while (low < high) {
-                const size = Math.floor((low + high + 1) / 2);
-                const block = measureTextBlock(lines, size, box.bold);
-                if (block.width <= box.width && block.height <= box.height) {
-                    low = size;
-                } else {
-                    high = size - 1;
-                }
-            }
-            return low;
-        }
-
-        function drawTextBox(box, index, dx, dy, isDuplicate) {
-            const isSelected = selectedKind === 'text' && index === selectedFrameIndex && !isDuplicate;
-            const x = box.x + dx;
-            const y = box.y + dy;
-
-            ctx.save();
-            ctx.setLineDash([8, 4]);
-            ctx.strokeStyle = isSelected ? '#d4a373' : '#2e7d5b';
-            ctx.lineWidth = 2;
-            ctx.strokeRect(x, y, box.width, box.height);
-            ctx.setLineDash([]);
-
-            const content = fillPlaceholders(box.text).trim();
-            if (content) {
-                const lines = content.split('\n').map(line => line.trim());
-                const size = fitTextSize(lines, box);
-                const block = measureTextBlock(lines, size, box.bold);
-                ctx.font = fontFor(size, box.bold);
-                ctx.fillStyle = box.color || '#000000';
-                ctx.textBaseline = 'alphabetic';
-                let lineTop = y + Math.floor((box.height - block.height) / 2);
-                lines.forEach(line => {
-                    const lineWidth = ctx.measureText(line).width;
-                    let lineX = x + (box.width - lineWidth) / 2;
-                    if (box.align === 'left') lineX = x;
-                    if (box.align === 'right') lineX = x + box.width - lineWidth;
-                    ctx.fillText(line, lineX, lineTop + block.ascent);
-                    lineTop += block.lineHeight + block.spacing;
-                });
-            }
-
-            if (!isDuplicate) {
-                ctx.fillStyle = 'rgba(138, 79, 255, 0.85)';
-                ctx.fillRect(x + 4, y + 4, 52, 18);
-                ctx.fillStyle = 'white';
-                ctx.font = '12px sans-serif';
-                ctx.fillText(fmt(I18N.canvas_text, { number: index + 1 }), x + 8, y + 17);
-            }
-            ctx.restore();
-        }
-
-        function addTextBox() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const width = Math.min(600, template.page.width);
-            const height = Math.min(120, template.page.height);
-            textsOf(template).push({
-                x: snapToGrid(Math.max(0, Math.floor((template.page.width - width) / 2))),
-                y: snapToGrid(Math.max(0, template.page.height - height - 60)),
-                width: width,
-                height: height,
-                text: '{event} - {date}',
-                color: '#000000',
-                align: 'center',
-                bold: false
-            });
-
-            selectedKind = 'text';
-            selectedFrameIndex = template.texts.length - 1;
-            renderCanvas();
-        }
-
-        function updateTextProperties() {
-            if (selectedKind !== 'text') return;
-            const box = selectedBox();
-            if (!box) return;
-
-            box.text = document.getElementById('textContent').value;
-            box.color = document.getElementById('textColor').value;
-            box.align = document.getElementById('textAlign').value;
-            box.bold = document.getElementById('textBold').checked;
-            box.x = parseInt(document.getElementById('textX').value) || 0;
-            box.y = parseInt(document.getElementById('textY').value) || 0;
-            box.width = Math.max(MIN_TEXT_BOX, parseInt(document.getElementById('textWidth').value) || MIN_TEXT_BOX);
-            box.height = Math.max(MIN_TEXT_BOX, parseInt(document.getElementById('textHeight').value) || MIN_TEXT_BOX);
-
-            renderCanvas();
-        }
-
-        function insertPlaceholder(placeholder) {
-            const field = document.getElementById('textContent');
-            const start = field.selectionStart ?? field.value.length;
-            const end = field.selectionEnd ?? field.value.length;
-            field.value = field.value.slice(0, start) + placeholder + field.value.slice(end);
-            field.focus();
-            field.selectionStart = field.selectionEnd = start + placeholder.length;
-            updateTextProperties();
-        }
-
-        function drawPhotoFrame(photo, index, isDuplicate) {
-            const isSelected = selectedKind === 'photo' && index === selectedFrameIndex && !isDuplicate;
-            ctx.strokeStyle = isSelected ? '#d4a373' : '#4a43b5';
-            ctx.lineWidth = 2;
-            ctx.fillStyle = isSelected ? 'rgba(212, 163, 115, 0.2)' : 'rgba(74, 67, 181, 0.12)';
-
-            ctx.fillRect(photo.x, photo.y, photo.width, photo.height);
-            ctx.strokeRect(photo.x, photo.y, photo.width, photo.height);
-
-            ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
-            ctx.fillRect(photo.x + 4, photo.y + 4, 60, 20);
-            ctx.fillStyle = 'white';
-            ctx.font = '12px sans-serif';
-            ctx.fillText(fmt(I18N.canvas_photo, { number: index + 1 }), photo.x + 8, photo.y + 18);
-        }
-
-        function drawResizeHandles(photo) {
-            const handleSize = 10;
-            const handles = [
-                { x: photo.x, y: photo.y, type: 'nw' },
-                { x: photo.x + photo.width, y: photo.y, type: 'ne' },
-                { x: photo.x, y: photo.y + photo.height, type: 'sw' },
-                { x: photo.x + photo.width, y: photo.y + photo.height, type: 'se' }
-            ];
-
-            handles.forEach(handle => {
-                ctx.fillStyle = 'white';
-                ctx.strokeStyle = '#d4a373';
-                ctx.lineWidth = 2;
-                ctx.beginPath();
-                ctx.arc(handle.x, handle.y, handleSize / 2, 0, Math.PI * 2);
-                ctx.fill();
-                ctx.stroke();
-            });
-        }
-
-        function updateFramePropertiesPanel() {
-            const panel = document.getElementById('frameProperties');
-            const textPanel = document.getElementById('textProperties');
-            const box = selectedBox();
-
-            panel.style.display = box && selectedKind === 'photo' ? 'block' : 'none';
-            textPanel.style.display = box && selectedKind === 'text' ? 'block' : 'none';
-            if (!box) return;
-
-            if (selectedKind === 'photo') {
-                document.getElementById('frameX').value = box.x;
-                document.getElementById('frameY').value = box.y;
-                document.getElementById('frameWidth').value = box.width;
-                document.getElementById('frameHeight').value = box.height;
-                return;
-            }
-
-            // Not while the operator types in it: rewriting the field under the
-            // caret on every keystroke would throw the caret to the end.
-            const content = document.getElementById('textContent');
-            if (document.activeElement !== content) {
-                content.value = box.text || '';
-            }
-            document.getElementById('textColor').value = box.color || '#000000';
-            document.getElementById('textAlign').value = box.align || 'center';
-            document.getElementById('textBold').checked = !!box.bold;
-            document.getElementById('textX').value = box.x;
-            document.getElementById('textY').value = box.y;
-            document.getElementById('textWidth').value = box.width;
-            document.getElementById('textHeight').value = box.height;
-        }
-
-        function updateFrameProperties() {
-            if (selectedKind !== 'photo') return;
-            const photo = selectedBox();
-            if (!photo) return;
-
-            photo.x = parseInt(document.getElementById('frameX').value) || 0;
-            photo.y = parseInt(document.getElementById('frameY').value) || 0;
-            photo.width = parseInt(document.getElementById('frameWidth').value) || 100;
-            photo.height = parseInt(document.getElementById('frameHeight').value) || 100;
-
-            renderCanvas();
-        }
-
-        function updateTemplateName() {
-            if (currentTemplateIndex < 0) return;
-            templates[currentTemplateIndex].name = document.getElementById('templateName').value;
-            renderTemplateList();
-        }
-
-        function updateTemplateDesc() {
-            if (currentTemplateIndex < 0) return;
-            templates[currentTemplateIndex].description = document.getElementById('templateDesc').value;
-            renderTemplateList();
-        }
-
-        function updateTemplateBackground() {
-            if (currentTemplateIndex < 0) return;
-            const value = document.getElementById('templateBackground').value.trim();
-            if (value !== '' && !value.startsWith('data:image')) {
-                templates[currentTemplateIndex].background = value;
-            } else if (value === '') {
-                templates[currentTemplateIndex].background = null;
-            }
-        }
-
-        function updateTemplateForeground() {
-            if (currentTemplateIndex < 0) return;
-            const value = document.getElementById('templateForeground').value.trim();
-            if (value !== '' && !value.startsWith('data:image')) {
-                templates[currentTemplateIndex].foreground = value;
-            } else if (value === '') {
-                templates[currentTemplateIndex].foreground = null;
-            }
-        }
-
-        function loadBackgroundImage() {
-            const file = document.getElementById('backgroundFile').files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    backgroundImage = img;
-                    backgroundImage._file = file;
-                    backgroundImage._dataUrl = e.target.result;
-                    if (currentTemplateIndex >= 0) {
-                        templates[currentTemplateIndex].background = e.target.result;
-                        document.getElementById('templateBackground').value = '[Base64 Image - ' + Math.round(e.target.result.length / 1024) + ' KB]';
-                    }
-                    renderCanvas();
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function loadForegroundImage() {
-            const file = document.getElementById('foregroundFile').files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    foregroundImage = img;
-                    foregroundImage._file = file;
-                    foregroundImage._dataUrl = e.target.result;
-                    if (currentTemplateIndex >= 0) {
-                        templates[currentTemplateIndex].foreground = e.target.result;
-                        document.getElementById('templateForeground').value = '[Base64 Image - ' + Math.round(e.target.result.length / 1024) + ' KB]';
-                    }
-                    renderCanvas();
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function loadImageFromPath(path, type) {
-            const img = new Image();
-            img.onload = function() {
-                if (type === 'background') {
-                    backgroundImage = img;
-                    if (path.startsWith('data:image')) {
-                        document.getElementById('templateBackground').value = fmt(I18N.embedded_image, { size: Math.round(path.length / 1024) });
-                    }
-                } else if (type === 'foreground') {
-                    foregroundImage = img;
-                    if (path.startsWith('data:image')) {
-                        document.getElementById('templateForeground').value = fmt(I18N.embedded_image, { size: Math.round(path.length / 1024) });
-                    }
-                }
-                renderCanvas();
-            };
-            img.onerror = function() {
-                if (!path.startsWith('data:image')) {
-                    console.log(`Could not load ${type} image from path: ${path}`);
-                }
-            };
-            img.src = path;
-        }
-
-        function updateDuplication() {
-            if (currentTemplateIndex < 0) return;
-            const template = templates[currentTemplateIndex];
-
-            const horizChecked = document.getElementById('duplicateHorizontal').checked;
-            const vertChecked = document.getElementById('duplicateVertical').checked;
-
-            if (horizChecked && vertChecked) {
-                if (event.target.id === 'duplicateHorizontal') {
-                    document.getElementById('duplicateVertical').checked = false;
-                    template.duplicate_vertical = false;
-                } else {
-                    document.getElementById('duplicateHorizontal').checked = false;
-                    template.duplicate_horizontal = false;
-                }
-            }
-
-            template.duplicate_horizontal = document.getElementById('duplicateHorizontal').checked;
-            template.duplicate_vertical = document.getElementById('duplicateVertical').checked;
-            loadTemplate();
-        }
-
-        function updateGridSize() {
-            const newSize = parseInt(document.getElementById('gridSizeInput').value);
-            if (newSize >= 5 && newSize <= 100) {
-                gridSize = newSize;
-                renderCanvas();
-            }
-        }
-
-        function changeOrientation() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const temp = template.page.width;
-            template.page.width = template.page.height;
-            template.page.height = temp;
-
-            adjustPhotosToCanvasBounds();
-            loadTemplate();
-        }
-
-        function adjustPhotosToCanvasBounds() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const pageWidth = template.page.width;
-            const pageHeight = template.page.height;
-
-            // Texts too: the booth refuses a template whose boxes leave the page.
-            template.photos.concat(textsOf(template)).forEach(photo => {
-                if (photo.x + photo.width > pageWidth || photo.y + photo.height > pageHeight) {
-                    if (photo.width > pageWidth) {
-                        photo.width = pageWidth - 60;
-                    }
-                    if (photo.height > pageHeight) {
-                        photo.height = pageHeight - 60;
-                    }
-
-                    if (photo.x + photo.width > pageWidth) {
-                        photo.x = Math.max(30, pageWidth - photo.width - 30);
-                    }
-                    if (photo.y + photo.height > pageHeight) {
-                        photo.y = Math.max(30, pageHeight - photo.height - 30);
-                    }
-
-                    photo.x = Math.max(0, photo.x);
-                    photo.y = Math.max(0, photo.y);
-
-                    photo.x = snapToGrid(photo.x);
-                    photo.y = snapToGrid(photo.y);
-                    photo.width = snapToGrid(photo.width);
-                    photo.height = snapToGrid(photo.height);
-                }
-            });
-        }
-
-        function changeFormat() {
-            if (currentTemplateIndex < 0) return;
-
-            const format = document.getElementById('formatSelect').value;
-            const template = templates[currentTemplateIndex];
-            const orientation = document.getElementById('orientationSelect').value;
-
-            if (format === '10x15') {
-                if (orientation === 'landscape') {
-                    template.page.width = 1800;
-                    template.page.height = 1200;
-                } else {
-                    template.page.width = 1200;
-                    template.page.height = 1800;
-                }
-            } else if (format === '5x15') {
-                template.page.width = 600;
-                template.page.height = 1800;
-            }
-
-            adjustPhotosToCanvasBounds();
-            loadTemplate();
-        }
-
-        function updatePageDimensions() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            template.page.width = parseInt(document.getElementById('widthInput').value) || 1800;
-            template.page.height = parseInt(document.getElementById('heightInput').value) || 1200;
-
-            document.getElementById('formatSelect').value = 'custom';
-
-            adjustPhotosToCanvasBounds();
-            loadTemplate();
-        }
-
-        function toggleGrid() {
-            gridEnabled = document.getElementById('gridToggle').checked;
-            renderCanvas();
-        }
-
-        function addPhotoFrame() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const centerX = Math.floor(template.page.width / 2 - 150);
-            const centerY = Math.floor(template.page.height / 2 - 150);
-
-            template.photos.push({
-                x: snapToGrid(centerX),
-                y: snapToGrid(centerY),
-                width: 300,
-                height: 300
-            });
-
-            selectedKind = 'photo';
-            selectedFrameIndex = template.photos.length - 1;
-            renderCanvas();
-        }
-
-        function deleteSelectedFrame() {
-            if (!selectedBox()) return;
-
-            boxesOfKind(templates[currentTemplateIndex], selectedKind).splice(selectedFrameIndex, 1);
-            selectedFrameIndex = -1;
-            renderCanvas();
-        }
-
-        function snapToGrid(value) {
-            if (!gridEnabled) return value;
-            return Math.round(value / gridSize) * gridSize;
-        }
-
-        canvas.addEventListener('mousedown', (e) => {
-            if (currentTemplateIndex < 0) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / scale;
-            const y = (e.clientY - rect.top) / scale;
-
-            const template = templates[currentTemplateIndex];
-
-            const photo = selectedBox();
-            if (photo) {
-                const handleSize = 10;
-                const handles = [
-                    { x: photo.x, y: photo.y, type: 'nw' },
-                    { x: photo.x + photo.width, y: photo.y, type: 'ne' },
-                    { x: photo.x, y: photo.y + photo.height, type: 'sw' },
-                    { x: photo.x + photo.width, y: photo.y + photo.height, type: 'se' }
-                ];
-
-                for (const handle of handles) {
-                    const dist = Math.sqrt(Math.pow(x - handle.x, 2) + Math.pow(y - handle.y, 2));
-                    if (dist <= handleSize) {
-                        isResizing = true;
-                        resizeHandle = handle.type;
-                        resizeStartFrame = { ...photo };
-                        dragStart = { x, y };
-                        return;
-                    }
-                }
-            }
-
-            // Texts first: they are drawn over the photos, so that is what the
-            // click landed on.
-            for (const kind of ['text', 'photo']) {
-                const boxes = boxesOfKind(template, kind);
-                for (let i = boxes.length - 1; i >= 0; i--) {
-                    const box = boxes[i];
-                    if (x >= box.x && x <= box.x + box.width &&
-                        y >= box.y && y <= box.y + box.height) {
-                        selectedKind = kind;
-                        selectedFrameIndex = i;
-                        isDragging = true;
-                        dragStart = { x: x - box.x, y: y - box.y };
-                        renderCanvas();
-                        return;
-                    }
-                }
-            }
-
-            selectedFrameIndex = -1;
-            renderCanvas();
-        });
-
-        canvas.addEventListener('mousemove', (e) => {
-            if (currentTemplateIndex < 0 || selectedFrameIndex < 0) return;
-            if (!isDragging && !isResizing) return;
-
-            const rect = canvas.getBoundingClientRect();
-            const x = (e.clientX - rect.left) / scale;
-            const y = (e.clientY - rect.top) / scale;
-
-            const photo = selectedBox();
-            if (!photo) return;
-
-            if (isResizing) {
-                const dx = x - dragStart.x;
-                const dy = y - dragStart.y;
-
-                switch (resizeHandle) {
-                    case 'se':
-                        photo.width = Math.max(50, resizeStartFrame.width + dx);
-                        photo.height = Math.max(50, resizeStartFrame.height + dy);
-                        break;
-                    case 'sw': {
-                        const newWidth = Math.max(50, resizeStartFrame.width - dx);
-                        photo.x = resizeStartFrame.x + (resizeStartFrame.width - newWidth);
-                        photo.width = newWidth;
-                        photo.height = Math.max(50, resizeStartFrame.height + dy);
-                        break;
-                    }
-                    case 'ne': {
-                        photo.width = Math.max(50, resizeStartFrame.width + dx);
-                        const newHeight = Math.max(50, resizeStartFrame.height - dy);
-                        photo.y = resizeStartFrame.y + (resizeStartFrame.height - newHeight);
-                        photo.height = newHeight;
-                        break;
-                    }
-                    case 'nw': {
-                        const newW = Math.max(50, resizeStartFrame.width - dx);
-                        const newH = Math.max(50, resizeStartFrame.height - dy);
-                        photo.x = resizeStartFrame.x + (resizeStartFrame.width - newW);
-                        photo.y = resizeStartFrame.y + (resizeStartFrame.height - newH);
-                        photo.width = newW;
-                        photo.height = newH;
-                        break;
-                    }
-                }
-
-                photo.x = snapToGrid(photo.x);
-                photo.y = snapToGrid(photo.y);
-                photo.width = snapToGrid(photo.width);
-                photo.height = snapToGrid(photo.height);
-
-            } else if (isDragging) {
-                photo.x = snapToGrid(x - dragStart.x);
-                photo.y = snapToGrid(y - dragStart.y);
-
-                const template = templates[currentTemplateIndex];
-                photo.x = Math.max(0, Math.min(photo.x, template.page.width - photo.width));
-                photo.y = Math.max(0, Math.min(photo.y, template.page.height - photo.height));
-            }
-
-            renderCanvas();
-        });
-
-        canvas.addEventListener('mouseup', () => {
-            isDragging = false;
-            isResizing = false;
-            resizeHandle = null;
-        });
-
-        document.addEventListener('keydown', (e) => {
-            if (e.key === 'Delete' || e.key === 'Backspace') {
-                if (selectedFrameIndex >= 0 && !['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement.tagName)) {
-                    e.preventDefault();
-                    deleteSelectedFrame();
-                }
-            }
-        });
-
-        function duplicateTemplate(index) {
-            const template = JSON.parse(JSON.stringify(templates[index]));
-            template.name = fmt(I18N.copy_name, { name: template.name });
-            templates.push(template);
-            templateSourceFiles.push(null);
-            renderTemplateList();
-            selectTemplate(templates.length - 1);
-        }
-
-        function deleteTemplate(index) {
-            if (index < builtInTemplateCount) {
-                alert(I18N.builtin_not_deletable);
-                return;
-            }
-
-            if (templates.length <= 1) {
-                alert(I18N.keep_one_template);
-                return;
-            }
-
-            deleteTemplateAtIndex(index);
-        }
-
-        async function deleteTemplateAtIndex(index) {
-            const template = templates[index];
-            const sourceFilename = templateSourceFiles[index];
-            const confirmMessage = sourceFilename
-                ? fmt(I18N.confirm_delete_with_file, { name: template.name, file: sourceFilename })
-                : fmt(I18N.confirm_delete, { name: template.name });
-
-            if (!confirm(confirmMessage)) {
-                return;
-            }
-
-            try {
-                if (sourceFilename) {
-                    const response = await fetch(`/api/templates/${encodeURIComponent(sourceFilename)}`, {
-                        method: 'DELETE'
-                    });
-
-                    const payload = await response.json();
-                    if (!response.ok) {
-                        throw new Error(payload.error || `HTTP ${response.status}`);
-                    }
-                }
-
-                templates.splice(index, 1);
-                templateSourceFiles.splice(index, 1);
-
-                if (currentTemplateIndex >= templates.length) {
-                    currentTemplateIndex = templates.length - 1;
-                }
-
-                renderTemplateList();
-                loadTemplate();
-            } catch (error) {
-                alert(fmt(I18N.delete_failed, { error: error.message }));
-            }
-        }
-
-        function createNewTemplate() {
-            document.getElementById('newTemplateModal').classList.add('show');
-            document.getElementById('newTemplateName').value = '';
-            document.getElementById('newTemplateDesc').value = '';
-        }
-
-        function closeNewTemplateModal() {
-            document.getElementById('newTemplateModal').classList.remove('show');
-        }
-
-        function confirmNewTemplate() {
-            const name = document.getElementById('newTemplateName').value || I18N.new_template_name;
-            const desc = document.getElementById('newTemplateDesc').value || I18N.new_template_description;
-            const format = document.getElementById('newTemplateFormat').value;
-
-            let width = 1800, height = 1200;
-
-            if (format === '10x15-landscape') {
-                width = 1800;
-                height = 1200;
-            } else if (format === '10x15-portrait') {
-                width = 1200;
-                height = 1800;
-            } else if (format === '5x15') {
-                width = 600;
-                height = 1800;
-            }
-
-            const newTemplate = {
-                name: name,
-                description: desc,
-                page: { width: width, height: height },
-                photos: [],
-                texts: [],
-                background: null,
-                foreground: null,
-                print_params: {
-                    PageSize: 'w288h432',
-                    'print-scaling': 'fit'
-                },
-                margin_percent: 5
-            };
-
-            templates.push(newTemplate);
-            templateSourceFiles.push(null);
-            renderTemplateList();
-            selectTemplate(templates.length - 1);
-            closeNewTemplateModal();
-        }
-
-        async function saveTemplateToServer() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const sourceFilename = templateSourceFiles[currentTemplateIndex];
-
-            try {
-                const response = await fetch('/api/templates', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        filename: sourceFilename,
-                        template: template
-                    })
-                });
-
-                const payload = await response.json();
-                if (!response.ok) {
-                    throw new Error(payload.error || `HTTP ${response.status}`);
-                }
-
-                templateSourceFiles[currentTemplateIndex] = payload.filename || sourceFilename;
-                alert(fmt(I18N.saved, { file: templateSourceFiles[currentTemplateIndex] }));
-            } catch (error) {
-                alert(fmt(I18N.save_failed, { error: error.message }));
-            }
-        }
-
-        function exportTemplate() {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const baseName = template.name.toLowerCase().replace(/\s+/g, '_');
-
-            const json = JSON.stringify(template, null, 2);
-            downloadFile(json, baseName + '.json', 'application/json');
-        }
-
-        function downloadFile(content, filename, type) {
-            const blob = new Blob([content], { type: type });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = filename;
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-        }
-
-        function importTemplate() {
-            const file = document.getElementById('importJsonFile').files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedTemplate = JSON.parse(e.target.result);
-
-                    if (!importedTemplate.page || !importedTemplate.name) {
-                        alert(I18N.invalid_file);
-                        return;
-                    }
-
-                    templates.push(importedTemplate);
-                    templateSourceFiles.push(null);
-                    renderTemplateList();
-                    selectTemplate(templates.length - 1);
-
-                    alert(fmt(I18N.imported, { name: importedTemplate.name }));
-                } catch (error) {
-                    alert(fmt(I18N.parse_failed, { error: error.message }));
-                }
-            };
-            reader.readAsText(file);
-        }
-
-        function downloadImageLayer(layer) {
-            if (currentTemplateIndex < 0) return;
-
-            const template = templates[currentTemplateIndex];
-            const baseName = template.name.toLowerCase().replace(/\s+/g, '_');
-
-            let imageToDownload = null;
-            let filename = '';
-
-            if (layer === 'background') {
-                if (!backgroundImage) {
-                    alert(I18N.no_background);
-                    return;
-                }
-                imageToDownload = backgroundImage;
-                filename = baseName + '_background.png';
-            } else if (layer === 'foreground') {
-                if (!foregroundImage) {
-                    alert(I18N.no_foreground);
-                    return;
-                }
-                imageToDownload = foregroundImage;
-                filename = baseName + '_foreground.png';
-            }
-
-            const exportCanvas = document.createElement('canvas');
-            const exportCtx = exportCanvas.getContext('2d');
-
-            exportCanvas.width = imageToDownload.width;
-            exportCanvas.height = imageToDownload.height;
-
-            exportCtx.drawImage(imageToDownload, 0, 0);
-
-            exportCanvas.toBlob(function(blob) {
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = filename;
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            }, 'image/png');
-        }
-
-        window.addEventListener('load', init);
-        // The print font arrives after the first draw; redraw once it is there,
-        // or every text is measured and shown in the fallback font.
-        if (document.fonts) {
-            Promise.all([
-                document.fonts.load('16px PrintFont'),
-                document.fonts.load('bold 16px PrintFont')
-            ]).then(() => renderCanvas()).catch(() => {});
-        }
+        window.EDITOR_CONFIG = {
+            i18n: {{ js_i18n|tojson }},
+            pageLimits: {{ page_limits|tojson }},
+            stackLimit: {{ stack_limit|tojson }},
+            assetBytesLimit: {{ asset_bytes_limit|tojson }},
+            fonts: {{ design_fonts|tojson }},
+            samplePhotoCount: {{ sample_photo_count|tojson }},
+        };
     </script>
+    <script src="{{ url_for('static', filename='vendor/fabric/fabric-7.4.0.min.js') }}"></script>
+    <script src="{{ url_for('static', filename='editor/template_editor.js') }}"></script>
 </body>
 </html>

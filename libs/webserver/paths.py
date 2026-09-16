@@ -20,6 +20,10 @@ LOG_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+$')
 # route, so the downloads and the archive stay unaware it exists rather than
 # each having to learn to skip it.
 THUMBNAIL_FILENAME = 'collage_small.jpg'
+# An image of a designed template, named by the booth after its content.
+TEMPLATE_ASSET_PATTERN = re.compile(r'^[0-9a-f]{32}\.(?:png|jpg|webp)$')
+# An image a template names by hand: the shapes template_schema accepts.
+TEMPLATE_IMAGE_PATTERN = re.compile(r'^(?:assets/)?[A-Za-z0-9._-]+\.(?:png|jpe?g|webp)$', re.IGNORECASE)
 
 
 def is_valid_session(session):
@@ -79,6 +83,48 @@ def safe_log_path(logs_directory, filename):
     requested_path = os.path.realpath(os.path.join(base_path, filename))
 
     if os.path.dirname(requested_path) != base_path:
+        return None
+
+    if not os.path.isfile(requested_path):
+        return None
+
+    return requested_path
+
+
+def safe_template_asset_path(assets_directory, filename):
+    """Resolve an image of the template assets folder, or None.
+
+    Asset names are made by the booth from their content, so anything else is
+    not one of them: no need to guess what a looser name was meant to reach.
+    """
+    if not isinstance(filename, str) or not TEMPLATE_ASSET_PATTERN.fullmatch(filename):
+        return None
+
+    base_path = os.path.realpath(assets_directory)
+    requested_path = os.path.realpath(os.path.join(base_path, filename))
+
+    if os.path.dirname(requested_path) != base_path:
+        return None
+
+    if not os.path.isfile(requested_path):
+        return None
+
+    return requested_path
+
+
+def safe_template_image_path(templates_directory, name):
+    """Resolve an image a template names as a file, or None.
+
+    A bare name beside the templates, or one in their assets/ folder: what a
+    template's layers may name, and nothing that climbs out of the directory.
+    """
+    if not isinstance(name, str) or not TEMPLATE_IMAGE_PATTERN.fullmatch(name):
+        return None
+
+    base_path = os.path.realpath(templates_directory)
+    requested_path = os.path.realpath(os.path.join(base_path, *name.split('/')))
+
+    if os.path.dirname(requested_path) not in (base_path, os.path.join(base_path, 'assets')):
         return None
 
     if not os.path.isfile(requested_path):

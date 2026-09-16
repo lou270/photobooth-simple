@@ -2,13 +2,14 @@
 
 import os
 import zipfile
+from pathlib import Path
 
 import cv2
 import numpy as np
 from flask import Blueprint, Response, g, redirect, render_template, request, send_file, session
 from kivy.logger import Logger
 
-from libs import event, i18n
+from libs import event, i18n, template_schema
 from libs.file_utils import FileUtils
 from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
@@ -32,16 +33,48 @@ LOGS_PAGE_JS_KEYS = {
     'logs_deleted_template': 'web.admin.logs_deleted_template',
 }
 
-# Same for editor/template_editor.html: alerts, confirmations and the names of
-# the built-in templates are all built by its script.
+# Same for the template editor: its levels, properties panel, alerts and
+# confirmations are all built by assets/editor/template_editor.js.
 EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
-    'sample_event', 'builtin_empty_name', 'builtin_empty_description', 'builtin_full_landscape',
-    'builtin_full_portrait', 'builtin_full_description', 'builtin_strip_portrait', 'builtin_strip_landscape',
-    'builtin_strip_description', 'duplicate_template', 'delete_template', 'embedded_image', 'canvas_photo',
-    'canvas_text', 'copy_name', 'builtin_not_deletable', 'keep_one_template', 'confirm_delete_with_file',
-    'confirm_delete', 'delete_failed', 'new_template_name', 'new_template_description', 'saved', 'save_failed',
-    'invalid_file', 'imported', 'parse_failed', 'no_background', 'no_foreground',
+    # templates
+    'sample_event', 'section_booth', 'section_drafts', 'booth_empty', 'booth_load_failed', 'page_too_large',
+    'duplicate_template', 'delete_template', 'copy_name', 'keep_one_template', 'confirm_delete_with_file',
+    'confirm_delete', 'delete_failed', 'new_template_name', 'saved', 'save_failed', 'saving', 'invalid_file',
+    'imported', 'parse_failed', 'unsaved_changes', 'booth_rejected', 'cannot_open',
+    # elements and levels
+    'canvas_photo', 'badge_field', 'element_field', 'kind_image', 'kind_rect', 'kind_ellipse', 'kind_line',
+    'kind_label', 'level_default_name', 'level_numbered', 'level_background', 'level_photos', 'level_foreground',
+    'level_texts', 'level_layout', 'level_empty', 'hide_level', 'show_level', 'lock_level', 'unlock_level',
+    'level_up', 'level_down', 'delete_level', 'element_up', 'element_down', 'keep_one_level',
+    'confirm_delete_level', 'level_locked_info',
+    # properties
+    'template_properties', 'active_level', 'name', 'description', 'opacity', 'shortcuts', 'shortcut_add',
+    'shortcut_select', 'shortcut_zoom', 'shortcut_pan', 'shortcut_undo', 'shortcut_copy', 'shortcut_arrows',
+    'shortcut_delete', 'shortcut_levels', 'selection_count', 'duplicate', 'delete', 'x', 'y', 'width', 'height',
+    'rotation', 'thickness', 'appearance', 'flip_horizontal', 'flip_vertical', 'replace_image', 'fit_page',
+    'fill', 'fill_color', 'outline', 'outline_color', 'corner_radius', 'color', 'text', 'font', 'font_print',
+    'font_size', 'alignment', 'text_left', 'text_center', 'text_right', 'bold', 'italic', 'new_label_text',
+    'label_info', 'photo_order', 'photo_info', 'field_info', 'placeholder_event_title', 'placeholder_date_title',
+    'placeholder_time_title', 'printed_twice', 'status_hint',
+    # images, preview, export
+    'uploading_image', 'image_failed', 'image_unsupported', 'image_too_heavy', 'image_loading', 'image_missing',
+    'image_missing_help', 'images_missing_error', 'no_photo_slot', 'hidden_slot_error', 'too_many_layers',
+    'preparing_preview', 'preview_failed', 'exporting', 'export_failed',
 )}
+
+
+# Fonts a design's fixed text may use: the welcome screen's letterings, shipped
+# for the offline booth. (id, name shown, regular file, bold file or None.)
+# Text that changes with each photo stays in the booth's print font, which is
+# the only one it can draw.
+DESIGN_FONTS = (
+    ('playfair', 'Playfair Display', 'PlayfairDisplay.ttf', None),
+    ('great-vibes', 'Great Vibes', 'GreatVibes-Regular.ttf', None),
+    ('montserrat', 'Montserrat', 'Montserrat-Medium.ttf', 'Montserrat-Bold.ttf'),
+    ('fredoka', 'Fredoka', 'Fredoka-Medium.ttf', 'Fredoka-SemiBold.ttf'),
+)
+# assets/icons/dummy0.png to dummy3.png, the photos previews are made with.
+SAMPLE_PHOTO_COUNT = 4
 
 
 def create_blueprint(server):
@@ -58,7 +91,24 @@ def create_blueprint(server):
         if not os.path.exists(server.template_editor_path):
             return 'Template editor not found', 404
 
-        return render_template('editor/template_editor.html', js_i18n=i18n.bundle(g.lang, EDITOR_PAGE_JS_KEYS))
+        return render_template(
+            'editor/template_editor.html',
+            js_i18n=i18n.bundle(g.lang, EDITOR_PAGE_JS_KEYS),
+            # The limits a saved template is checked against, so a custom page
+            # size is refused while it is typed rather than at save time.
+            page_limits={'side': template_schema.MAX_PAGE_SIDE, 'pixels': template_schema.MAX_PAGE_PIXELS},
+            stack_limit=template_schema.MAX_STACK_ENTRIES,
+            asset_bytes_limit=template_schema.MAX_EMBEDDED_IMAGE_BYTES,
+            design_fonts=[
+                {
+                    'id': font_id, 'label': label,
+                    'regular': f'/admin/editor/fonts/lettering/{regular}',
+                    'bold': f'/admin/editor/fonts/lettering/{bold}' if bold else None,
+                }
+                for font_id, label, regular, bold in DESIGN_FONTS
+            ],
+            sample_photo_count=SAMPLE_PHOTO_COUNT,
+        )
 
     @blueprint.route('/admin/editor/fonts/<variant>')
     def editor_font(variant):
@@ -73,6 +123,30 @@ def create_blueprint(server):
         if path is None:
             return 'Not found', 404
         return send_file(str(path), mimetype='font/ttf', max_age=86400)
+
+    @blueprint.route('/admin/editor/fonts/lettering/<filename>')
+    def editor_lettering_font(filename):
+        """A font a design's own text may be set in, from the welcome screen's letterings."""
+        auth_redirect = server._require_admin_auth()
+        if auth_redirect is not None:
+            return auth_redirect
+
+        # Only the files the fonts list names: the name never reaches the disk otherwise.
+        if filename not in {name for font in DESIGN_FONTS for name in font[2:] if name}:
+            return 'Not found', 404
+        return send_file(str(event.WELCOME_FONT_DIRECTORY / filename), mimetype='font/ttf', max_age=86400)
+
+    @blueprint.route('/admin/editor/samples/<int:number>')
+    def editor_sample_photo(number):
+        """The sample photos the booth fills its previews with, for the editor's photo slots."""
+        auth_redirect = server._require_admin_auth()
+        if auth_redirect is not None:
+            return auth_redirect
+
+        if not 0 <= number < SAMPLE_PHOTO_COUNT:
+            return 'Not found', 404
+        path = Path(server.project_root, 'assets', 'icons', f'dummy{number}.png')
+        return send_file(str(path), mimetype='image/png', max_age=86400)
 
     # --- the photo behind the welcome screen --------------------------------
 

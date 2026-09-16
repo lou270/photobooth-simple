@@ -232,10 +232,22 @@ def test_the_template_editor_speaks_the_booth_language(tmp_path):
 
     page = client.get('/admin/editor').get_data(as_text=True)
 
-    assert i18n.translate('fr', 'web.editor.template_properties') in page
+    assert i18n.translate('fr', 'web.editor.levels') in page
     assert 'Template Properties' not in page
     for key in EDITOR_PAGE_JS_KEYS.values():
         assert i18n.translate('fr', key) != key, f'{key} has no French text'
+
+
+def test_the_editor_script_only_asks_for_strings_the_page_hands_it():
+    """A key missing from the bundle shows as `undefined` in the operator's face."""
+    import re
+    from libs.webserver.admin import EDITOR_PAGE_JS_KEYS
+
+    script = (Path(__file__).resolve().parents[1] / 'web' / 'assets' / 'editor' / 'template_editor.js').read_text(encoding='utf-8')
+    used = set(re.findall(r'I18N\.([a-z_]+)', script))
+    used |= {f'kind_{kind}' for kind in re.findall(r"'(image|rect|ellipse|line)'", script)}
+
+    assert used - set(EDITOR_PAGE_JS_KEYS) == set()
 
 
 def test_a_refused_value_leaves_the_file_alone(client, editable_config):

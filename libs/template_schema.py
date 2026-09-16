@@ -10,6 +10,7 @@ and returns a normalised template with unknown keys dropped.
 
 import base64
 import binascii
+import json
 import re
 
 # A 10x15 cm page at 300 dpi is about 2.1 Mpx; the ceiling leaves room for
@@ -23,13 +24,24 @@ MAX_DESCRIPTION_LENGTH = 300
 MAX_PRINT_PARAMS = 20
 MAX_PRINT_PARAM_LENGTH = 120
 MAX_EMBEDDED_IMAGE_BYTES = 12 * 1024 * 1024
+# All the images one template embeds, together: the web server refuses a
+# request above 32 MB, and base64 grows the bytes by a third on the way.
+MAX_EMBEDDED_TOTAL_BYTES = 22 * 1024 * 1024
 MAX_TEXTS = 10
 MAX_TEXT_LENGTH = 200
 TEXT_ALIGNMENTS = ('left', 'center', 'right')
 COLOR_PATTERN = re.compile(r'^#[0-9a-fA-F]{6}$')
+# Every level of a designed template is an image, a photo or a text, so this
+# bounds how many full compositing passes one collage can cost the booth.
+MAX_STACK_ENTRIES = 40
+STACK_TYPES = ('image', 'photo', 'text')
+# The editor's own description of a design, kept so it can be opened again.
+# It holds shapes and references to assets, never pixels.
+MAX_DESIGN_BYTES = 2 * 1024 * 1024
 
 DATA_URI_PATTERN = re.compile(r'^data:image/(png|jpeg|jpg|webp);base64,(.+)$', re.IGNORECASE | re.DOTALL)
-ASSET_FILENAME_PATTERN = re.compile(r'^[A-Za-z0-9._-]+\.(png|jpe?g|webp)$', re.IGNORECASE)
+# A bare file name next to the templates, or one in their assets/ folder.
+ASSET_FILENAME_PATTERN = re.compile(r'^(?:assets/)?[A-Za-z0-9._-]+\.(png|jpe?g|webp)$', re.IGNORECASE)
 
 LAYER_KEYS = ('background', 'foreground')
 
@@ -170,12 +182,128 @@ def _validate_layer(value, field):
         return value
 
     # Anything else is resolved against the templates directory, so it must be a
-    # bare filename: no separators, no traversal, no absolute path.
-    if not ASSET_FILENAME_PATTERN.match(value):
+    # bare filename, or one inside assets/: no other separator, no traversal,
+    # no absolute path.
+    if not ASSET_FILENAME_PATTERN.match(value) or '..' in value.split('/'):
         raise TemplateValidationError(
             f'{field} must be an embedded image or a plain image filename, got {value!r}'
         )
     return value
+
+
+def _embedded_bytes(value):
+    """Decoded size of an embedded image, 0 for a file name or no image."""
+    if not value or not value.lower().startswith('data:'):
+        return 0
+    encoded = value.split(',', 1)[1]
+    return len(encoded) * 3 // 4
+
+
+def _validate_opacity(value, field):
+    if value is None:
+        return 1
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        raise TemplateValidationError(f'{field} must be a number')
+    if not 0 <= value <= 1:
+        raise TemplateValidationError(f'{field} must be between 0 and 1')
+    return value
+
+
+def _validate_stack(stack, page, photos, texts):
+    """The order the booth draws a designed template in, bottom first.
+
+    Each entry is a flattened image, one photo slot or one text box. Photos
+    and texts keep their geometry in `photos` and `texts`, which the rest of
+    the booth reads; the stack only says when each is drawn and how opaque.
+    Every photo and every text must be drawn exactly once: a slot left out
+    would be a guest's photo taken and never printed.
+    """
+    if stack is None:
+        return None
+    if not isinstance(stack, list):
+        raise TemplateValidationError('stack must be a list')
+    if len(stack) > MAX_STACK_ENTRIES:
+        raise TemplateValidationError(f'stack cannot hold more than {MAX_STACK_ENTRIES} entries')
+
+    validated = []
+    placed = {'photo': [], 'text': []}
+    for index, entry in enumerate(stack):
+        field = f'stack[{index}]'
+        if not isinstance(entry, dict):
+            raise TemplateValidationError(f'{field} must be an object')
+
+        kind = entry.get('type')
+        if kind not in STACK_TYPES:
+            raise TemplateValidationError(f'{field}.type must be one of {", ".join(STACK_TYPES)}')
+        opacity = _validate_opacity(entry.get('opacity'), f'{field}.opacity')
+
+        if kind == 'image':
+            src = _validate_layer(entry.get('src'), f'{field}.src')
+            if src is None:
+                raise TemplateValidationError(f'{field}.src is required')
+            x = _require_int(entry.get('x'), f'{field}.x', minimum=0, maximum=page['width'])
+            y = _require_int(entry.get('y'), f'{field}.y', minimum=0, maximum=page['height'])
+            width = _require_int(entry.get('width'), f'{field}.width', minimum=1, maximum=page['width'])
+            height = _require_int(entry.get('height'), f'{field}.height', minimum=1, maximum=page['height'])
+            if x + width > page['width'] or y + height > page['height']:
+                raise TemplateValidationError(f'{field} does not fit inside the page')
+            validated.append({
+                'type': 'image', 'src': src,
+                'x': x, 'y': y, 'width': width, 'height': height,
+                'opacity': opacity,
+            })
+            continue
+
+        boxes = photos if kind == 'photo' else texts
+        position = _require_int(entry.get('index'), f'{field}.index', minimum=0, maximum=max(0, len(boxes) - 1))
+        if position >= len(boxes):
+            raise TemplateValidationError(f'{field}.index points to no {kind}')
+        placed[kind].append(position)
+        validated.append({'type': kind, 'index': position, 'opacity': opacity})
+
+    for kind, boxes in (('photo', photos), ('text', texts)):
+        if sorted(placed[kind]) != list(range(len(boxes))):
+            raise TemplateValidationError(f'stack must draw every {kind} exactly once')
+
+    return validated
+
+
+def _design_images(value):
+    """Every embedded image string anywhere inside the design."""
+    if isinstance(value, dict):
+        return [image for item in value.values() for image in _design_images(item)]
+    if isinstance(value, list):
+        return [image for item in value for image in _design_images(item)]
+    if isinstance(value, str) and value[:11].lower() == 'data:image/':
+        return [value]
+    return []
+
+
+def _validate_design(design):
+    """The editor's own description of the design, kept to open it again.
+
+    Its images are references to assets, except in a file exported to carry
+    a template to another booth, where they travel inside it. Those count
+    with the template's other embedded images, not against the size of the
+    description itself.
+    """
+    if design is None:
+        return None, []
+    if not isinstance(design, dict):
+        raise TemplateValidationError('design must be an object')
+    try:
+        encoded = json.dumps(design, ensure_ascii=False, allow_nan=False)
+    except (TypeError, ValueError):
+        raise TemplateValidationError('design must be plain JSON') from None
+
+    images = _design_images(design)
+    for index, image in enumerate(images):
+        _validate_layer(image, f'design image {index}')
+    described = len(encoded.encode('utf-8')) - sum(len(image) for image in images)
+    if described > MAX_DESIGN_BYTES:
+        raise TemplateValidationError(f'design is above the {MAX_DESIGN_BYTES} byte limit')
+    # A round trip, so what is stored is exactly what was checked.
+    return json.loads(encoded), images
 
 
 def _validate_print_params(print_params):
@@ -241,5 +369,21 @@ def validate_template(data):
 
     for key in LAYER_KEYS:
         template[key] = _validate_layer(data.get(key), key)
+
+    template['stack'] = _validate_stack(data.get('stack'), page, template['photos'], template['texts'])
+    if template['stack'] is not None and (template['background'] or template['foreground']):
+        # Two descriptions of the same drawing would leave the booth guessing
+        # which one the editor meant.
+        raise TemplateValidationError('a template with a stack puts its images in it, not in background or foreground')
+    template['design'], design_images = _validate_design(data.get('design'))
+
+    images = [template[key] for key in LAYER_KEYS]
+    images += [entry['src'] for entry in template['stack'] or () if entry['type'] == 'image']
+    images += design_images
+    total = sum(_embedded_bytes(image) for image in images)
+    if total > MAX_EMBEDDED_TOTAL_BYTES:
+        raise TemplateValidationError(
+            f'embedded images add up to {total} bytes, above the {MAX_EMBEDDED_TOTAL_BYTES} byte limit'
+        )
 
     return template

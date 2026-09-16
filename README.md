@@ -192,17 +192,27 @@ You can edit configuration file and download photos from <localip>:<WEB_PORT>.
 
 ### Template Editor
 
-The application includes a **visual template editor** - a browser-based tool for creating and customizing photo layouts without coding.
+The application includes a **visual template editor** - a browser-based design tool for creating and customizing photo layouts without coding.
 The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin authentication.
 
-- **Visual Canvas:** Interactive canvas with grid snapping for precise positioning
-- **Photo Frames:** Add, move, resize, and delete photo placeholders
-- **Background/Foreground Layers:** Import decorative backgrounds and overlay frames
-- **Text Boxes:** Printed text with `{event}`, `{date}` and `{time}` placeholders, previewed in the booth's own font with today's values
-- **Multiple Formats:** Support for various print formats (10x15 cm, 5x15 cm strips, custom sizes)
-- **Duplication Support:** Automatically duplicate templates horizontally or vertically for strip printing
-- **Import/Export:** Save templates as JSON files and import existing templates
-- **Live Preview:** Real-time preview with scaling and duplication visualization
+- **Levels:** A design is a stack of levels, like layers in a drawing program: named, reordered, hidden (a hidden level is not printed), locked, each with its own opacity. Decoration may sit under the photos, over part of them, or between two of them.
+- **Elements:** PNG, JPEG or WebP images (transparency kept; add them from the toolbar, by dropping them on the page or by pasting), rectangles with rounded corners, ellipses, lines, fixed text in the welcome screen's letterings, photo slots and variable texts. Every element has a position, size, rotation and opacity; photo slots and variable texts are not rotated, since the booth draws those itself.
+- **Canvas:** Zoom (Ctrl + wheel) and pan (wheel, or Space + drag), snapping to the page and to other elements with guides, optional grid, multiple selection, align and distribute, undo and redo, copy, paste and duplicate, arrow keys to nudge.
+- **Photo slots:** Shown with a sample photo cropped the way the booth crops the real one.
+- **Variable texts:** `{event}`, `{date}` and `{time}` placeholders, previewed in the booth's own font with today's values.
+- **Formats:** 10x15 cm, 5x15 cm strips and custom sizes; strips printed twice across the sheet.
+- **Booth preview:** Shows the booth's own assembly of the template, with the sample photos, next to the editor's drawing.
+- **Import/Export:** A template exports as one JSON file with its images inside, which another booth can import or take as it is.
+- **The booth's templates and drafts:** The list shows the files in `templates/` apart from what is not saved yet; a file the booth refuses is listed with the reason. The ready-made layouts are starting points in the *New template* dialog.
+- **Images:** A photo heavier than 12 MB or larger than 40 megapixels is scaled down in the browser to what the page can show at 600 dpi before it is sent. Images a template names as plain files beside it, as older templates did, are shown and printed like the others.
+
+When a design is saved, each run of decoration between two photo slots or variable texts is flattened
+by the browser into one image at 600 dpi, cropped to what it covers and stored in `templates/assets/`
+under a name made from its content. The template file keeps the drawing order in `stack` and the
+editable design in `design`, so the booth only stacks images, photos and texts and prints exactly
+what the editor showed. Images no template mentions are removed from `templates/assets/` a day
+after they were last used. Templates written before levels existed, with a `background` and a
+`foreground`, still print as they always did and open in the editor as three levels.
 
 ![Template Editor](doc/template_editor.png)
 
@@ -229,9 +239,10 @@ Each setting there says what it does, its default, and its name in `config.ini`.
 
 ### Text on the prints
 
-A template can carry text boxes, added in the template editor with **+ Add Text**. The text is sized
-to fill its box - a long event name shrinks instead of running off the sheet - and drawn over the
-foreground layer, in Roboto, the font Kivy already ships.
+A template can carry variable text boxes, added in the template editor with **Variable**. The text is
+sized to fill its box - a long event name shrinks instead of running off the sheet - and drawn in
+Roboto, the font Kivy already ships, at the level the design puts it (over everything in a template
+without levels).
 
 | Placeholder | Prints as |
 | --- | --- |
