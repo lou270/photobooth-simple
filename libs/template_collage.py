@@ -5,7 +5,7 @@ import base64
 import logging
 import tempfile
 import numpy as np
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageColor, ImageDraw, ImageFont
 
 from libs import event
 from libs.file_utils import FileUtils
@@ -69,7 +69,8 @@ class TemplateCollage:
         
         # Load template
         if template is None:
-            with open(template_path, 'r') as f:
+            # UTF-8 whatever the system says: template names carry accents.
+            with open(template_path, 'r', encoding='utf-8') as f:
                 template = json.load(f)
 
         # Validate on the way in as well as on the way out: a template can reach
@@ -91,10 +92,11 @@ class TemplateCollage:
         self._duplicate_horizontal = self._template.get('duplicate_horizontal', False)
         self._duplicate_vertical = self._template.get('duplicate_vertical', False)
         
-        # Store background and foreground (can be base64 or file path)
-        self._background = self._template.get('background')
-        self._foreground = self._template.get('foreground')
-        
+        # What is drawn, bottom first: the editor's own order for a designed
+        # template, the historical one for a template that only has a
+        # background and a foreground.
+        self._stack = self._template['stack'] or self._legacy_stack()
+
         # Load dummy images for preview
         self._dummies = [
             os.path.join(self._module_dir, '../assets/icons/dummy0.png'),
@@ -106,10 +108,28 @@ class TemplateCollage:
         # Cache for preview image (generate once)
         self._preview_cache = None
         
-        # Background and foreground at page size, keyed by that size: previews
+        # Images at the size they are drawn at, keyed by that size: previews
         # are assembled at 300 dpi whatever the saved collage is assembled at.
         self._layer_cache = {}
-    
+
+    def _legacy_stack(self):
+        """The drawing order of a template written before stacks existed.
+
+        Background, photos, foreground, then texts over everything. The two
+        images are marked so they keep behaving as they always did: the
+        background replaces the page, and a foreground without transparency
+        is laid over the photos at half strength.
+        """
+        page = {'x': 0, 'y': 0, 'width': self._page_width, 'height': self._page_height, 'opacity': 1}
+        stack = []
+        if self._template['background']:
+            stack.append(dict(page, type='image', src=self._template['background'], legacy='background'))
+        stack += [{'type': 'photo', 'index': index, 'opacity': 1} for index in range(len(self._photos))]
+        if self._template['foreground']:
+            stack.append(dict(page, type='image', src=self._template['foreground'], legacy='foreground'))
+        stack += [{'type': 'text', 'index': index, 'opacity': 1} for index in range(len(self._texts))]
+        return stack
+
     def get_name(self):
         """Return the template name."""
         return self._name
@@ -191,19 +211,19 @@ class TemplateCollage:
             Logger.warning(f'Image file could not be decoded: {path}')
         return image
 
-    def _get_page_layer(self, image_data, imread_flags, layer, page_size):
-        """Return a layer already scaled to the page, decoded and resized once.
+    def _get_page_layer(self, image_data, imread_flags, layer, size):
+        """Return a layer already scaled to where it is drawn, decoded and resized once.
 
         The source art is far larger than the page it is drawn on: the shipped
         full-page frame is 4370x2880 RGBA, 48 MB in memory, for an 1800x1200
         page. It used to be copied out of the cache and resized again on every
-        single collage. Caching it at page size removes both, and keeps the
-        resident copy at page size instead of source size.
+        single collage. Caching it at its drawn size removes both, and keeps
+        the resident copy at that size instead of source size.
 
         A booth assembling at 600 dpi draws at two sizes, the preview and the
         collage, so it decodes each layer twice rather than keeping the source.
         """
-        key = (layer, page_size)
+        key = (layer, size)
         if key in self._layer_cache:
             return self._layer_cache[key]
 
@@ -211,24 +231,36 @@ class TemplateCollage:
         if image is None:
             return None
 
-        width, height = page_size
+        # 8-bit BGR or BGRA from here on, whatever the file held: a 16-bit or
+        # greyscale PNG is a valid drawing, not a reason to lose the layer.
+        if image.dtype == np.uint16:
+            image = (image >> 8).astype(np.uint8)
+        if image.ndim == 2:
+            image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+
+        width, height = size
         if image.shape[1] != width or image.shape[0] != height:
-            image = cv2.resize(image, (width, height), interpolation=cv2.INTER_AREA)
+            shrinking = image.shape[1] >= width and image.shape[0] >= height
+            image = cv2.resize(image, (width, height),
+                               interpolation=cv2.INTER_AREA if shrinking else cv2.INTER_LINEAR)
 
         self._layer_cache[key] = image
         return image
 
     def _layout(self, full_resolution):
-        """Page size, photo slots and text boxes at the resolution to assemble at."""
+        """Page size, photo slots, text boxes and stack at the resolution to assemble at."""
         scale = self._scale if full_resolution else 1
         if scale == 1:
-            return (self._page_width, self._page_height), self._photos, self._texts
+            return (self._page_width, self._page_height), self._photos, self._texts, self._stack
 
         def scaled(box):
+            if 'width' not in box:
+                return box
             return dict(box, **{side: box[side] * scale for side in ('x', 'y', 'width', 'height')})
 
         page_size = (self._page_width * scale, self._page_height * scale)
-        return page_size, [scaled(photo) for photo in self._photos], [scaled(text) for text in self._texts]
+        return (page_size, [scaled(photo) for photo in self._photos], [scaled(text) for text in self._texts],
+                [scaled(entry) for entry in self._stack])
     
     def get_preview(self):
         """
@@ -264,7 +296,8 @@ class TemplateCollage:
     def assemble(self, image_paths, output_path=None, for_print=False, photo_filter=None, full_resolution=True):
         """
         Assemble photos into a collage based on the template.
-        Simple approach: create canvas, apply background, paste photos (clipping if needed), apply foreground.
+        Starts from a white page and draws the stack over it, bottom first:
+        images, photos (cropped to their slot, clipped to the page) and texts.
 
         Args:
             image_paths: List of paths to input images
@@ -280,61 +313,31 @@ class TemplateCollage:
             The assembled collage as a numpy array
         """
         Logger.info(f'TemplateCollage: assemble({len(image_paths)} images)')
-        page_size, photos, texts = self._layout(full_resolution)
+        page_size, photos, texts, stack = self._layout(full_resolution)
         page_width, page_height = page_size
 
-        # Step 1: Create canvas with white background
         canvas = np.full((page_height, page_width, 3), 255, dtype=np.uint8)
 
-        # Step 2: Apply background image if specified (already at canvas size)
-        if self._background:
-            background = self._get_page_layer(self._background, cv2.IMREAD_COLOR, 'background', page_size)
-            if background is not None:
-                # Copy: photos are pasted into the canvas, and the cache is shared
-                # with every later collage.
-                canvas = background.copy()
-        
-        # Step 3: Place each photo according to template (clip if needed)
-        for i, photo_spec in enumerate(photos):
-            if i >= len(image_paths):
-                break
-                
-            # Load image
-            img = cv2.imread(image_paths[i], cv2.IMREAD_COLOR)
-            if img is None:
-                Logger.warning(f'Could not load image: {image_paths[i]}')
+        # Texts next to each other in the stack are drawn in one pass: each
+        # pass converts the whole page to Pillow and back.
+        pending_texts = []
+        for number, entry in enumerate(stack):
+            if entry['type'] == 'text':
+                pending_texts.append((texts[entry['index']], entry['opacity']))
                 continue
+            canvas = self._draw_texts(canvas, pending_texts)
+            pending_texts = []
 
-            if photo_filter is not None:
-                img = photo_filter(img)
-            
-            # Get photo specifications
-            x = photo_spec['x']
-            y = photo_spec['y']
-            width = photo_spec['width']
-            height = photo_spec['height']
-            
-            # Resize and crop image to target dimensions
-            img_resized = FileUtils.resize_and_crop(img, (height, width))
-            
-            # Calculate actual dimensions we can paste (clip to canvas boundaries)
-            paste_height = min(height, page_height - y, img_resized.shape[0])
-            paste_width = min(width, page_width - x, img_resized.shape[1])
-            
-            # Only paste if there's space
-            if paste_height > 0 and paste_width > 0:
-                canvas[y:y + paste_height, x:x + paste_width] = img_resized[0:paste_height, 0:paste_width]
-        
-        # Step 4: Apply foreground overlay if specified (already at canvas size)
-        if self._foreground:
-            overlay = self._get_page_layer(self._foreground, cv2.IMREAD_UNCHANGED, 'foreground', page_size)
-            if overlay is not None:
-                # _apply_overlay only reads the overlay, so the cache can be shared.
-                canvas = self._apply_overlay(canvas, overlay)
+            if entry['type'] == 'photo':
+                index = entry['index']
+                if index < len(image_paths):
+                    self._draw_photo(canvas, image_paths[index], photos[index], entry['opacity'], photo_filter)
+            else:
+                canvas = self._draw_image(canvas, entry, number)
 
-        # Step 4b: Texts, over the frame: a name printed under a decoration
-        # nobody can read is a name the guest never sees.
-        canvas = self._draw_texts(canvas, texts)
+        # Texts come last in a template written before stacks: a name printed
+        # under a decoration nobody can read is a name the guest never sees.
+        canvas = self._draw_texts(canvas, pending_texts)
 
         # Step 5: Save base collage (without duplication for web gallery)
         if output_path:
@@ -395,6 +398,7 @@ class TemplateCollage:
         return low
 
     def _draw_texts(self, canvas, texts):
+        """Draw (box, opacity) pairs over the canvas, in order."""
         if not texts:
             return canvas
 
@@ -406,59 +410,120 @@ class TemplateCollage:
             values = event.text_values()
 
         image = None
-        draw = None
-        for box in texts:
+        for box, opacity in texts:
             content = event.fill_placeholders(box['text'], values).strip()
-            if not content:
+            if not content or opacity <= 0:
                 continue
             lines = [line.strip() for line in content.splitlines()]
 
             if image is None:
                 image = Image.fromarray(cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB))
-                draw = ImageDraw.Draw(image)
 
-            size = self._fit_font(lines, box, box['bold'])
-            font = self._font(size, box['bold'])
-            _width, block_height, line_height = self._text_block_size(lines, font, size)
-            y = box['y'] + (box['height'] - block_height) // 2
-            for line in lines:
-                line_width = font.getlength(line)
-                if box['align'] == 'left':
-                    x = box['x']
-                elif box['align'] == 'right':
-                    x = box['x'] + box['width'] - line_width
-                else:
-                    x = box['x'] + (box['width'] - line_width) / 2
-                draw.text((x, y), line, font=font, fill=box['color'], anchor='la')
-                y += line_height + int(size * self.LINE_SPACING)
+            if opacity >= 1:
+                self._draw_text_lines(ImageDraw.Draw(image), box, lines, (0, 0), box['color'])
+                continue
+
+            # Pillow draws text opaque whatever alpha the ink has, so a
+            # see-through text is drawn as a mask and the colour poured
+            # through it. The mask reaches past the box: glyphs are fitted to
+            # it by their metrics, and accents or tails may still overhang.
+            margin = box['height'] // 2
+            left, top = max(0, box['x'] - margin), max(0, box['y'] - margin)
+            right = min(image.width, box['x'] + box['width'] + margin)
+            bottom = min(image.height, box['y'] + box['height'] + margin)
+            mask = Image.new('L', (right - left, bottom - top), 0)
+            self._draw_text_lines(ImageDraw.Draw(mask), box, lines, (left, top), 255)
+            mask = mask.point(lambda value: round(value * opacity))
+            image.paste(ImageColor.getrgb(box['color']), (left, top, right, bottom), mask)
 
         if image is None:
             return canvas
         return cv2.cvtColor(np.asarray(image), cv2.COLOR_RGB2BGR)
 
-    def _apply_overlay(self, image, overlay):
+    def _draw_text_lines(self, draw, box, lines, origin, fill):
+        """Fit the lines to their box and draw them, `origin` being where `draw` starts on the page."""
+        size = self._fit_font(lines, box, box['bold'])
+        font = self._font(size, box['bold'])
+        _width, block_height, line_height = self._text_block_size(lines, font, size)
+        y = box['y'] - origin[1] + (box['height'] - block_height) // 2
+        for line in lines:
+            line_width = font.getlength(line)
+            if box['align'] == 'left':
+                x = box['x']
+            elif box['align'] == 'right':
+                x = box['x'] + box['width'] - line_width
+            else:
+                x = box['x'] + (box['width'] - line_width) / 2
+            draw.text((x - origin[0], y), line, font=font, fill=fill, anchor='la')
+            y += line_height + int(size * self.LINE_SPACING)
+
+    # --- images and photos ----------------------------------------------------
+
+    def _draw_image(self, canvas, entry, number):
+        """Lay one image of the stack over the canvas, where the editor put it."""
+        legacy = entry.get('legacy')
+        if legacy == 'background':
+            background = self._get_page_layer(entry['src'], cv2.IMREAD_COLOR, 'background',
+                                              (canvas.shape[1], canvas.shape[0]))
+            # Copy: photos are pasted into the canvas, and the cache is shared
+            # with every later collage.
+            return canvas if background is None else background.copy()
+
+        name = legacy or f'stack{number}'
+        layer = self._get_page_layer(entry['src'], cv2.IMREAD_UNCHANGED, name, (entry['width'], entry['height']))
+        if layer is None:
+            return canvas
+
+        opacity = entry['opacity']
+        if legacy == 'foreground' and layer.shape[2] == 3:
+            # What a foreground without transparency has always done.
+            opacity = 0.5
+        self._blend(canvas, layer, entry['x'], entry['y'], opacity)
+        return canvas
+
+    def _draw_photo(self, canvas, image_path, spec, opacity, photo_filter):
+        img = cv2.imread(image_path, cv2.IMREAD_COLOR)
+        if img is None:
+            Logger.warning(f'Could not load image: {image_path}')
+            return
+
+        if photo_filter is not None:
+            img = photo_filter(img)
+
+        # Cropped to the slot's shape, then clipped to the canvas.
+        img_resized = FileUtils.resize_and_crop(img, (spec['height'], spec['width']))
+        self._blend(canvas, img_resized, spec['x'], spec['y'], opacity)
+
+    def _blend(self, canvas, layer, x, y, opacity):
+        """Mix a BGR or BGRA layer into the canvas at (x, y), in place.
+
+        Only the layer's own rectangle is touched, so a small decoration costs
+        its size rather than the page's, and an opaque layer is a plain copy.
         """
-        Apply an overlay image on top of the base image.
-        
-        Args:
-            image: Base image (numpy array)
-            overlay: Overlay image (numpy array, already resized to match base image)
-            
-        Returns:
-            Image with overlay applied
-        """
-        if overlay.shape[2] == 4:  # If overlay has alpha channel
-            alpha_overlay = overlay[:, :, 3] / 255.0
-            alpha_image = 1.0 - alpha_overlay
-            
-            for c in range(0, 3):
-                image[:, :, c] = (alpha_overlay * overlay[:, :, c] + alpha_image * image[:, :, c])
+        height = min(layer.shape[0], canvas.shape[0] - y)
+        width = min(layer.shape[1], canvas.shape[1] - x)
+        if height <= 0 or width <= 0 or opacity <= 0:
+            return
+
+        color = layer[:height, :width, :3]
+        alpha = layer[:height, :width, 3] if layer.shape[2] == 4 else None
+        region = canvas[y:y + height, x:x + width]
+        if alpha is None and opacity >= 1:
+            region[:] = color
+            return
+
+        strength = round(255 * opacity)
+        if alpha is None:
+            weight = np.full((height, width), strength, dtype=np.uint8)
+        elif strength < 255:
+            weight = cv2.multiply(alpha, strength, scale=1 / 255)
         else:
-            # If no alpha channel, just blend with some transparency (optional)
-            alpha_overlay = 0.5  # This can be adjusted
-            image = cv2.addWeighted(image, 1 - alpha_overlay, overlay, alpha_overlay, 0)
-        
-        return image
+            weight = alpha
+        # 8-bit, saturating and vectorised by OpenCV: a 16-bit or float copy of
+        # a 600 dpi page is both slower and more memory than a Pi should spend.
+        weight = cv2.cvtColor(weight, cv2.COLOR_GRAY2BGR)
+        region[:] = cv2.add(cv2.multiply(color, weight, scale=1 / 255),
+                            cv2.multiply(region, cv2.bitwise_not(weight), scale=1 / 255))
 
 
 def load_templates(templates_dir='templates', text_values=None, dpi=TEMPLATE_DPI):

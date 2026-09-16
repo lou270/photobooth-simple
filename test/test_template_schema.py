@@ -10,8 +10,11 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from libs.template_collage import DEFAULT_TEMPLATE
 from libs.template_schema import (
+    MAX_DESIGN_BYTES,
     MAX_EMBEDDED_IMAGE_BYTES,
+    MAX_EMBEDDED_TOTAL_BYTES,
     MAX_PAGE_PIXELS,
+    MAX_STACK_ENTRIES,
     TemplateValidationError,
     validate_template,
 )
@@ -123,3 +126,90 @@ def test_the_built_in_fallback_template_validates():
 def test_shipped_templates_validate(template_path):
     """The templates the booth ships with must survive the new rules."""
     validate_template(json.loads(template_path.read_text(encoding='utf-8')))
+
+
+# --- designed templates: a stack of images, photos and texts ---------------
+
+def stacked_template(stack, **overrides):
+    return minimal_template(
+        texts=[{'x': 30, 'y': 1600, 'width': 540, 'height': 100, 'text': '{event}'}],
+        stack=stack,
+        **overrides,
+    )
+
+
+def image_entry(**overrides):
+    entry = {'type': 'image', 'src': 'assets/frame.png', 'x': 0, 'y': 0, 'width': 600, 'height': 1800}
+    entry.update(overrides)
+    return entry
+
+
+def test_a_stack_is_normalised_with_full_opacity_by_default():
+    validated = validate_template(stacked_template([
+        image_entry(),
+        {'type': 'photo', 'index': 0, 'opacity': 0.5},
+        image_entry(x=100, y=100, width=200, height=200, extra='dropped'),
+        {'type': 'text', 'index': 0},
+    ]))
+
+    assert validated['stack'] == [
+        {'type': 'image', 'src': 'assets/frame.png', 'x': 0, 'y': 0, 'width': 600, 'height': 1800, 'opacity': 1},
+        {'type': 'photo', 'index': 0, 'opacity': 0.5},
+        {'type': 'image', 'src': 'assets/frame.png', 'x': 100, 'y': 100, 'width': 200, 'height': 200, 'opacity': 1},
+        {'type': 'text', 'index': 0, 'opacity': 1},
+    ]
+
+
+def test_a_template_without_a_stack_keeps_none():
+    assert validate_template(minimal_template())['stack'] is None
+
+
+@pytest.mark.parametrize('stack', [
+    'photo',
+    [{'type': 'video'}],
+    [{'type': 'photo', 'index': 0}],                                   # the text is never drawn
+    [{'type': 'text', 'index': 0}],                                    # the photo is never drawn
+    [{'type': 'photo', 'index': 0}, {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}],
+    [{'type': 'photo', 'index': 1}, {'type': 'text', 'index': 0}],
+    [{'type': 'photo', 'index': 0, 'opacity': 1.5}, {'type': 'text', 'index': 0}],
+    [{'type': 'photo', 'index': 0, 'opacity': True}, {'type': 'text', 'index': 0}],
+    [image_entry(x=100), {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}],
+    [image_entry(src=None), {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}],
+    [image_entry(src='assets/../../secret.png'), {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}],
+    [image_entry(src='other/frame.png'), {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}],
+])
+def test_a_malformed_stack_is_rejected(stack):
+    with pytest.raises(TemplateValidationError):
+        validate_template(stacked_template(stack))
+
+
+def test_a_stack_and_a_foreground_cannot_both_describe_the_drawing():
+    stack = [{'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}]
+    with pytest.raises(TemplateValidationError, match='stack'):
+        validate_template(stacked_template(stack, foreground='frame.png'))
+
+
+def test_a_stack_too_deep_for_the_booth_is_rejected():
+    stack = [image_entry() for _ in range(MAX_STACK_ENTRIES)]
+    stack += [{'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}]
+    with pytest.raises(TemplateValidationError, match='more than'):
+        validate_template(stacked_template(stack))
+
+
+def test_embedded_images_are_limited_together_not_only_one_by_one():
+    half = MAX_EMBEDDED_TOTAL_BYTES // 2 + 1024
+    stack = [image_entry(src=data_uri(half)), image_entry(src=data_uri(half)),
+             {'type': 'photo', 'index': 0}, {'type': 'text', 'index': 0}]
+    with pytest.raises(TemplateValidationError, match='add up'):
+        validate_template(stacked_template(stack))
+
+
+def test_the_editor_design_is_kept_as_plain_json():
+    design = {'levels': [{'name': 'Décor', 'opacity': 0.8, 'elements': []}]}
+    assert validate_template(minimal_template(design=design))['design'] == design
+
+
+@pytest.mark.parametrize('design', ['levels', {'size': float('nan')}, {'blob': 'x' * (MAX_DESIGN_BYTES + 1)}])
+def test_a_design_that_is_not_small_plain_json_is_rejected(design):
+    with pytest.raises(TemplateValidationError):
+        validate_template(minimal_template(design=design))
