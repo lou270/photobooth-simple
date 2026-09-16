@@ -850,7 +850,9 @@
         "preparing_preview": "The booth is assembling…",
         "preview_failed": "The preview could not be made: {error}",
         "exporting": "Preparing the file…",
-        "export_failed": "The export could not be made: {error}"
+        "export_failed": "The export could not be made: {error}",
+        "booth_rejected": "Refused by the booth: {error}",
+        "cannot_open": "This template cannot be opened: {error}"
       }
     },
     "stats": {

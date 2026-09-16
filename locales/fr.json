@@ -850,7 +850,9 @@
         "preparing_preview": "Assemblage par la borne…",
         "preview_failed": "L'aperçu n'a pas pu être fait : {error}",
         "exporting": "Préparation du fichier…",
-        "export_failed": "L'export n'a pas pu être fait : {error}"
+        "export_failed": "L'export n'a pas pu être fait : {error}",
+        "booth_rejected": "Refusé par la borne : {error}",
+        "cannot_open": "Ce modèle ne peut pas être ouvert : {error}"
       }
     },
     "stats": {

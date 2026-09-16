@@ -189,11 +189,21 @@
             elements: (Array.isArray(level.elements) ? level.elements : []).map(normaliseElement).filter(Boolean),
         }));
         if (!levels.length) levels.push(makeLevel(I18N.level_default_name));
-        return { version: 1, levels };
+        const design = { version: 1, levels };
+        // Numbers from a file may repeat or skip: shooting order is 1, 2, 3...
+        renumberPhotos(design);
+        return design;
     }
 
+    // A box from a file, or null when it is not one: four finite numbers.
     function boxOf(raw) {
-        return { x: raw.x, y: raw.y, width: raw.width, height: raw.height };
+        if (!isObject(raw)) return null;
+        const box = { x: raw.x, y: raw.y, width: raw.width, height: raw.height };
+        return Object.values(box).every(value => finite(value, NaN) === value) ? box : null;
+    }
+
+    function listOf(value) {
+        return Array.isArray(value) ? value : [];
     }
 
     // A template made before designs existed, or written by hand: its layers
@@ -201,44 +211,75 @@
     function designFromTemplate(template) {
         const page = template.page;
         const fullPage = { x: 0, y: 0, width: page.width, height: page.height };
-        const photos = (template.photos || []).map((photo, index) => makeElement('photo', Object.assign(boxOf(photo), { number: index + 1 })));
-        const fields = (template.texts || []).map(text => makeElement('field', Object.assign(boxOf(text), {
-            text: text.text || '', color: isColor(text.color) ? text.color : '#000000',
-            align: text.align || 'center', bold: !!text.bold,
-        })));
+        const photos = listOf(template.photos).map((photo, index) => {
+            const box = boxOf(photo);
+            return box && makeElement('photo', Object.assign(box, { number: index + 1 }));
+        });
+        const fields = listOf(template.texts).map(text => {
+            const box = boxOf(text);
+            return box && makeElement('field', Object.assign(box, {
+                text: typeof text.text === 'string' ? text.text : '',
+                color: isColor(text.color) ? text.color : '#000000',
+                align: ['left', 'center', 'right'].includes(text.align) ? text.align : 'center',
+                bold: text.bold === true,
+            }));
+        });
+        const layer = src => makeElement('image', Object.assign({ src }, fullPage));
         const levels = [];
 
-        if (Array.isArray(template.stack) && template.stack.length) {
-            const elements = template.stack.map(entry => {
-                const opacity = finite(entry.opacity, 1);
+        if (listOf(template.stack).length) {
+            const elements = listOf(template.stack).filter(isObject).map(entry => {
+                const opacity = clamp(finite(entry.opacity, 1), 0, 1);
                 if (entry.type === 'photo' && photos[entry.index]) return Object.assign(photos[entry.index], { opacity });
                 if (entry.type === 'text' && fields[entry.index]) return Object.assign(fields[entry.index], { opacity });
-                if (entry.type === 'image') return makeElement('image', Object.assign(boxOf(entry), { src: entry.src, opacity }));
+                const box = boxOf(entry);
+                if (entry.type === 'image' && box && typeof entry.src === 'string') {
+                    return makeElement('image', Object.assign(box, { src: entry.src, opacity }));
+                }
                 return null;
             }).filter(Boolean);
             levels.push(makeLevel(I18N.level_layout, elements));
         } else {
-            if (template.background) {
-                levels.push(makeLevel(I18N.level_background, [makeElement('image', Object.assign({ src: template.background }, fullPage))]));
+            if (typeof template.background === 'string' && template.background) {
+                levels.push(makeLevel(I18N.level_background, [layer(template.background)]));
             }
-            levels.push(makeLevel(I18N.level_photos, photos));
-            if (template.foreground) {
-                levels.push(makeLevel(I18N.level_foreground, [makeElement('image', Object.assign({ src: template.foreground }, fullPage))]));
+            levels.push(makeLevel(I18N.level_photos, photos.filter(Boolean)));
+            if (typeof template.foreground === 'string' && template.foreground) {
+                const foreground = layer(template.foreground);
+                // A foreground without transparency has always been laid over
+                // the photos at half strength; a JPEG cannot have any.
+                if (/^data:image\/jpe?g/i.test(foreground.src) || /\.jpe?g$/i.test(foreground.src)) foreground.opacity = 0.5;
+                levels.push(makeLevel(I18N.level_foreground, [foreground]));
             }
-            if (fields.length) {
-                levels.push(makeLevel(I18N.level_texts, fields));
+            if (fields.some(Boolean)) {
+                levels.push(makeLevel(I18N.level_texts, fields.filter(Boolean)));
             }
         }
-        return { version: 1, levels };
+        const design = { version: 1, levels };
+        renumberPhotos(design);
+        return design;
     }
 
+    function pageOf(template) {
+        return isObject(template.page) && pageSizeIsAllowed(template.page.width, template.page.height);
+    }
+
+    // Returns false when the template cannot be drawn at all: a file with no
+    // usable page, which the booth refuses too.
     function openEntry(entry) {
-        if (entry.design) return;
-        entry.design = isObject(entry.template.design)
-            ? normaliseDesign(entry.template.design)
-            : designFromTemplate(entry.template);
+        if (entry.design) return true;
+        if (!pageOf(entry.template)) return false;
+        try {
+            entry.design = isObject(entry.template.design)
+                ? normaliseDesign(entry.template.design)
+                : designFromTemplate(entry.template);
+        } catch (error) {
+            console.error('Template could not be opened', error);
+            return false;
+        }
         entry.customFormat = detectFormat(entry.template.page) === 'custom';
         entry.history = { states: [snapshot(entry)], index: 0 };
+        return true;
     }
 
     function allElements(design) {
@@ -295,6 +336,11 @@
             clampSlot(item, page);
             return;
         }
+        if (item.kind === 'line') {
+            // A line is a bar as thick as its stroke: its box follows.
+            item.strokeWidth = roundTo(Math.max(1, item.strokeWidth), 1);
+            item.height = item.strokeWidth;
+        }
         item.width = roundTo(Math.max(1, item.width), 1);
         item.height = roundTo(Math.max(1, item.height), 1);
         item.x = roundTo(item.x, 1);
@@ -334,6 +380,7 @@
 
     function restoreHistory(entry, index) {
         const data = JSON.parse(entry.history.states[index]);
+        const pageChanged = data.page.width !== entry.template.page.width || data.page.height !== entry.template.page.height;
         entry.history.index = index;
         entry.template.page = data.page;
         entry.template.duplicate_horizontal = data.duplicate_horizontal;
@@ -343,34 +390,80 @@
         entry.dirty = true;
         state.selectedIds = state.selectedIds.filter(id => findElement(id));
         renderAll();
+        if (pageChanged) fitView();
     }
 
+    // While text is being typed on the page, the first undo only ends the
+    // typing: the text becomes its own step, which the next undo takes back.
     function undo() {
         const entry = currentEntry();
-        if (entry && entry.history.index > 0) restoreHistory(entry, entry.history.index - 1);
+        if (isEditingText()) finishTextEditing();
+        else if (entry && entry.history.index > 0) restoreHistory(entry, entry.history.index - 1);
     }
 
     function redo() {
         const entry = currentEntry();
-        if (entry && entry.history.index < entry.history.states.length - 1) restoreHistory(entry, entry.history.index + 1);
+        if (isEditingText()) finishTextEditing();
+        else if (entry && entry.history.index < entry.history.states.length - 1) restoreHistory(entry, entry.history.index + 1);
     }
 
     // After every change the operator means to keep: one undo step, and the
-    // canvas, the levels and (unless an input is being typed in) the panel
-    // drawn again from the design.
+    // canvas, the levels and the panel drawn again from the design.
+    //
+    // options.entry: the template changed, when it may no longer be the one
+    // on screen (a text edit that ends because another template was opened).
+    // options.panel: 'soon' when the change comes from the panel itself; it is
+    // then redrawn once the field has finished handing focus on, so a value
+    // the design corrected shows corrected without losing the operator's place.
     function commit(options) {
-        const entry = currentEntry();
-        if (!entry) return;
+        const entry = (options && options.entry) || currentEntry();
+        if (!entry || !entry.design) return;
         const page = entry.template.page;
         allElements(entry.design).forEach(item => tidyGeometry(item, page));
         if (pushHistory(entry) && !entry.dirty) {
             entry.dirty = true;
             renderTemplateList();
         }
+        if (entry !== currentEntry()) return;
         renderDesign();
         renderLevels();
-        if (!options || options.panel !== false) renderProperties();
+        if (options && options.panel === 'soon') refreshPanelSoon();
+        else renderProperties();
         updateToolbar();
+    }
+
+    let panelRefresh = null;
+
+    function refreshPanelSoon() {
+        clearTimeout(panelRefresh);
+        panelRefresh = setTimeout(() => {
+            const panel = byId('properties');
+            const active = document.activeElement;
+            let focusKey = null;
+            let selection = null;
+            if (active && panel.contains(active)) {
+                focusKey = active.dataset.field || null;
+                try {
+                    if (typeof active.selectionStart === 'number') selection = [active.selectionStart, active.selectionEnd];
+                } catch (error) {
+                    selection = null;
+                }
+            }
+            const scrollTop = panel.scrollTop;
+            renderProperties();
+            panel.scrollTop = scrollTop;
+            if (!focusKey) return;
+            const next = [...panel.querySelectorAll('[data-field]')].find(node => node.dataset.field === focusKey);
+            if (!next) return;
+            next.focus();
+            if (selection && typeof next.setSelectionRange === 'function') {
+                try {
+                    next.setSelectionRange(selection[0], selection[1]);
+                } catch (error) {
+                    // Number and colour fields have no text selection.
+                }
+            }
+        }, 0);
     }
 
     // --- images, fonts and samples ------------------------------------------
@@ -381,7 +474,12 @@
         if (typeof src !== 'string') return null;
         if (/^data:image\/(png|jpe?g|webp);base64,/i.test(src)) return src;
         const match = /^assets\/([0-9a-f]{32}\.(?:png|jpg|webp))$/.exec(src);
-        return match ? `/api/template-assets/${match[1]}` : null;
+        if (match) return `/api/template-assets/${match[1]}`;
+        // A file put next to the templates by hand, as older templates did.
+        if (/^(?:assets\/)?[A-Za-z0-9._-]+\.(?:png|jpe?g|webp)$/i.test(src)) {
+            return `/api/template-files/${src.split('/').map(encodeURIComponent).join('/')}`;
+        }
+        return null;
     }
 
     function loadImage(src) {
@@ -624,6 +722,9 @@
                 if (image) {
                     object = new fabric.FabricImage(image, Object.assign(common, {
                         scaleX: item.width / image.naturalWidth, scaleY: item.height / image.naturalHeight,
+                        // A frame covers the page: a click on its transparent
+                        // middle reaches the photo beneath instead of the frame.
+                        perPixelTargetFind: !plain,
                     }));
                 } else {
                     if (plain) return null;
@@ -674,6 +775,10 @@
         if (item.kind === 'line') {
             ['mt', 'mb', 'tl', 'tr', 'bl', 'br'].forEach(control => object.setControlVisible(control, false));
         }
+        if (item.kind === 'label') {
+            // Its height is its lines': a side widens the box, a corner scales the lettering.
+            ['mt', 'mb'].forEach(control => object.setControlVisible(control, false));
+        }
         return object;
     }
 
@@ -681,6 +786,8 @@
     const canvas = new fabric.Canvas('designCanvas', {
         width: canvasArea.clientWidth,
         height: canvasArea.clientHeight,
+        // Transparent pixels closer than this still count as the image.
+        targetFindTolerance: 4,
         renderOnAddRemove: false,
         preserveObjectStacking: true,
         stopContextMenu: true,
@@ -698,7 +805,9 @@
         renderScheduled = true;
         requestAnimationFrame(() => {
             renderScheduled = false;
-            renderDesign();
+            // A late image or font is not worth throwing the operator out of
+            // the text they are typing; the edit's own commit redraws.
+            if (!isEditingText()) renderDesign();
         });
     }
 
@@ -726,7 +835,9 @@
             if (selected.length === 1) {
                 canvas.setActiveObject(selected[0]);
             } else if (selected.length > 1) {
-                canvas.setActiveObject(new fabric.ActiveSelection(selected, { canvas }));
+                const selection = new fabric.ActiveSelection(selected, { canvas });
+                lockSlotRotation(selection);
+                canvas.setActiveObject(selection);
             }
             state.selectedIds = selected.map(object => object.elementId);
         }
@@ -864,8 +975,11 @@
     // Fabric is still finishing the gesture when it reports it: drawing the
     // canvas again from inside would end the same transform a second time,
     // and report it again. The design is read now, the canvas rebuilt after.
+    // The template is taken now: by the time the step is recorded, another
+    // one may be open.
     function commitAfterGesture() {
-        setTimeout(commit, 0);
+        const entry = currentEntry();
+        setTimeout(() => commit({ entry }), 0);
     }
 
     canvas.on('object:modified', event => {
@@ -885,7 +999,30 @@
         }
     });
 
+    // Typing straight on the page: ended before anything replaces the canvas
+    // objects, so the text typed so far lands in the design instead of
+    // vanishing with the object that held it.
+    function finishTextEditing() {
+        const object = canvas.getActiveObject();
+        if (object && object.isEditing) object.exitEditing();
+    }
+
+    function isEditingText() {
+        const object = canvas.getActiveObject();
+        return !!(object && object.isEditing);
+    }
+
+    // The booth never turns a photo or a variable text, so neither does a
+    // selection that holds one.
+    function lockSlotRotation(selection) {
+        if (!(selection instanceof fabric.ActiveSelection)) return;
+        const holdsSlot = selection.getObjects().some(object => object instanceof PhotoSlot || object instanceof FieldBox);
+        selection.set({ lockRotation: holdsSlot });
+        selection.setControlVisible('mtr', !holdsSlot);
+    }
+
     function syncSelectionFromCanvas() {
+        lockSlotRotation(canvas.getActiveObject());
         if (suppressSelectionEvents) return;
         state.selectedIds = canvas.getActiveObjects().map(object => object.elementId).filter(Boolean);
         if (state.selectedIds.length) {
@@ -1110,11 +1247,43 @@
         return payload;
     }
 
+    // A photo straight from a camera can be heavier, or larger, than the booth
+    // takes. It is scaled down to what the page can show at 600 dpi, and only
+    // when it has to be, so a picture that fits is kept exactly as sent.
+    async function fitImageForBooth(file, page) {
+        let bitmap;
+        try {
+            bitmap = await createImageBitmap(file);
+        } catch (error) {
+            return file;
+        }
+        const pixels = bitmap.width * bitmap.height;
+        if (file.size <= CONFIG.assetBytesLimit && pixels <= CONFIG.pageLimits.pixels) {
+            bitmap.close();
+            return file;
+        }
+        const longest = Math.min(MAX_CANVAS_SIDE, Math.max(page.width, page.height) * FLATTEN_SCALE);
+        let scale = Math.min(1, longest / Math.max(bitmap.width, bitmap.height), Math.sqrt(CONFIG.pageLimits.pixels / pixels));
+        const type = file.type === 'image/png' || file.type === 'image/webp' ? 'image/png' : 'image/jpeg';
+        let blob = file;
+        for (let attempt = 0; attempt < 6; attempt++) {
+            const surface = document.createElement('canvas');
+            surface.width = Math.max(1, Math.round(bitmap.width * scale));
+            surface.height = Math.max(1, Math.round(bitmap.height * scale));
+            surface.getContext('2d').drawImage(bitmap, 0, 0, surface.width, surface.height);
+            blob = await canvasToBlob(surface, type, 0.9);
+            if (blob.size <= CONFIG.assetBytesLimit) break;
+            scale *= 0.75;
+        }
+        bitmap.close();
+        return blob;
+    }
+
     async function addImageFiles(files) {
         const entry = currentEntry();
         if (!entry) return;
         const page = entry.template.page;
-        const accepted = [...files].filter(file => /^image\/(png|jpeg|webp)$/.test(file.type));
+        const accepted = [...files].filter(file => /^image\/(png|jpe?g|webp)$/.test(file.type));
         if (!accepted.length) {
             if (files.length) alert(I18N.image_unsupported);
             return;
@@ -1122,7 +1291,7 @@
         setBusy(I18N.uploading_image);
         try {
             for (const file of accepted) {
-                const asset = await uploadImageBlob(file, file.name);
+                const asset = await uploadImageBlob(await fitImageForBooth(file, page), file.name);
                 await loadImage(asset.filename);
                 const scale = Math.min(1, (page.width * 0.8) / asset.width, (page.height * 0.8) / asset.height);
                 const width = Math.round(asset.width * scale);
@@ -1144,7 +1313,7 @@
         if (!found || !file) return;
         setBusy(I18N.uploading_image);
         try {
-            const asset = await uploadImageBlob(file, file.name);
+            const asset = await uploadImageBlob(await fitImageForBooth(file, currentEntry().template.page), file.name);
             await loadImage(asset.filename);
             const item = found.element;
             // Same place, same width, the new picture's own proportions.
@@ -1423,17 +1592,27 @@
 
     // --- the properties panel -----------------------------------------------
 
-    function section(parent, title) {
+    function section(parent, title, key) {
         const node = element('div', 'prop-section');
+        node.dataset.section = key || title || '';
         if (title) node.append(element('h3', null, title));
         parent.append(node);
         return node;
+    }
+
+    // Each field is named by its section and label, so the panel can give
+    // focus back to the same field after it is drawn again.
+    function nameField(parent, label, control) {
+        const input = control.matches('input, select, textarea') ? control : control.querySelector('input, select, textarea');
+        const owner = parent.closest('.prop-section');
+        if (input) input.dataset.field = `${owner ? owner.dataset.section : ''}/${label}`;
     }
 
     function row(parent, label, control) {
         const node = element('label', 'prop-row');
         node.append(element('span', null, label), control);
         parent.append(node);
+        nameField(parent, label, control);
         return control;
     }
 
@@ -1518,6 +1697,7 @@
         input.addEventListener('change', () => onChange(input.checked));
         node.append(input, document.createTextNode(label));
         parent.append(node);
+        nameField(parent, label, input);
         return input;
     }
 
@@ -1543,7 +1723,7 @@
 
     function finalEdit(item, changes) {
         Object.assign(item, changes);
-        commit({ panel: false });
+        commit({ panel: 'soon' });
     }
 
     function renderProperties() {
@@ -1582,7 +1762,7 @@
             renderLevels();
         }, value => {
             level.name = value.trim().slice(0, 60) || I18N.level_default_name;
-            commit({ panel: false });
+            commit({ panel: 'soon' });
         }));
         row(levelSection, I18N.opacity, opacityInput(level.opacity, value => {
             level.opacity = value;
@@ -1590,7 +1770,7 @@
             renderLevels();
         }, value => {
             level.opacity = value;
-            commit({ panel: false });
+            commit({ panel: 'soon' });
         }));
 
         const help = section(panel, I18N.shortcuts);
@@ -1609,7 +1789,7 @@
             renderDesign();
         }, value => {
             found.forEach(item => { item.element.opacity = value; });
-            commit({ panel: false });
+            commit({ panel: 'soon' });
         }));
         buttons(node, [
             { label: I18N.duplicate, onClick: duplicateSelection },
@@ -1964,7 +2144,9 @@
         event.preventDefault();
         canvasArea.classList.add('dropping');
     });
-    canvasArea.addEventListener('dragleave', () => canvasArea.classList.remove('dropping'));
+    canvasArea.addEventListener('dragleave', event => {
+        if (!canvasArea.contains(event.relatedTarget)) canvasArea.classList.remove('dropping');
+    });
     canvasArea.addEventListener('drop', event => {
         canvasArea.classList.remove('dropping');
         if (!currentEntry() || !event.dataTransfer.files.length) return;
@@ -1981,7 +2163,22 @@
         return !!(object && object.isEditing);
     }
 
+    function openDialog() {
+        return document.querySelector('.modal.show');
+    }
+
     document.addEventListener('keydown', event => {
+        // A dialog in front: the design behind it is out of reach. Escape
+        // closes the dialog, Enter confirms a new template.
+        const dialog = openDialog();
+        if (dialog) {
+            if (event.key === 'Escape') dialog.classList.remove('show');
+            if (event.key === 'Enter' && dialog.id === 'newTemplateModal' && event.target.tagName !== 'BUTTON') {
+                event.preventDefault();
+                byId('confirmNewTemplate').click();
+            }
+            return;
+        }
         if (event.key === ' ' && !typingSomewhere()) {
             if (!spaceHeld) {
                 spaceHeld = true;
@@ -2059,7 +2256,7 @@
     // An image on the clipboard becomes an image of the design; otherwise
     // what was copied in the editor is pasted, shifted so it shows.
     document.addEventListener('paste', event => {
-        if (typingSomewhere() || state.busy || !currentEntry()) return;
+        if (openDialog() || typingSomewhere() || state.busy || !currentEntry()) return;
         const files = [...(event.clipboardData ? event.clipboardData.files : [])].filter(file => file.type.startsWith('image/'));
         event.preventDefault();
         if (files.length) addImageFiles(files);
@@ -2101,14 +2298,15 @@
         // only, never markup, or a crafted template would run script with the
         // admin session that opened this editor.
         const meta = element('div', 'template-item-meta');
-        const name = element('div', 'template-item-name', entry.template.name || '');
+        const name = element('div', 'template-item-name', String(entry.template.name || entry.filename || ''));
         if (entry.dirty) {
             const dot = element('span', 'dirty', '●');
             dot.title = I18N.unsaved_changes;
             name.append(dot);
         }
-        meta.append(name, element('div', 'template-item-desc', entry.template.description || ''));
+        meta.append(name, element('div', 'template-item-desc', typeof entry.template.description === 'string' ? entry.template.description : ''));
         if (!isDraft(entry)) meta.append(element('div', 'template-item-file', `templates/${entry.filename}`));
+        if (entry.error) meta.append(element('div', 'template-item-error', fmt(I18N.booth_rejected, { error: entry.error })));
 
         const actions = element('div', 'template-item-actions');
         actions.append(
@@ -2120,16 +2318,24 @@
     }
 
     function selectTemplate(index) {
+        const entry = state.entries[index];
+        if (entry && !openEntry(entry)) {
+            alert(fmt(I18N.cannot_open, { error: entry.error || I18N.invalid_file }));
+            return false;
+        }
+        finishTextEditing();
         state.current = index;
         state.selectedIds = [];
-        const entry = currentEntry();
-        if (entry) {
-            openEntry(entry);
-            state.activeLevelId = entry.design.levels[entry.design.levels.length - 1].id;
-        }
+        if (entry) state.activeLevelId = entry.design.levels[entry.design.levels.length - 1].id;
         renderAll();
         fitView();
-        if (entry) loadFonts(entry.design).then(scheduleRender);
+        if (entry) {
+            loadFonts(entry.design).then(() => {
+                fabric.cache.clearFontCache();
+                scheduleRender();
+            });
+        }
+        return true;
     }
 
     function renderAll() {
@@ -2142,7 +2348,21 @@
 
     function addEntry(entry) {
         state.entries.push(entry);
-        selectTemplate(state.entries.length - 1);
+        if (!selectTemplate(state.entries.length - 1)) state.entries.pop();
+        return state.entries.includes(entry);
+    }
+
+    // Opens the first template that can be opened from `index` on, or none.
+    function selectFrom(index) {
+        for (let candidate = Math.max(0, index); candidate < state.entries.length; candidate++) {
+            if (openEntry(state.entries[candidate])) {
+                selectTemplate(candidate);
+                return;
+            }
+        }
+        state.current = -1;
+        state.selectedIds = [];
+        renderAll();
     }
 
     function duplicateTemplate(index) {
@@ -2157,8 +2377,9 @@
 
     async function deleteTemplate(index) {
         const entry = state.entries[index];
-        const boothCount = state.entries.filter(candidate => !isDraft(candidate)).length;
-        if (!isDraft(entry) && boothCount <= 1) {
+        // Files the booth refuses do not count: it would be left with none it prints.
+        const usable = candidate => !isDraft(candidate) && !candidate.error;
+        if (usable(entry) && state.entries.filter(usable).length <= 1) {
             alert(I18N.keep_one_template);
             return;
         }
@@ -2179,12 +2400,14 @@
             return;
         }
 
+        const wasCurrent = index === state.current;
         state.entries.splice(index, 1);
-        if (index < state.current || state.current >= state.entries.length) state.current -= 1;
-        if (state.current >= 0) {
-            selectTemplate(state.current);
+        if (wasCurrent) {
+            state.current = -1;
+            selectFrom(Math.min(index, state.entries.length - 1));
         } else {
-            renderAll();
+            if (index < state.current) state.current -= 1;
+            renderTemplateList();
         }
     }
 
@@ -2417,6 +2640,9 @@
         await uploadEmbeddedImages(entry);
         await Promise.all(allElements(design).filter(item => item.kind === 'image').map(item => loadImage(item.src)));
         await loadFonts(design);
+        // Text measured before its font arrived would be laid out with the
+        // fallback's widths: lines broken and aligned in the wrong places.
+        fabric.cache.clearFontCache();
 
         const missing = allElements(design).filter(item => item.kind === 'image' && !readyImage(item.src));
         if (missing.length) throw new Error(I18N.images_missing_error);
@@ -2461,8 +2687,8 @@
         });
 
         return {
-            name: (entry.template.name || '').trim() || I18N.new_template_name,
-            description: (entry.template.description || '').trim(),
+            name: String(entry.template.name || '').trim() || I18N.new_template_name,
+            description: String(entry.template.description || '').trim(),
             page: clone(page),
             photos: slots.map(item => ({ x: item.x, y: item.y, width: item.width, height: item.height })),
             texts,
@@ -2486,7 +2712,7 @@
     async function saveCurrent() {
         const entry = currentEntry();
         if (!entry || state.busy) return;
-        if (canvas.getActiveObject() && canvas.getActiveObject().isEditing) canvas.getActiveObject().exitEditing();
+        finishTextEditing();
         setBusy(I18N.saving);
         try {
             const template = await buildBoothTemplate(entry);
@@ -2500,6 +2726,7 @@
             entry.filename = payload.filename || entry.filename;
             entry.template = Object.assign(template, { design: null });
             entry.dirty = false;
+            entry.error = null;
             cleanUpAssets();
             renderAll();
             showStatus(fmt(I18N.saved, { file: entry.filename }));
@@ -2513,6 +2740,7 @@
     async function previewCurrent() {
         const entry = currentEntry();
         if (!entry || state.busy) return;
+        finishTextEditing();
         setBusy(I18N.preparing_preview);
         try {
             const template = await buildBoothTemplate(entry);
@@ -2569,6 +2797,7 @@
     byId('exportButton').addEventListener('click', async () => {
         const entry = currentEntry();
         if (!entry || state.busy) return;
+        finishTextEditing();
         setBusy(I18N.exporting);
         try {
             const template = await buildBoothTemplate(entry);
@@ -2613,7 +2842,7 @@
     // Fonts arrive after the first drawing; text measured in a fallback font
     // is measured again once the real one is there.
     document.fonts.addEventListener('loadingdone', () => {
-        if (fabric.cache && fabric.cache.clearFontCache) fabric.cache.clearFontCache();
+        fabric.cache.clearFontCache();
         scheduleRender();
     });
 
@@ -2626,16 +2855,19 @@
             const payload = await response.json();
             if (isObject(payload.text_values)) state.textValues = payload.text_values;
             (Array.isArray(payload.templates) ? payload.templates : []).forEach(item => {
-                if (isObject(item) && isObject(item.template) && isObject(item.template.page) && item.filename) {
-                    state.entries.push(makeEntry(item.template, item.filename));
-                }
+                if (!isObject(item) || typeof item.filename !== 'string') return;
+                // Listed even when the booth refuses it, with the reason:
+                // the file is there, and hiding it would hide why.
+                const entry = makeEntry(isObject(item.template) ? item.template : {}, item.filename);
+                entry.error = typeof item.error === 'string' ? item.error : null;
+                state.entries.push(entry);
             });
         } catch (error) {
             state.boothLoadError = error.message;
         }
 
         if (state.entries.length) {
-            selectTemplate(0);
+            selectFrom(0);
         } else {
             renderAll();
             if (!state.boothLoadError) openNewTemplateDialog();

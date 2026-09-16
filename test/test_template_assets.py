@@ -167,6 +167,46 @@ def test_the_editor_routes_are_for_the_admin_only(server, path):
     assert server.app.test_client().get(path).status_code == 302
 
 
+def test_an_image_put_beside_the_templates_by_hand_is_served_to_the_editor(client, server):
+    """Older templates name their frame as a file next to them."""
+    directory = Path(server.templates_directory)
+    (directory / 'assets').mkdir(parents=True)
+    (directory / 'frame.png').write_bytes(png_bytes())
+    (directory / 'assets' / 'logo.jpg').write_bytes(b'jpeg bytes')
+
+    assert client.get('/api/template-files/frame.png').mimetype == 'image/png'
+    assert client.get('/api/template-files/assets/logo.jpg').mimetype == 'image/jpeg'
+
+
+@pytest.mark.parametrize('name', ['strip.json', '../config.ini.example', 'other/frame.png', 'missing.png'])
+def test_only_image_files_of_the_templates_are_served(client, server, name):
+    directory = Path(server.templates_directory)
+    (directory / 'other').mkdir(parents=True)
+    (directory / 'strip.json').write_text('{}', encoding='utf-8')
+    (directory / 'other' / 'frame.png').write_bytes(png_bytes())
+
+    assert client.get(f'/api/template-files/{name}').status_code == 404
+
+
+def test_the_template_list_says_why_the_booth_refuses_a_file(client, server):
+    """The folder shows the file; the editor has to show why the booth does not."""
+    directory = Path(server.templates_directory)
+    directory.mkdir(parents=True)
+    (directory / 'good.json').write_text(json.dumps({
+        'name': 'Good', 'page': {'width': 600, 'height': 400},
+        'photos': [{'x': 0, 'y': 0, 'width': 600, 'height': 400}],
+    }), encoding='utf-8')
+    (directory / 'no_photo.json').write_text(json.dumps({'name': 'No photo', 'page': {'width': 600, 'height': 400}}), encoding='utf-8')
+    (directory / 'broken.json').write_text('{ not json', encoding='utf-8')
+
+    listed = {item['filename']: item for item in client.get('/api/templates').get_json()['templates']}
+
+    assert listed['good.json']['error'] is None
+    assert 'photos' in listed['no_photo.json']['error']
+    assert listed['no_photo.json']['template']['name'] == 'No photo'
+    assert 'JSON' in listed['broken.json']['error']
+
+
 def test_a_preview_of_an_invalid_template_says_why(client):
     response = client.post('/api/templates/preview', json={'template': {'name': 'Broken'}})
 

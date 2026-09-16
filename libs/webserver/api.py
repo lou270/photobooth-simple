@@ -290,6 +290,24 @@ def create_blueprint(server):
         response.headers['Cache-Control'] = 'private, max-age=31536000, immutable'
         return response
 
+    @blueprint.route('/api/template-files/<path:name>', methods=['GET'])
+    def read_template_file(name):
+        """An image a template names as a plain file, put beside the templates by hand.
+
+        The same names a template may use for its layers, and only those, so
+        the editor can show and flatten a template made before assets existed.
+        """
+        auth_error = server._require_admin_api_auth()
+        if auth_error is not None:
+            return auth_error
+
+        path = paths.safe_template_image_path(server.templates_directory, name)
+        if path is None:
+            return jsonify({'error': 'Image not found'}), 404
+
+        extension = name.rsplit('.', 1)[1].lower()
+        return send_file(path, mimetype=ASSET_MIMETYPES['jpg' if extension == 'jpeg' else extension])
+
     @blueprint.route('/api/template-assets/cleanup', methods=['POST'])
     def clean_up_template_assets():
         """Remove images no template mentions any more, once they are old enough."""

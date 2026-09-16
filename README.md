@@ -203,7 +203,8 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 - **Formats:** 10x15 cm, 5x15 cm strips and custom sizes; strips printed twice across the sheet.
 - **Booth preview:** Shows the booth's own assembly of the template, with the sample photos, next to the editor's drawing.
 - **Import/Export:** A template exports as one JSON file with its images inside, which another booth can import or take as it is.
-- **The booth's templates and drafts:** The list shows the files in `templates/` apart from what is not saved yet; the ready-made layouts are starting points in the *New template* dialog.
+- **The booth's templates and drafts:** The list shows the files in `templates/` apart from what is not saved yet; a file the booth refuses is listed with the reason. The ready-made layouts are starting points in the *New template* dialog.
+- **Images:** A photo heavier than 12 MB or larger than 40 megapixels is scaled down in the browser to what the page can show at 600 dpi before it is sent. Images a template names as plain files beside it, as older templates did, are shown and printed like the others.
 
 When a design is saved, each run of decoration between two photo slots or variable texts is flattened
 by the browser into one image at 600 dpi, cropped to what it covers and stored in `templates/assets/`

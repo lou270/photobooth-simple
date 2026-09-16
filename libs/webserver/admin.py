@@ -40,7 +40,7 @@ EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
     'sample_event', 'section_booth', 'section_drafts', 'booth_empty', 'booth_load_failed', 'page_too_large',
     'duplicate_template', 'delete_template', 'copy_name', 'keep_one_template', 'confirm_delete_with_file',
     'confirm_delete', 'delete_failed', 'new_template_name', 'saved', 'save_failed', 'saving', 'invalid_file',
-    'imported', 'parse_failed', 'unsaved_changes',
+    'imported', 'parse_failed', 'unsaved_changes', 'booth_rejected', 'cannot_open',
     # elements and levels
     'canvas_photo', 'badge_field', 'element_field', 'kind_image', 'kind_rect', 'kind_ellipse', 'kind_line',
     'kind_label', 'level_default_name', 'level_numbered', 'level_background', 'level_photos', 'level_foreground',

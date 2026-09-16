@@ -149,7 +149,12 @@ class WebServer:
         self._watchdog_thread.start()
 
     def _load_template_definitions(self):
-        """Load all template JSON files from the templates directory."""
+        """Load all template JSON files from the templates directory.
+
+        A file the booth would refuse is listed all the same, with the reason
+        in `error`: the editor shows the operator why a template they can see
+        in the folder never appears on the booth.
+        """
         templates = []
 
         if not os.path.isdir(self.templates_directory):
@@ -163,17 +168,23 @@ class WebServer:
             if not os.path.isfile(template_path):
                 continue
 
+            entry = {'filename': filename, 'template': {}, 'error': None}
             try:
                 with open(template_path, 'r', encoding='utf-8') as handle:
                     template_data = json.load(handle)
-
-                if isinstance(template_data, dict):
-                    templates.append({
-                        'filename': filename,
-                        'template': template_data,
-                    })
-            except Exception as e:
+            except (OSError, ValueError) as e:
                 Logger.error(f'WebServer: Error loading template {filename}: {e}')
+                entry['error'] = f'not a readable JSON file: {e}'
+                templates.append(entry)
+                continue
+
+            if isinstance(template_data, dict):
+                entry['template'] = template_data
+            try:
+                validate_template(template_data)
+            except TemplateValidationError as e:
+                entry['error'] = str(e)
+            templates.append(entry)
 
         return templates
 
