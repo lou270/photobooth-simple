@@ -156,7 +156,11 @@ class PhotoboothApp(App):
         watched a black window. Only the settings are read before this point.
         """
         Logger.info('PhotoboothApp: build().')
-        if self.FULLSCREEN: Window.fullscreen = True
+        if self.FULLSCREEN:
+            Window.fullscreen = True
+            # Guests use the touchscreen: a pointer parked in the middle of the
+            # welcome picture is all a fullscreen booth would show of a mouse.
+            Window.show_cursor = False
         _title_font, text_font = event.welcome_fonts(self.WELCOME_FONT)
         self.loading = LoadingScreen(font_name=text_font)
         return self.loading

@@ -147,6 +147,15 @@ managed_block() {
     rm -f "$tmp"
 }
 
+# boot_config_block <block-name> - managed_block into the firmware config, under
+# an [all] filter. Raspberry Pi OS ends config.txt with [all], but a file that
+# ends inside [pi4] or [cm5] would otherwise apply the block to that board only,
+# and on any other one the overlay would quietly never load.
+boot_config_block() {
+    local name="$1"
+    { printf '[all]\n'; cat; } | managed_block "$(boot_config_path)" "$name"
+}
+
 # kernel_cmdline_set <cmdline.txt> <argument...> - make the Pi's kernel command
 # line carry each argument, replacing an earlier one with the same name
 # (loglevel=7 gives way to loglevel=3). managed_block cannot do this job: the
@@ -259,6 +268,10 @@ has_boot_config() { boot_config_path > /dev/null; }
 
 has_wayfire() { [ -f /etc/wayfire/defaults.ini ]; }
 
+# labwc replaced Wayfire on Raspberry Pi OS at the end of 2024, and is the only
+# desktop Trixie ships: a kiosk step that knew only Wayfire left the taskbar up.
+has_labwc() { [ -f /etc/xdg/labwc/autostart ] || [ -f "$HOME/.config/labwc/autostart" ]; }
+
 # GRUB as Debian and Ubuntu package it: /etc/default/grub.d/*.cfg is read after
 # /etc/default/grub, which is what lets the booth add to it without editing it.
 has_grub() { [ -f /etc/default/grub ] && command -v update-grub > /dev/null 2>&1; }
@@ -317,4 +330,21 @@ enabled() { [ "${1:-no}" = "yes" ]; }
 booth_config() {
     local key="$1"
     "${PHOTOBOOTH_PYTHON:-python3}" "${PHOTOBOOTH_DIR:?}/tools/booth_config.py" "$key"
+}
+
+# config_ini_set <KEY> <value> - rewrite one existing `KEY = value` line of
+# config.ini, leaving its comments and every other line alone. Says nothing when
+# the value is already the one asked for, so a re-run stays quiet.
+config_ini_set() {
+    local key="$1"
+    local value="$2"
+    local file="${PHOTOBOOTH_DIR:?}/config.ini"
+    if [ ! -f "$file" ] || ! grep -q "^${key} *=" "$file"; then
+        return 0
+    fi
+    if grep -q "^${key} *= *${value} *\$" "$file"; then
+        return 0
+    fi
+    run sed -i "s/^${key} *=.*/${key} = ${value}/" "$file"
+    is_dry_run || print_success "config.ini: ${key} = ${value}"
 }

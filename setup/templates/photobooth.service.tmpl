@@ -10,12 +10,16 @@ Group=${PHOTOBOOTH_GROUP}
 WorkingDirectory=${PHOTOBOOTH_DIR_ESCAPED}
 Environment=PYTHONUNBUFFERED=1
 Environment=DISPLAY=${DISPLAY_TARGET}
+Environment=XAUTHORITY=${PHOTOBOOTH_HOME_ESCAPED}/.Xauthority
+Environment=XDG_RUNTIME_DIR=/run/user/${PHOTOBOOTH_UID}
+ExecStartPre=/bin/sh ${PHOTOBOOTH_DIR_ESCAPED}/setup/wait-for-display.sh
 ExecStart=${PHOTOBOOTH_PYTHON_ESCAPED} ${PHOTOBOOTH_DIR_ESCAPED}/photoboothapp.py
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=300
 StartLimitBurst=20
 KillMode=control-group
+TimeoutStartSec=150
 TimeoutStopSec=15
 StandardOutput=append:/var/log/photobooth.log
 StandardError=append:/var/log/photobooth.log

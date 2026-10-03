@@ -134,9 +134,12 @@ fi
 
 print_info "Step 1/8: base system packages"
 
-# gettext-base carries envsubst, which renders every template below.
-apt_ensure gcc make build-essential git scons swig \
-    ffmpeg libturbojpeg0 libgl1 \
+# gettext-base carries envsubst, which renders every template below. libgl1 is
+# what the pip builds of Kivy and OpenCV load at import. Only names that exist
+# unchanged from Bookworm to Trixie: apt_ensure stops the whole install on a
+# package the release no longer has.
+apt_ensure gcc make build-essential git curl \
+    ffmpeg libgl1 \
     python3-pip python3-venv gettext-base
 
 # ---------------------------------------------------------------------------
@@ -197,6 +200,22 @@ if ! is_dry_run && [ -f "$PHOTOBOOTH_DIR/config.ini" ]; then
     fi
 fi
 
+# config.ini.example describes a full booth: fullscreen off for development, a
+# DS620 and a ring light expected. Left as it is, a kiosk booth came up in a
+# window, and one without a printer or a ring was reported broken by the
+# doctor and showed guests a print button that could only fail. The answers
+# above are the truth about this hardware, so they win on these three settings
+# and only in that direction: a printer added by hand is never switched off.
+if enabled "$KIOSK"; then
+    config_ini_set FULLSCREEN True
+fi
+if ! enabled "$PRINTER_SETUP"; then
+    config_ini_set PRINTER None
+fi
+if ! enabled "$LED_RING"; then
+    config_ini_set RINGLED False
+fi
+
 # ---------------------------------------------------------------------------
 # Step 4 - kiosk mode
 # ---------------------------------------------------------------------------
@@ -213,12 +232,25 @@ if enabled "$KIOSK"; then
             print_skip "Wayfire background already configured"
         fi
         print_success "Wayfire panel hidden"
-    else
-        print_skip "Wayfire not installed; leaving the desktop alone"
+    fi
+    if has_labwc; then
+        # Commented rather than deleted, and already commented on a second run.
+        for labwc_autostart in /etc/xdg/labwc/autostart "$HOME/.config/labwc/autostart"; do
+            [ -f "$labwc_autostart" ] || continue
+            as_owner=()
+            case "$labwc_autostart" in
+                /etc/*) as_owner=(sudo) ;;
+            esac
+            run "${as_owner[@]}" sed -i '/^[^#].*wf-panel-pi/ s/^/# /' "$labwc_autostart"
+        done
+        print_success "labwc panel hidden"
+    fi
+    if ! has_wayfire && ! has_labwc; then
+        print_skip "Neither Wayfire nor labwc installed; leaving the desktop alone"
     fi
 
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "kiosk" <<'KIOSK_BLOCK'
+        boot_config_block "kiosk" <<'KIOSK_BLOCK'
 # Suppress the low-voltage warning overlay, which would otherwise draw over the
 # booth's own fullscreen interface during an event.
 avoid_warnings=1
@@ -249,15 +281,25 @@ print_info "Step 5/8: screen"
 
 if [ "$SCREEN" = "ingcool7" ]; then
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "screen-ingcool7" <<'SCREEN_BLOCK'
-# Ingcool 7in 1024x600 touchscreen: it reports no usable EDID, so the mode has
-# to be stated rather than negotiated.
+        BOOT_CONFIG="$(boot_config_path)"
+        boot_config_block "screen-ingcool7" <<'SCREEN_BLOCK'
+# Ingcool 7in 1024x600 touchscreen, powered from the Pi's USB ports. Its mode is
+# set on the kernel command line (video=), see below.
 max_usb_current=1
-hdmi_group=2
-hdmi_mode=87
-hdmi_cvt 1024 600 60 6 0 0 0
-hdmi_drive=1
+usb_max_current_enable=1
 SCREEN_BLOCK
+        # The panel reports no usable EDID, so the mode has to be stated. The
+        # hdmi_group/hdmi_cvt lines this used to write belong to the legacy
+        # firmware display stack: under the KMS driver every current Raspberry
+        # Pi OS uses, and the only one a Pi 5 has, they are ignored, and the
+        # panel came up in whatever mode it guessed. KMS takes the mode from
+        # video=, with CVT timings (M) and the output forced on (D).
+        KERNEL_CMDLINE="$(dirname "$BOOT_CONFIG")/cmdline.txt"
+        if [ -f "$KERNEL_CMDLINE" ]; then
+            kernel_cmdline_set "$KERNEL_CMDLINE" "video=HDMI-A-1:1024x600M@60D"
+        else
+            print_warning "No $KERNEL_CMDLINE; the 1024x600 mode cannot be forced."
+        fi
         NEED_REBOOT=true
     else
         print_warning "No firmware config on this host; set the 1024x600 mode through the display settings instead."
@@ -278,15 +320,28 @@ if enabled "$CAMERA_PICAMERA"; then
         # Anchored at end of line on purpose: the unanchored version appended
         # ',cma-512' again on every run, ending up with cma-512,cma-512.
         run sudo sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,cma-512/' "$BOOT_CONFIG"
-        managed_block "$BOOT_CONFIG" "camera-imx708" <<'CAMERA_BLOCK'
-# Raspberry Pi Camera Module V3
-dtoverlay=imx708,cam0
+        # Same block name as the dtoverlay=imx708,cam0 this used to write, so a
+        # re-run replaces it. That overlay pinned the camera to the CAM0 port:
+        # a Pi 4 has no such port, and on a Pi 5 the ribbon usually sits in the
+        # other one, so the camera was never found. Auto-detection finds it on
+        # whichever port it is plugged into.
+        boot_config_block "camera-imx708" <<'CAMERA_BLOCK'
+# Raspberry Pi Camera Module V3, on whichever camera port it is plugged into.
+camera_auto_detect=1
 CAMERA_BLOCK
         NEED_REBOOT=true
-        print_info "After reboot: libcamera-still --list-cameras"
+        print_info "After reboot: rpicam-still --list-cameras"
     else
         print_warning "No firmware config on this host; the Pi camera cannot be enabled here."
     fi
+    # Preinstalled on the desktop image only: a Lite image has no picamera2,
+    # and the booth fell back to another camera without saying why.
+    apt_ensure python3-picamera2
+    # The venv's numpy 2 shadows Debian's numpy 1.24 on Bookworm, and the apt
+    # simplejpeg that picamera2 imports was built against the latter: the
+    # import fails with "numpy.dtype size changed". A pip simplejpeg in the
+    # venv is built against numpy 2.
+    run "$PHOTOBOOTH_PYTHON" -m pip install --upgrade simplejpeg
 else
     print_skip "Pi Camera not requested"
 fi
@@ -294,7 +349,11 @@ fi
 if enabled "$CAMERA_DSLR"; then
     # libs/gphoto2.py binds libgphoto2.so directly through ctypes, so the shared
     # library and its udev rules are what matter here, not a Python package.
-    apt_ensure gphoto2 libgphoto2-6 libgphoto2-dev
+    # The library itself comes in as a dependency: it is libgphoto2-6 on
+    # Bookworm and libgphoto2-6t64 on Trixie, and naming the first stopped the
+    # install there. libgphoto2-dev carries the unversioned libgphoto2.so that
+    # libs/gphoto2.py loads.
+    apt_ensure gphoto2 libgphoto2-dev
 
     if enabled "$GPHOTO2_UPDATER"; then
         if [ -z "$GPHOTO2_UPDATER_REF" ]; then
@@ -343,6 +402,7 @@ if enabled "$PRINTER_SETUP"; then
     apt_ensure cups libcups2-dev python3-cups printer-driver-gutenprint
 
     run sudo usermod -a -G lpadmin "$(id -un)"
+    run sudo systemctl enable --now cups
     run sudo cupsctl --remote-admin --remote-any
 
     PRINTER_NAME="$(is_dry_run && echo "DS620" || booth_config PRINTER)"
@@ -352,8 +412,11 @@ if enabled "$PRINTER_SETUP"; then
     else
         if [ -z "$PRINTER_URI" ]; then
             # Pick the first USB device CUPS can see. Dye-sub booth printers are
-            # USB, and a booth normally has exactly one.
-            PRINTER_URI="$(lpinfo -v 2>/dev/null | awk '/^direct usb:/ {print $2; exit}' || true)"
+            # USB, and a booth normally has exactly one. Through sudo: listing
+            # devices is an lpadmin operation, the group added above only
+            # counts from the next login, and lpinfo refused with "Forbidden" -
+            # which the 2>/dev/null turned into "no USB printer detected".
+            PRINTER_URI="$(sudo lpinfo -v 2>/dev/null | awk '/^direct usb:/ {print $2; exit}' || true)"
         fi
 
         if [ -z "$PRINTER_URI" ]; then
@@ -385,7 +448,7 @@ print_info "Step 8/8: LED ring"
 
 if enabled "$LED_RING"; then
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "led-spi" <<'SPI_BLOCK'
+        boot_config_block "led-spi" <<'SPI_BLOCK'
 # WS2812 ring light: libs/hardware/led.py bit-bangs the WS2812 timing over SPI0.
 # Wiring: GND to pin 6/9/14/20/25, DIN to pin 19 (GPIO 10 / MOSI), VCC to 5V.
 dtparam=spi=on
@@ -396,10 +459,13 @@ SPI_BLOCK
     else
         print_warning "No SPI bus on this host; libs/hardware/led.py will fall back to NullLed."
     fi
-    # A build failure here must not take the whole install down: libs/hardware/
-    # led.py already treats a missing spidev as "no ring light" and returns
-    # NullLed, so the booth still runs.
-    if ! run "$PHOTOBOOTH_PYTHON" -m pip install spidev; then
+    # The apt package first: spidev has no wheel on PyPI, and building it needs
+    # python3-dev, which nothing installs - so the pip route failed on almost
+    # every fresh image and the ring stayed dark. The venv sees the apt module
+    # through --system-site-packages. A failure here must not take the whole
+    # install down: libs/hardware/led.py treats a missing spidev as "no ring
+    # light" and returns NullLed, so the booth still runs.
+    if ! apt_ensure python3-spidev && ! run "$PHOTOBOOTH_PYTHON" -m pip install spidev; then
         print_warning "spidev did not install; the ring light will fall back to NullLed."
     fi
 else
@@ -422,11 +488,17 @@ if enabled "$AUTOSTART"; then
         PHOTOBOOTH_GROUP="$(id -gn)"
         PHOTOBOOTH_DIR_ESCAPED="$(escape_systemd_value "$PHOTOBOOTH_DIR")"
         PHOTOBOOTH_PYTHON_ESCAPED="$(escape_systemd_value "$VENV_PYTHON")"
-        DISPLAY_TARGET="$(loginctl show-user "$PHOTOBOOTH_USER" -p Display --value 2>/dev/null || true)"
-        DISPLAY_TARGET="${DISPLAY_TARGET:-:0}"
+        PHOTOBOOTH_UID="$(id -u)"
+        PHOTOBOOTH_HOME_ESCAPED="$(escape_systemd_value "$HOME")"
+        # The desktop the booth draws on: X11's :0, or the X server Wayland
+        # starts for X clients, which takes the same name. This used to come
+        # from `loginctl show-user -p Display`, which names a login session
+        # ("c1"), not an X display: the service was started with DISPLAY=c1
+        # and Kivy never opened a window.
+        DISPLAY_TARGET=":0"
 
         export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_DIR_ESCAPED
-        export PHOTOBOOTH_PYTHON_ESCAPED DISPLAY_TARGET
+        export PHOTOBOOTH_PYTHON_ESCAPED DISPLAY_TARGET PHOTOBOOTH_UID PHOTOBOOTH_HOME_ESCAPED
 
         render "$TEMPLATES/photobooth.service.tmpl" /etc/systemd/system/photobooth.service 0644
 
@@ -492,7 +564,7 @@ if enabled "$BOOT_SPLASH"; then
 
     if has_boot_config; then
         BOOT_CONFIG="$(boot_config_path)"
-        managed_block "$BOOT_CONFIG" "boot-splash" <<'SPLASH_BLOCK'
+        boot_config_block "boot-splash" <<'SPLASH_BLOCK'
 # No rainbow square from the firmware before the booth's own splash.
 disable_splash=1
 SPLASH_BLOCK

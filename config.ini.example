@@ -4,7 +4,8 @@
 # their phone asks for, independently of this setting. Available: en, fr
 LANGUAGE = en
 
-# If set to True, the window fill be fullscren
+# If set to True, the booth fills the screen and hides the mouse pointer. The
+# installer sets it on a booth installed in kiosk mode.
 FULLSCREEN = False
 
 # Size of the booth window, in pixels. This is also the mode fullscreen runs at,

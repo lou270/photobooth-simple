@@ -58,10 +58,10 @@ changes nothing.
 The installer is idempotent. Host files are written either as a delimited block:
 
 ```
-# >>> photobooth:screen-ingcool7 >>>
-hdmi_group=2
-...
-# <<< photobooth:screen-ingcool7 <<<
+# >>> photobooth:led-spi >>>
+[all]
+dtparam=spi=on
+# <<< photobooth:led-spi <<<
 ```
 
 or as a whole file rendered from `setup/templates/`. Running it twice rewrites
@@ -72,16 +72,16 @@ one answer is safe.
 
 | Step | Needs | Effect |
 | --- | --- | --- |
-| Base packages | - | Build tools, ffmpeg, libturbojpeg, `gettext-base` for templating |
+| Base packages | - | Build tools, curl, ffmpeg, `libgl1` for Kivy and OpenCV, `gettext-base` for templating |
 | Python | - | Creates `.venv` and installs `requirements.txt` into it |
-| Configuration | - | Creates `config.ini`, generates an admin password if none is set |
-| Kiosk | Wayfire | Hides the panel and the cursor, stops the media-mount dialog |
-| Screen | firmware config | 1024x600 timings for the Ingcool 7" panel |
-| Pi camera | firmware config | `imx708` overlay and the CMA bump libcamera needs |
+| Configuration | - | Creates `config.ini`, generates an admin password if none is set, sets `FULLSCREEN = True` in kiosk mode, `PRINTER = None` and `RINGLED = False` when the booth has neither |
+| Kiosk | labwc or Wayfire | Hides the panel, stops the media-mount dialog; the booth hides the pointer itself in fullscreen |
+| Screen | firmware config | `video=HDMI-A-1:1024x600M@60D` on the kernel command line for the Ingcool 7" panel |
+| Pi camera | firmware config | `camera_auto_detect=1`, the CMA bump libcamera needs, `python3-picamera2`, and a `simplejpeg` built for the venv's numpy |
 | DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
 | Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
-| LED ring | firmware config | Enables SPI, installs `spidev` |
-| Autostart | systemd | `photobooth.service`, restarts on crash, starts at boot |
+| LED ring | firmware config | Enables SPI, installs `python3-spidev` |
+| Autostart | systemd | `photobooth.service`: waits for the desktop's display, restarts on crash, starts at boot |
 | Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
 
 ### The boot splash
@@ -183,7 +183,7 @@ printer CUPS reports. If the printer was not plugged in at the time, plug it in
 and run the installer again, or pin the device explicitly:
 
 ```bash
-lpinfo -v                      # find the URI
+sudo lpinfo -v                 # find the URI
 # then set PRINTER_URI in setup/booth.conf
 ```
 
@@ -234,8 +234,14 @@ ring.
 
 ## Troubleshooting
 
+**The booth does not start at boot.** `systemctl status photobooth.service`
+and `/var/log/photobooth.log`. The service waits up to two minutes for the
+desktop's display (`/tmp/.X11-unix/X0`): the machine has to boot to the desktop
+with automatic login (`sudo raspi-config`, System Options, Boot / Auto Login).
+
 **Camera not detected.** Run `./setup/doctor.sh` first: it says which backends
-are present. For a Pi camera, `libcamera-still --list-cameras` after a reboot.
+are present. For a Pi camera, `rpicam-still --list-cameras` after a reboot
+(`libcamera-still` on older images).
 For a DSLR, `gphoto2 --capture-image`; if it reports the device is busy, the
 gvfs handlers are back - the installer disables them.
 
@@ -258,9 +264,11 @@ set `REMOTE_URL` to the right address. On a network without internet, Android
 may quietly move the phone back onto mobile data - the capture page tells
 guests how to stay connected.
 
-**Screen resolution wrong.** For the Ingcool panel, confirm the
-`photobooth:screen-ingcool7` block is present in the firmware config. Other
-panels usually negotiate their own mode; set `SCREEN=none`. Then set
+**Screen resolution wrong.** For the Ingcool panel, confirm
+`video=HDMI-A-1:1024x600M@60D` is on the line in `cmdline.txt` (beside
+`config.txt`); the `hdmi_cvt` lines older versions wrote there are ignored by
+the KMS display driver. Other panels usually negotiate their own mode; set
+`SCREEN=none`. Then set
 `WINDOW_WIDTH` and `WINDOW_HEIGHT` in `config.ini` to that same mode: the booth
 asks for a real fullscreen rather than a desktop-sized one, so a panel running
 1920x1080 has to be named there as well.
