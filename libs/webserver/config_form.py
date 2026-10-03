@@ -90,6 +90,7 @@ CONFIG_FORM_SECTIONS = (
                          ('picamera2', 'web.config.choices.camera.picamera2'), ('opencv', 'web.config.choices.camera.opencv'),
                          ('fake', 'web.config.choices.camera.fake')]},
             {'section': 'Capture', 'option': 'CALIBRATION', 'control': 'text', 'placeholder': '(1.4, 0, 0)', 'default': 'None', 'default_key': 'web.config.value.disabled'},
+            {'section': 'Capture', 'option': 'DSLR_HOT_PIXEL_FILTER', 'control': 'checkbox', 'default': 'False'},
             {'section': 'Capture', 'option': 'BLUR_CAMERA', 'control': 'checkbox', 'default': 'True'},
             {'section': 'Capture', 'option': 'PREVIEW_BLUR_REFRESH_FRAMES', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'frames', 'default': '3'},
             {'section': 'Capture', 'option': 'BLUR_IMAGES', 'control': 'checkbox', 'default': 'False'},

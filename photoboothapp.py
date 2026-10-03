@@ -110,6 +110,7 @@ class PhotoboothApp(App):
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
         self._dslr_capture_params = config.get_dslr_capture_params()
+        self.DSLR_HOT_PIXEL_FILTER = config.get_dslr_hot_pixel_filter()
         self.EVENT_NAME = config.get_event_name()
         self.DATE_FORMAT = config.get_date_format()
         self.WELCOME_TITLE = config.get_welcome_title()
@@ -211,6 +212,7 @@ class PhotoboothApp(App):
             zoom=self.CALIBRATION,
             dslr_liveview_params=self._dslr_liveview_params,
             dslr_capture_params=self._dslr_capture_params,
+            dslr_hot_pixel_filter=self.DSLR_HOT_PIXEL_FILTER,
             camera_backend=self.CAMERA_BACKEND,
         )
 
@@ -829,6 +831,7 @@ class PhotoboothApp(App):
             zoom=self.CALIBRATION,
             dslr_liveview_params=self._dslr_liveview_params,
             dslr_capture_params=self._dslr_capture_params,
+            dslr_hot_pixel_filter=self.DSLR_HOT_PIXEL_FILTER,
             camera_backend=self.CAMERA_BACKEND,
         )
         self._log_runtime_snapshot('devices_reset')

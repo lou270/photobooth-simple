@@ -440,6 +440,10 @@
             "label": "Calibrage aperçu / photo",
             "help": "Seulement quand l'aperçu et la photo viennent de deux appareils différents (par exemple caméra Raspberry Pi pour l'aperçu, reflex pour la photo) : recadre l'aperçu pour qu'il corresponde à la photo finale. Format (zoom, décalage_x, décalage_y), à obtenir avec l'outil tools/calibrate_zoom.py. Laisser vide pour désactiver."
           },
+          "DSLR_HOT_PIXEL_FILTER": {
+            "label": "Effacer les pixels chauds du reflex",
+            "help": "Efface les petits points blancs ou colorés qu'un capteur vieillissant ajoute à l'image, surtout dans les zones sombres, sur l'aperçu et les photos du reflex. Seuls ces points isolés sont retouchés, le reste de l'image ne change pas. Sans effet sur une webcam ou une caméra Raspberry Pi."
+          },
           "BLUR_CAMERA": {
             "label": "Bords flous autour de l'aperçu",
             "help": "Remplit les bandes vides autour de l'aperçu en direct avec une version floutée de l'image, au lieu de bandes unies."
