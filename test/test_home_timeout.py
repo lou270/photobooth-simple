@@ -174,6 +174,18 @@ class Deciding:
         self.kept += 1
 
 
+def test_the_confirm_counter_follows_each_templates_shot_count():
+    """It was built once for one template, and a longer one ran off its end."""
+    from kivy.uix.boxlayout import BoxLayout
+
+    screen = SimpleNamespace(icons=[], counter_layout=BoxLayout())
+
+    for count in (2, 4, 3):
+        ConfirmCaptureScreen._set_icon_count(screen, count)
+        assert len(screen.icons) == count
+        assert len(screen.counter_layout.children) == count
+
+
 @pytest.fixture
 def quick_auto_keep(monkeypatch):
     monkeypatch.setattr(TIMINGS, 'auto_keep', 0.05)

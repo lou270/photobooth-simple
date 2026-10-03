@@ -81,14 +81,8 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         grid_container.add_widget(self.cards_grid)
         scroll_view.add_widget(grid_container)
 
-        # Build format cards: all of them. The grid wraps and the scroll view
-        # takes over past what fits, so a fourth template is reachable rather
-        # than silently missing.
         self.format_cards = []
-        for format_idx in range(len(self.app.print_formats)):
-            card = self._create_format_card(format_idx)
-            self.cards_grid.add_widget(card)
-            self.format_cards.append(card)
+        self._build_cards()
 
         self.add_widget(scroll_view)
 
@@ -110,6 +104,21 @@ class SelectFormatScreen(HomeTimeoutMixin, ColorScreen):
         Window.bind(on_resize=self._on_window_resize)
         
         # Initial card size calculation
+        self._update_card_sizes()
+
+    def _build_cards(self):
+        # All of them. The grid wraps and the scroll view takes over past what
+        # fits, so a fourth template is reachable rather than silently missing.
+        for format_idx in range(len(self.app.print_formats)):
+            card = self._create_format_card(format_idx)
+            self.cards_grid.add_widget(card)
+            self.format_cards.append(card)
+
+    def rebuild_cards(self):
+        """Show the app's current templates, after the editor changed them."""
+        self.cards_grid.clear_widgets()
+        self.format_cards = []
+        self._build_cards()
         self._update_card_sizes()
 
     def _calculate_card_size(self):

@@ -41,7 +41,7 @@ class WebServer:
     })
 
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
-                 restart_callback=None, remote_store=None, remote_enabled=False, share_enabled=False,
+                 restart_callback=None, templates_changed_callback=None, remote_store=None, remote_enabled=False, share_enabled=False,
                  booth_language=i18n.DEFAULT_LANGUAGE):
         self.save_directory = save_directory
         self.host = host
@@ -58,6 +58,9 @@ class WebServer:
         self._expected_sessions_lock = threading.Lock()
         self.stats_store = stats_store
         self.restart_callback = restart_callback
+        # Told whenever the editor saves or deletes a template, so the booth
+        # offers it without being restarted.
+        self.templates_changed_callback = templates_changed_callback
         # The queue phones send photos to. Kept as a flag of its own rather than
         # inferred from the store: the operator turns the feature off without
         # the photos already received going anywhere.
@@ -370,6 +373,14 @@ class WebServer:
             oldest = sorted(self._expected_sessions, key=self._expected_sessions.get)
             for key in oldest[:overflow]:
                 del self._expected_sessions[key]
+
+    def _templates_changed(self):
+        if not callable(self.templates_changed_callback):
+            return
+        try:
+            self.templates_changed_callback()
+        except Exception as exc:
+            Logger.error(f'WebServer: could not ask the booth to reload its templates: {exc}')
 
     def _event_text_values(self):
         """Today's values for template placeholders, from config.ini as it stands."""

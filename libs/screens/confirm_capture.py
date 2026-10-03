@@ -62,15 +62,9 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
             size_hint=(0.25, 0.1),
             pos_hint={'x': 0.375, 'y':0.85},
         )
+        # Filled on entry: each template asks for its own number of shots, and
+        # the templates can change while the booth runs.
         self.icons = []
-        for _ in range(0, self.app.get_shots_to_take(self._current_format)):
-            icon = ResizeLabel(
-                font_name=ICON_TTF,
-                text=ICON_SHOT_TO_TAKE,
-                wh_fraction=0.07,
-            )
-            self.counter_layout.add_widget(icon)
-            self.icons.append(icon)
         self.overlay_layout.add_widget(self.counter_layout)
 
         # Home button - top left
@@ -155,6 +149,18 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
             self._start_auto_keep()
         return super(ConfirmCaptureScreen, self).on_touch_down(touch)
 
+    def _set_icon_count(self, count):
+        while len(self.icons) < count:
+            icon = ResizeLabel(
+                font_name=ICON_TTF,
+                text=ICON_SHOT_TO_TAKE,
+                wh_fraction=0.07,
+            )
+            self.counter_layout.add_widget(icon)
+            self.icons.append(icon)
+        while len(self.icons) > count:
+            self.counter_layout.remove_widget(self.icons.pop())
+
     def on_entry(self, kwargs={}):
         Logger.info('ConfirmCaptureScreen: on_entry().')
         self._current_shot = kwargs.get('shot') if 'shot' in kwargs else 0
@@ -169,6 +175,7 @@ class ConfirmCaptureScreen(HomeTimeoutMixin, ColorScreen):
         else:
             if not self.counter_layout.parent:
                 self.overlay_layout.add_widget(self.counter_layout)
+            self._set_icon_count(total_shots)
             for i in range(0, total_shots): self.icons[i].text = ICON_SHOT_TO_TAKE
             for i in range(0, self._current_shot + 1): self.icons[i].text = ICON_SHOT_TAKEN
 

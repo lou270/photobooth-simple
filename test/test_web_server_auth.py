@@ -82,6 +82,28 @@ def test_an_authenticated_admin_can_create_a_template(client, server):
     assert json.loads(saved.read_text(encoding='utf-8'))['name'] == 'Strip'
 
 
+def test_saving_and_deleting_a_template_tells_the_booth(client, server):
+    changes = []
+    server.templates_changed_callback = lambda: changes.append(True)
+    login(client)
+
+    filename = client.post('/api/templates', json={'template': valid_template()}).get_json()['filename']
+    assert changes == [True]
+
+    client.delete(f'/api/templates/{filename}')
+    assert changes == [True, True]
+
+
+def test_a_refused_template_does_not_tell_the_booth(client, server):
+    changes = []
+    server.templates_changed_callback = lambda: changes.append(True)
+    login(client)
+
+    client.post('/api/templates', json={'template': valid_template() | {'page': {'width': 0, 'height': 10}}})
+
+    assert changes == []
+
+
 def test_an_invalid_template_is_refused_with_a_reason(client):
     login(client)
 
