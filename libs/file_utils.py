@@ -175,7 +175,7 @@ class FileUtils:
 
     @staticmethod
     def blurry_borders(im, size, blur_cache=None, refresh_blur=True, return_cache=False,
-                       interpolation=cv2.INTER_AREA):
+                       interpolation=cv2.INTER_AREA, blur_kernel=51):
         """
         Add blurry borders to an image.
         OPTIMIZED: Reduced blur kernel size from (101,101) to (51,51) for 4x faster performance.
@@ -184,6 +184,9 @@ class FileUtils:
         shown on the confirm and review screens. The live preview passes
         INTER_LINEAR: it runs this every frame, and AREA costs about twice as
         much for a difference nobody sees on a moving image.
+
+        `blur_kernel` (odd) is in pixels of the image built here; the live
+        preview builds a smaller one than the screen and scales it down.
         """
         width, height = (max(1, int(size[0])), max(1, int(size[1])))
         im_height, im_width = im.shape[:2]
@@ -213,7 +216,7 @@ class FileUtils:
 
         if should_refresh_blur:
             # Recompute the blurred background only when geometry changes or every n frames.
-            blurred_image = cv2.GaussianBlur(im, (51, 51), 0)
+            blurred_image = cv2.GaussianBlur(im, (blur_kernel, blur_kernel), 0)
             blur_cache = {
                 'signature': cache_signature,
                 'blurred_image': blurred_image,

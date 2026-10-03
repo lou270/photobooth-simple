@@ -90,6 +90,21 @@ elif [ -f "$SETUP_DIR/booth.conf" ]; then
     # shellcheck source=/dev/null
     source "$SETUP_DIR/booth.conf"
     print_info "Profile: setup/booth.conf (found automatically)"
+    # Loaded silently, the answers of an earlier run left a plain ./install.sh
+    # with no question to ask, and no way to change one short of editing the
+    # file. Run interactively, it shows them and offers to answer again; the
+    # values it never asks about (PRINTER_URI, PRINTER_PPD, GPHOTO2_*) are kept.
+    if [ "$ASSUME_YES" != "true" ]; then
+        echo ""
+        grep -E '^(KIOSK|SCREEN|CAMERA_PICAMERA|CAMERA_DSLR|PRINTER_SETUP|LED_RING|AUTOSTART|BOOT_SPLASH)=' \
+            "$SETUP_DIR/booth.conf" | sed 's/^/    /'
+        echo ""
+        if ! ask_yes_no "Reuse these answers?"; then
+            for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH; do
+                printf -v "$var" 'ask'
+            done
+        fi
+    fi
 fi
 
 is_dry_run && print_warning "Dry run: nothing will be modified."
@@ -416,12 +431,21 @@ if enabled "$PRINTER_SETUP"; then
             # devices is an lpadmin operation, the group added above only
             # counts from the next login, and lpinfo refused with "Forbidden" -
             # which the 2>/dev/null turned into "no USB printer detected".
-            PRINTER_URI="$(sudo lpinfo -v 2>/dev/null | awk '/^direct usb:/ {print $2; exit}' || true)"
+            # Gutenprint's own backend first (gutenprint53+usb://dnp-ds620/...):
+            # it is the one that drives a dye-sub printer, which CUPS's plain usb
+            # backend often leaves out of its list - matching usb:// alone found
+            # nothing at all with a DS620 plugged in and switched on.
+            DEVICES="$(sudo lpinfo -v 2>/dev/null || true)"
+            PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^gutenprint[0-9]*\+usb:\/\// {print $2; exit}')"
+            if [ -z "$PRINTER_URI" ]; then
+                PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^usb:\/\// {print $2; exit}')"
+            fi
         fi
 
         if [ -z "$PRINTER_URI" ]; then
-            print_warning "No USB printer detected. Plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
-            print_info "Available devices: lpinfo -v"
+            print_warning "No USB printer detected. Switch it on, plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
+            print_info "Devices CUPS sees (sudo lpinfo -v):"
+            printf '%s\n' "${DEVICES:-}" | sed 's/^/    /'
         else
             PPD_PATH="$PHOTOBOOTH_DIR/$PRINTER_PPD"
             if [ -f "$PPD_PATH" ]; then

@@ -308,6 +308,7 @@ class Gphoto2Camera(Camera):
                 continue
             # capture_preview() starts live view again by itself.
             self._liveview_ended = False
+            frame_started_at = time.monotonic()
             try:
                 with self._camera_lock:
                     cfile = self._instance.capture_preview()
@@ -319,7 +320,11 @@ class Gphoto2Camera(Camera):
                     with self._preview_lock:
                         self._preview_frame = im
                         self._preview_frame_id += 1
-                time.sleep(1.0 / self._preview_fps)
+                # Only what is left of the frame period. Sleeping the whole
+                # period on top of the USB transfer and the decode made each
+                # frame cost both: a camera answering in 60 ms gave 8 fps, not
+                # the 15 this is meant to cap at.
+                time.sleep(max(0.0, 1.0 / self._preview_fps - (time.monotonic() - frame_started_at)))
             except Exception as e:
                 self._preview_failures += 1
                 if self._preview_failures in (5, 15) or self._preview_failures % 60 == 0:

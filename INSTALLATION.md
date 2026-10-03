@@ -26,7 +26,8 @@ cd py-photobooth-simple
 ```
 
 The installer asks what hardware this booth has, installs accordingly, and saves
-your answers to `setup/booth.conf`. Then check it:
+your answers to `setup/booth.conf`. Run again, it shows those answers and asks
+whether to reuse them or answer again. Then check it:
 
 ```bash
 ./setup/doctor.sh

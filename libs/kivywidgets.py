@@ -259,6 +259,23 @@ class KivyCamera(Image):
                 if frame_w > max_w or frame_h > max_h:
                     scale = min(max_w / frame_w, max_h / frame_h)
                     im = cv2.resize(im, (int(frame_w * scale), int(frame_h * scale)), interpolation=cv2.INTER_LINEAR)
+                # Compose at the frame's own resolution and let the GPU scale
+                # the texture up to the widget (fit_mode='contain'). A DSLR
+                # live view frame is about 528x352 once decoded at half size,
+                # and enlarging it on the CPU to a 1920x1080 window first - then
+                # blurring, stacking and uploading 6 MB per frame - cost 150 to
+                # 200 ms a frame on a Pi 4: a 4 fps preview. Upscaling adds no
+                # detail the GPU would not add for free.
+                im_h, im_w = im.shape[:2]
+                upscale = min(target_size[0] / im_w, target_size[1] / im_h)
+                blur_kernel = 51
+                if upscale > 1:
+                    target_size = (
+                        max(1, round(target_size[0] / upscale)),
+                        max(1, round(target_size[1] / upscale)),
+                    )
+                    # The same blur once on screen, measured in screen pixels.
+                    blur_kernel = max(3, int(51 / upscale) | 1)
                 refresh_blur = (self._frame_count % self._blur_refresh_frames) == 0
                 im, self._blur_cache = FileUtils.blurry_borders(
                     im,
@@ -268,6 +285,7 @@ class KivyCamera(Image):
                     return_cache=True,
                     # Live preview: speed over the last bit of downscale quality.
                     interpolation=cv2.INTER_LINEAR,
+                    blur_kernel=blur_kernel,
                 )
                 self._frame_count += 1
             elif im.shape[1] > display_size[0] or im.shape[0] > display_size[1]:
