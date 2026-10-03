@@ -225,6 +225,13 @@ MAX_COPIES = 3
 # four times larger and a slower collage on the Raspberry Pi.
 COLLAGE_DPI = 300
 
+# For a sheet the printer cuts into several prints (2x4*3...): where its cuts
+# start, in pixels at 300 dpi from the start of the page its driver describes.
+# The booth lays each copy out on its own print from there, so the cuts fall
+# between them instead of in a template's margin. 20 on a DNP QW410; measure
+# another printer with tools/manual/cut_calibration.py.
+CUT_OFFSET = 20
+
 # Seconds to wait for printer recovery before continuing without printing
 PRINTER_WAIT_TIMEOUT = 45
 

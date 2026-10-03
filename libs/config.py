@@ -25,6 +25,8 @@ CAMERA_BACKENDS = ('auto', 'gphoto2', 'picamera2', 'opencv', 'fake')
 # screen, at four times the pixels to assemble.
 COLLAGE_DPIS = (300, 600)
 DEFAULT_COLLAGE_DPI = 300
+# Measured on a DNP QW410: its cuts fall 20 px into the page its driver describes.
+DEFAULT_CUT_OFFSET = 20
 
 # Window size used when config.ini says nothing: the 7" Ingcool panel the booth
 # is built around. Below MIN_WINDOW_SIDE the interface, sized in fractions of
@@ -349,6 +351,15 @@ class Config:
         stepper on the review screen, so a mistouch cannot empty a ribbon.
         """
         return min(10, max(1, self._get_int(('Print', 'Picture'), 'MAX_COPIES', fallback=3)))
+
+    def get_cut_offset(self):
+        """Where the printer starts measuring its cuts, in pixels at 300 dpi from the start of its page.
+
+        A printer cutting a sheet into several prints cuts at fixed lengths,
+        counted from a point a little inside the page its driver describes.
+        Measured on a DNP QW410 with tools/manual/cut_calibration.py.
+        """
+        return min(100, max(0, self._get_int(('Print', 'Picture'), 'CUT_OFFSET', fallback=DEFAULT_CUT_OFFSET)))
 
     def get_collage_dpi(self):
         """Resolution the saved and printed collage is assembled at."""

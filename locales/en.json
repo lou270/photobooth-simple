@@ -478,6 +478,10 @@
             "label": "Collage resolution",
             "help": "Templates are drawn at 300 dpi, the printer's own resolution, so 600 dpi does not change the print. It makes the collage sharper in the gallery and on guests' phones, but files are about four times larger and the collage takes a little longer to build."
           },
+          "CUT_OFFSET": {
+            "label": "Where the printer starts its cuts",
+            "help": "For a template printed on a sheet the printer cuts into several prints (2x4*3…): how far into the page the cutter starts measuring, in pixels at 300 dpi. The booth places each copy on its own print from there, so the cuts fall between the copies. 20 on a DNP QW410; another printer is measured with tools/manual/cut_calibration.py."
+          },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Wait when the printer stops answering",
             "help": "When the printer is unplugged or in error, how long the booth waits for it to come back before giving up the print (the photo stays saved). At least 5 seconds."

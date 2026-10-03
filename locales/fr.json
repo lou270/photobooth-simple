@@ -478,6 +478,10 @@
             "label": "Résolution du montage",
             "help": "Les modèles sont dessinés à 300 dpi, la résolution de l'imprimante : 600 dpi ne change donc rien au tirage. Le montage est plus net dans la galerie et sur le téléphone des invités, mais les fichiers sont environ quatre fois plus lourds et le montage prend un peu plus de temps à construire."
           },
+          "CUT_OFFSET": {
+            "label": "Point de départ des coupes",
+            "help": "Pour un modèle imprimé sur une feuille que l'imprimante découpe en plusieurs tirages (2x4*3…) : à quelle distance du début de la page l'imprimante commence à mesurer ses coupes, en pixels à 300 dpi. La borne place chaque exemplaire sur son propre tirage à partir de là, pour que les coupes tombent entre les exemplaires. 20 sur une DNP QW410 ; une autre imprimante se mesure avec tools/manual/cut_calibration.py."
+          },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Attente si l'imprimante ne répond plus",
             "help": "Quand l'imprimante est débranchée ou en erreur, temps pendant lequel la borne attend son retour avant d'abandonner l'impression (la photo reste enregistrée). Minimum 5 secondes."

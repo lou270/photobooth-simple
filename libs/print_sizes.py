@@ -102,6 +102,95 @@ def _inches(value):
     return f'{value:g}'
 
 
+_PPD_ENTRY = re.compile(r'^\*(PageSize|PaperDimension|ImageableArea) ([^/:\s]+)(?:/([^:]*))?:\s*"([^"]*)"', re.MULTILINE)
+
+
+def read_ppd(ppd_text):
+    """Every page size in a PPD, with what the driver says of its page.
+
+    Returns {name: {'label': ..., 'paper': [width, height], 'area': [left,
+    bottom, right, top]}}, in points; a size missing either dimension is left
+    without it. Read from the text rather than through pycups, which hides the
+    two geometry keywords behind a per-attribute lookup.
+    """
+    pages = {}
+    for keyword, name, label, value in _PPD_ENTRY.findall(ppd_text):
+        page = pages.setdefault(name, {'label': ''})
+        if keyword == 'PageSize':
+            page['label'] = (label or '').strip()
+            continue
+        try:
+            numbers = [float(number) for number in value.split()]
+        except ValueError:
+            continue
+        if keyword == 'PaperDimension' and len(numbers) == 2:
+            page['paper'] = numbers
+        elif keyword == 'ImageableArea' and len(numbers) == 4:
+            page['area'] = numbers
+    return pages
+
+
+def _pixels(points, dpi=300):
+    return int(round(points * dpi / POINTS_PER_INCH))
+
+
+def cut_layout(page_size, page, copies, design_size, cut_offset):
+    """Where the copies of a design go on the driver's page, so the cuts fall between them.
+
+    The driver's page is longer than the paper (1836 px at 300 dpi for 6
+    inches, 1800 px), and the cutter measures its prints off from a point
+    inside it, cut_offset pixels from the start. Stretched to that page, as
+    print-scaling=fit does, the copies drift away from the cuts: on a QW410's
+    2x4*3 the joins land at 612 and 1224 while the cutter goes through 620 and
+    1220, enough to eat a 10 px margin. Laid out at the page's own size, the
+    sheet is printed as it is, and each copy starts where its print does.
+
+    Returns None when the design is not exactly one print of this size, or
+    the driver did not describe the page: the sheet is then laid out as
+    before, and fitted. Otherwise a dict, in pixels at 300 dpi:
+        rotate: the design is turned a quarter turn first,
+        along_x: copies follow each other along x rather than y,
+        pad: (top, bottom, left, right) around the copies, filled by
+            prolonging their edges, since all of it is printed past the paper.
+    """
+    size = describe(page_size, (page or {}).get('label', ''))
+    if size is None or size['count'] != copies or copies < 2 or 'paper' not in page or 'area' not in page:
+        return None
+    match = _NAME.match(page_size)
+    paper_across = _pixels(float(match.group(1)))
+    paper_along = _pixels(float(match.group(2)))
+    piece = paper_along // copies
+    if piece * copies != paper_along:
+        return None
+
+    # The side the driver prints edge to edge runs along the paper; the other
+    # has margins, the print head being wider than the paper.
+    (paper_width, paper_height), (left, bottom, right, top) = page['paper'], page['area']
+    along_x = left == 0 and right == paper_width
+    if not along_x and not (bottom == 0 and top == paper_height):
+        return None
+    page_along = _pixels(paper_width if along_x else paper_height)
+    page_across = _pixels(top - bottom if along_x else right - left)
+
+    # One print, either way round: piece along the paper, its width across.
+    wanted = (piece, paper_across) if along_x else (paper_across, piece)
+    if tuple(design_size) == wanted:
+        rotate = False
+    elif tuple(design_size[::-1]) == wanted:
+        rotate = True
+    else:
+        return None
+
+    lead = cut_offset
+    trail = page_along - lead - paper_along
+    side = page_across - paper_across
+    if trail < 0 or side < 0:
+        return None
+    before, after = side // 2, side - side // 2
+    pad = (before, after, lead, trail) if along_x else (lead, trail, before, after)
+    return {'rotate': rotate, 'along_x': along_x, 'pad': pad}
+
+
 def describe_all(choices):
     """Every usable size in a printer's (name, label) list, in the driver's order."""
     sizes = []

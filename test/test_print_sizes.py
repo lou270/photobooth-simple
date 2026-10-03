@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.print_sizes import FALLBACK_PAGE_SIZES, describe, describe_all
+from libs.print_sizes import FALLBACK_PAGE_SIZES, cut_layout, describe, describe_all, read_ppd
 
 
 def test_the_qw410_cuts_a_4x6_into_three_2x4():
@@ -88,3 +88,49 @@ def test_a_real_qw410_driver_offers_every_size_but_the_mixed_ones():
 
 def test_every_fallback_size_is_usable():
     assert len(describe_all(FALLBACK_PAGE_SIZES)) == len(FALLBACK_PAGE_SIZES)
+
+
+# --- laying copies out where the cutter separates them ----------------------
+
+# The QW410's own lines for the sizes measured with tools/manual/cut_calibration.py.
+QW410_GEOMETRY = '''
+*PageSize w288h288-div2/2x4*2:  "<</PageSize[296.640 337.920]/ImagingBBox null>>setpagedevice"
+*PageSize w288h432-div3/2x4*3:  "<</PageSize[337.920 440.640]/ImagingBBox null>>setpagedevice"
+*ImageableArea w288h288-div2/2x4*2:     "0.000 17.040 296.640 320.880"
+*ImageableArea w288h432-div3/2x4*3:     "17.040 0.000 320.880 440.640"
+*PaperDimension w288h288-div2/2x4*2:    "296.640 337.920"
+*PaperDimension w288h432-div3/2x4*3:    "337.920 440.640"
+'''
+
+
+def test_the_ppd_gives_each_size_its_label_and_page():
+    pages = read_ppd(QW410_GEOMETRY)
+
+    assert pages['w288h432-div3'] == {
+        'label': '2x4*3', 'paper': [337.92, 440.64], 'area': [17.04, 0.0, 320.88, 440.64]}
+
+
+@pytest.mark.parametrize('design, rotate', [((600, 1200), True), ((1200, 600), False)])
+def test_three_2x4_start_where_the_qw410_cuts_a_4x6(design, rotate):
+    """Measured: the cuts fall at 620 and 1220 on a 1836 px page, 20 px in."""
+    layout = cut_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], 3, design, 20)
+
+    assert layout == {'rotate': rotate, 'along_x': False, 'pad': (20, 16, 33, 33)}
+
+
+def test_on_a_page_the_driver_turns_the_copies_follow_each_other_along_x():
+    layout = cut_layout('w288h288-div2', read_ppd(QW410_GEOMETRY)['w288h288-div2'], 2, (600, 1200), 20)
+
+    assert layout == {'rotate': False, 'along_x': True, 'pad': (33, 33, 20, 16)}
+
+
+@pytest.mark.parametrize('copies, design', [
+    (3, (600, 1800)),   # not one 2x4 print
+    (2, (600, 1200)),   # the sheet is cut in three, not two
+])
+def test_a_design_that_is_not_one_print_of_the_size_is_left_to_be_fitted(copies, design):
+    assert cut_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], copies, design, 20) is None
+
+
+def test_a_size_the_driver_gave_no_geometry_for_is_left_to_be_fitted():
+    assert cut_layout('w288h432-div3', {'label': '2x4*3'}, 3, (600, 1200), 20) is None

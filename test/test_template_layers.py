@@ -188,6 +188,44 @@ def test_the_collage_kept_for_the_gallery_is_one_print(tmp_path, photo):
     assert cv2.imread(str(tmp_path / 'collage_print.jpg')).shape[1::-1] == (1800, 1200)
 
 
+QW410_DIV3 = {'label': '2x4*3', 'paper': [337.92, 440.64], 'area': [17.04, 0.0, 320.88, 440.64]}
+
+
+@pytest.mark.parametrize('dpi', [300, 600])
+def test_on_the_qw410_page_each_copy_starts_where_its_print_does(tmp_path, dpi):
+    """The cutter goes through 620 and 1220: each copy must run from one cut to the next."""
+    shot = tmp_path / 'shot.jpg'
+    # A photo with distinct edges, so a copy shifted by a pixel shows.
+    image = np.zeros((1200, 600, 3), dtype=np.uint8)
+    image[:, :, 0] = np.linspace(0, 255, 600, dtype=np.uint8)
+    image[:, :, 1] = np.linspace(0, 255, 1200, dtype=np.uint8)[:, None]
+    cv2.imwrite(str(shot), image)
+    collage = template(dpi=dpi, page={'width': 600, 'height': 1200},
+                       photos=[{'x': 0, 'y': 0, 'width': 600, 'height': 1200}],
+                       print_params={'PageSize': 'w288h432-div3'}, copies_per_sheet=3)
+    collage.set_printer_page(QW410_DIV3, cut_offset=20)
+    scale = dpi // 300
+
+    one = cv2.rotate(collage.assemble([str(shot)]), cv2.ROTATE_90_CLOCKWISE)
+    sheet = collage.assemble([str(shot)], for_print=True)
+
+    assert sheet.shape[1::-1] == (1266 * scale, 1836 * scale)
+    for start in (20, 620, 1220):
+        copy = sheet[start * scale:(start + 600) * scale, 33 * scale:1233 * scale]
+        assert np.array_equal(copy, one)
+    # Printed past the paper: the design prolonged, not white.
+    assert np.array_equal(sheet[0], sheet[20 * scale])
+    assert np.array_equal(sheet[:, 0], sheet[:, 33 * scale])
+
+
+def test_without_a_printer_the_sheet_is_fitted_as_before(photo):
+    collage = template(page={'width': 600, 'height': 1200}, print_params={'PageSize': 'w288h432-div3'},
+                       copies_per_sheet=3)
+    collage.set_printer_page(None, cut_offset=20)
+
+    assert sheet_size(collage, photo) == (1800, 1200)
+
+
 def test_the_duplicate_flags_still_say_which_way(photo):
     """A strip drawn before copies_per_sheet existed keeps printing as it did."""
     strip = template(page={'width': 600, 'height': 1800}, duplicate_vertical=True)
