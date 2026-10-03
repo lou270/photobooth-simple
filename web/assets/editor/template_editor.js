@@ -1096,6 +1096,16 @@
         byId('zoomLabel').textContent = `${Math.round(canvas.getZoom() * 100)}%`;
     }
 
+    // Every change of view goes through here. The canvas is built with
+    // renderOnAddRemove off, and with it Fabric's setViewportTransform and
+    // zoomToPoint move the view without drawing it: the page stayed where it
+    // was until something else happened to redraw.
+    function setView(transform) {
+        canvas.setViewportTransform(transform);
+        updateZoomLabel();
+        canvas.requestRenderAll();
+    }
+
     function fitView() {
         const entry = currentEntry();
         if (!entry) return;
@@ -1104,14 +1114,13 @@
         const areaHeight = canvas.getHeight();
         const padding = 48;
         const zoom = clamp(Math.min((areaWidth - padding * 2) / width, (areaHeight - padding * 2) / height), 0.02, 8);
-        canvas.setViewportTransform([zoom, 0, 0, zoom, (areaWidth - width * zoom) / 2, (areaHeight - height * zoom) / 2]);
-        updateZoomLabel();
+        setView([zoom, 0, 0, zoom, (areaWidth - width * zoom) / 2, (areaHeight - height * zoom) / 2]);
     }
 
     function zoomAt(factor, point) {
         const zoom = clamp(canvas.getZoom() * factor, 0.02, 8);
         canvas.zoomToPoint(new fabric.Point(point.x, point.y), zoom);
-        updateZoomLabel();
+        setView(canvas.viewportTransform);
     }
 
     function zoomAtCentre(factor) {
@@ -1125,17 +1134,19 @@
             const v = canvas.viewportTransform.slice();
             v[4] -= e.shiftKey ? e.deltaY : e.deltaX;
             v[5] -= e.shiftKey ? 0 : e.deltaY;
-            canvas.setViewportTransform(v);
+            setView(v);
         }
         e.preventDefault();
         e.stopPropagation();
     });
 
     let panning = null;
-    let spaceHeld = false;
 
+    // Ctrl (Cmd on a Mac) + drag moves the view, as does the middle button.
+    // Read from the pointer event itself: a key held since before the window
+    // had the focus never sent its keydown.
     canvasArea.addEventListener('pointerdown', event => {
-        if (event.button === 1 || (event.button === 0 && spaceHeld)) {
+        if (event.button === 1 || (event.button === 0 && (event.ctrlKey || event.metaKey))) {
             panning = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
             canvasArea.setPointerCapture(event.pointerId);
             canvasArea.classList.add('panning');
@@ -1151,7 +1162,7 @@
         v[5] += event.clientY - panning.y;
         panning.x = event.clientX;
         panning.y = event.clientY;
-        canvas.setViewportTransform(v);
+        setView(v);
         event.stopPropagation();
     }, true);
 
@@ -2224,12 +2235,8 @@
             }
             return;
         }
-        if (event.key === ' ' && !typingSomewhere()) {
-            if (!spaceHeld) {
-                spaceHeld = true;
-                canvasArea.classList.add('space-held');
-            }
-            event.preventDefault();
+        if (event.key === 'Control' || event.key === 'Meta') {
+            canvasArea.classList.add('pan-ready');
             return;
         }
         const modifier = event.ctrlKey || event.metaKey;
@@ -2287,16 +2294,10 @@
     });
 
     document.addEventListener('keyup', event => {
-        if (event.key === ' ') {
-            spaceHeld = false;
-            canvasArea.classList.remove('space-held');
-        }
+        if (event.key === 'Control' || event.key === 'Meta') canvasArea.classList.remove('pan-ready');
     });
 
-    window.addEventListener('blur', () => {
-        spaceHeld = false;
-        canvasArea.classList.remove('space-held');
-    });
+    window.addEventListener('blur', () => canvasArea.classList.remove('pan-ready'));
 
     // An image on the clipboard becomes an image of the design; otherwise
     // what was copied in the editor is pasted, shifted so it shows.
