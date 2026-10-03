@@ -99,7 +99,7 @@ CONFIG_FORM_SECTIONS = (
     {
         'id': 'print',
         'fields': (
-            {'section': 'Print', 'option': 'PRINTER', 'control': 'text', 'placeholder': 'DS620', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.printing_disabled'},
+            {'section': 'Print', 'option': 'PRINTER', 'control': 'text', 'placeholder': 'photobooth', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.printing_disabled'},
             {'section': 'Print', 'option': 'MAX_PRINTS', 'control': 'number', 'number_type': 'optional_int', 'min': 0, 'step': 1, 'unit': 'prints', 'placeholder_key': 'web.config.value.unlimited', 'default': 'None', 'default_key': 'web.config.value.unlimited'},
             {'section': 'Print', 'option': 'MAX_COPIES', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 10, 'step': 1, 'unit': 'copies', 'default': '3'},
             {'section': 'Print', 'option': 'COLLAGE_DPI', 'control': 'select', 'default': '300',

@@ -143,6 +143,11 @@ else
     ask_yes_no_var BOOT_SPLASH "Show the welcome picture instead of boot messages while the booth starts?"
 fi
 
+# What the profile itself says, before step 7 fills PRINTER_URI with the
+# printer chosen from a list: that one carries this machine's serial number,
+# and saved into the profile it would follow the profile to the next booth.
+PROFILE_PRINTER_URI="$PRINTER_URI"
+
 # ---------------------------------------------------------------------------
 # Step 1 - base packages
 # ---------------------------------------------------------------------------
@@ -413,6 +418,60 @@ fi
 
 print_info "Step 7/8: printer"
 
+# The queue the booth prints to, whatever printer is behind it: the model is
+# chosen below from what CUPS sees, and config.ini only ever names this queue,
+# so changing printers never means editing it.
+PRINTER_QUEUE=photobooth
+
+# printer_candidates - one "uri<TAB>description" line per printer CUPS can
+# reach, Gutenprint's own USB backend first: it is the one that drives a
+# dye-sub printer, and the same printer often shows up a second time through
+# CUPS's plain usb backend.
+printer_candidates() {
+    sudo lpinfo -l -v 2> /dev/null | awk '
+        /^Device: uri = / { uri = $0; sub(/^Device: uri = /, "", uri); next }
+        /^[ \t]+class = / { class = $0; sub(/^[ \t]+class = /, "", class); next }
+        /^[ \t]+info = / {
+            info = $0; sub(/^[ \t]+info = /, "", info)
+            # Bare backend names ("network lpd") are ways to add a printer by
+            # hand, not printers.
+            if (uri ~ /:\/\// && (class == "direct" || class == "network")) {
+                rank = uri ~ /^gutenprint[0-9]*\+usb:/ ? 0 : (uri ~ /^usb:/ ? 1 : 2)
+                print rank "\t" uri "\t" info
+            }
+        }' | sort -s -t "$(printf '\t')" -k1,1 | cut -f2-
+}
+
+# printer_driver <uri> - the driver lpadmin should use for that printer.
+printer_driver() {
+    local uri="$1" model driver
+    case "$uri" in
+        gutenprint*+usb://*)
+            # gutenprint53+usb://dnp-qw410/serial -> gutenprint.5.3://dnp-qw410/expert
+            model="${uri#*://}"
+            model="${model%%/*}"
+            driver="$(sudo lpinfo -m 2> /dev/null \
+                | awk -v model="$model" '$1 ~ ("^gutenprint[.0-9]*://" model "/expert$") {print $1; exit}')"
+            if [ -n "$driver" ]; then
+                printf -- '-m\t%s' "$driver"
+                return
+            fi
+            ;;
+        ipp://*|ipps://*|dnssd://*)
+            printf -- '-m\teverywhere'
+            return
+            ;;
+    esac
+    # The PPD only for the printer it was written for, named in its file name
+    # (doc/DS620.ppd): on any other model it describes the wrong paper.
+    model="$(basename "$PRINTER_PPD" .ppd)"
+    if [ -f "$PHOTOBOOTH_DIR/$PRINTER_PPD" ] && printf '%s' "$uri" | grep -qi -- "$model"; then
+        printf -- '-P\t%s' "$PHOTOBOOTH_DIR/$PRINTER_PPD"
+    else
+        printf -- '-m\teverywhere'
+    fi
+}
+
 if enabled "$PRINTER_SETUP"; then
     apt_ensure cups libcups2-dev python3-cups printer-driver-gutenprint
 
@@ -420,9 +479,8 @@ if enabled "$PRINTER_SETUP"; then
     run sudo systemctl enable --now cups
     run sudo cupsctl --remote-admin --remote-any
 
-    # cupsctl restarts the scheduler. lpinfo sent straight after it met a
-    # cupsd still starting, got nothing back, and the printer was reported
-    # missing while it sat plugged in and switched on.
+    # cupsctl restarts the scheduler, and lpinfo sent straight after it got
+    # nothing back: a printer plugged in and switched on was reported missing.
     if ! is_dry_run; then
         for _ in $(seq 30); do
             lpstat -r > /dev/null 2>&1 && break
@@ -430,72 +488,69 @@ if enabled "$PRINTER_SETUP"; then
         done
     fi
 
-    PRINTER_NAME="$(is_dry_run && echo "DS620" || booth_config PRINTER)"
+    if [ -z "$PRINTER_URI" ]; then
+        while true; do
+            print_info "Looking for printers..."
+            CANDIDATES=()
+            while IFS= read -r line; do
+                CANDIDATES+=("$line")
+            done < <(printer_candidates)
 
-    if [ -z "$PRINTER_NAME" ]; then
-        print_info "PRINTER is None in config.ini; CUPS installed but no queue registered."
-    else
-        if [ -z "$PRINTER_URI" ]; then
-            # Pick the first USB device CUPS can see. Dye-sub booth printers are
-            # USB, and a booth normally has exactly one. Through sudo: listing
-            # devices is an lpadmin operation, and the group added above only
-            # counts from the next login. Gutenprint's own backend first
-            # (gutenprint53+usb://dnp-qw410/...): it is the one that drives a
-            # dye-sub printer, which CUPS's plain usb backend often leaves out.
-            # A few tries, since backends answer slowly right after a restart.
-            DEVICES=""
-            DEVICES_ERROR=""
-            DEVICES_ERROR_FILE="$(mktemp)"
-            for _ in 1 2 3; do
-                # Its error is kept to be shown: silenced, a refusal and an
-                # empty bus looked the same.
-                DEVICES="$(sudo lpinfo -v 2> "$DEVICES_ERROR_FILE" || true)"
-                DEVICES_ERROR="$(cat "$DEVICES_ERROR_FILE")"
-                PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^gutenprint[0-9]*\+usb:\/\// {print $2; exit}')"
-                if [ -z "$PRINTER_URI" ]; then
-                    PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^usb:\/\// {print $2; exit}')"
+            if [ "${#CANDIDATES[@]}" -eq 0 ]; then
+                print_warning "No printer found. Is it switched on and plugged in?"
+                if [ "$ASSUME_YES" = "true" ] || is_dry_run || ! ask_yes_no "Search again?"; then
+                    break
                 fi
-                [ -n "$PRINTER_URI" ] && break
-                sleep 3
-            done
-            rm -f "$DEVICES_ERROR_FILE"
-        fi
+                continue
+            fi
 
-        if [ -z "$PRINTER_URI" ]; then
-            print_warning "No USB printer detected. Switch it on, plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
-            print_info "Devices CUPS sees (sudo lpinfo -v):"
-            printf '%s\n' "${DEVICES:-}" "${DEVICES_ERROR:-}" | sed '/^$/d; s/^/    /'
-        else
-            # The driver of the printer actually plugged in. The PPD in doc/ is
-            # a DS620's: registered on a QW410 it described another printer,
-            # with the wrong paper sizes. Gutenprint names its driver after the
-            # model in its own URI (gutenprint53+usb://dnp-qw410/serial ->
-            # gutenprint.5.3://dnp-qw410/expert); the PPD file is the fallback
-            # for a printer Gutenprint does not drive.
-            PRINTER_DRIVER=""
-            case "$PRINTER_URI" in
-                gutenprint*+usb://*)
-                    PRINTER_MODEL="${PRINTER_URI#*://}"
-                    PRINTER_MODEL="${PRINTER_MODEL%%/*}"
-                    PRINTER_DRIVER="$(sudo lpinfo -m 2> /dev/null \
-                        | awk -v model="$PRINTER_MODEL" '$1 ~ ("^gutenprint[.0-9]*://" model "/expert$") {print $1; exit}' || true)"
+            if [ "$ASSUME_YES" = "true" ] || is_dry_run; then
+                # Unattended: the first one, which is the USB printer when
+                # there is one. Said out loud, since nobody chose it.
+                PRINTER_URI="${CANDIDATES[0]%%$'\t'*}"
+                print_info "Using the first printer found: ${CANDIDATES[0]#*$'\t'} ($PRINTER_URI)"
+                break
+            fi
+
+            echo ""
+            echo "  Printers found:"
+            for i in "${!CANDIDATES[@]}"; do
+                printf '    %d) %s\n       %s\n' "$((i + 1))" "${CANDIDATES[$i]#*$'\t'}" "${CANDIDATES[$i]%%$'\t'*}"
+            done
+            echo "    r) search again"
+            echo "    0) none, no printer on this booth"
+            echo ""
+            read -r -p "Which printer should the booth use? [1]: " choice
+            choice="${choice:-1}"
+            case "$choice" in
+                r|R) continue ;;
+                0) break ;;
+                *[!0-9]*|'') echo "Please answer with a number from the list." ;;
+                *)
+                    if [ "$choice" -ge 1 ] && [ "$choice" -le "${#CANDIDATES[@]}" ]; then
+                        PRINTER_URI="${CANDIDATES[$((choice - 1))]%%$'\t'*}"
+                        break
+                    fi
+                    echo "Please answer with a number from the list."
                     ;;
             esac
-            PPD_PATH="$PHOTOBOOTH_DIR/$PRINTER_PPD"
-            if [ -n "$PRINTER_DRIVER" ]; then
-                print_info "Registering '$PRINTER_NAME' on $PRINTER_URI with the driver $PRINTER_DRIVER"
-                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m "$PRINTER_DRIVER" -E
-            elif [ -f "$PPD_PATH" ]; then
-                print_info "Registering '$PRINTER_NAME' on $PRINTER_URI using $PRINTER_PPD"
-                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -P "$PPD_PATH" -E
-            else
-                print_warning "No driver for this printer and no PPD at $PPD_PATH; registering with the driverless default."
-                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m everywhere -E
-            fi
-            run sudo cupsaccept "$PRINTER_NAME"
-            run sudo cupsenable "$PRINTER_NAME"
-            print_success "Printer '$PRINTER_NAME' registered"
-        fi
+        done
+    else
+        print_info "Printer from the profile: $PRINTER_URI"
+    fi
+
+    if [ -z "$PRINTER_URI" ]; then
+        print_warning "No printer registered. Plug it in and run the installer again, or set PRINTER_URI in setup/booth.conf."
+    else
+        IFS=$'\t' read -r DRIVER_OPTION DRIVER_VALUE <<< "$(printer_driver "$PRINTER_URI")"
+        print_info "Registering '$PRINTER_QUEUE' on $PRINTER_URI ($DRIVER_VALUE)"
+        run sudo lpadmin -p "$PRINTER_QUEUE" -v "$PRINTER_URI" "$DRIVER_OPTION" "$DRIVER_VALUE" -E
+        run sudo cupsaccept "$PRINTER_QUEUE"
+        run sudo cupsenable "$PRINTER_QUEUE"
+        # The default queue as well, for anything printing without a name.
+        run sudo lpadmin -d "$PRINTER_QUEUE"
+        config_ini_set PRINTER "$PRINTER_QUEUE"
+        print_success "Printer registered as '$PRINTER_QUEUE'"
     fi
 else
     print_skip "Printer support not requested"
@@ -738,7 +793,7 @@ CAMERA_DSLR=$CAMERA_DSLR
 GPHOTO2_UPDATER=$GPHOTO2_UPDATER
 GPHOTO2_UPDATER_REF=$GPHOTO2_UPDATER_REF
 PRINTER_SETUP=$PRINTER_SETUP
-PRINTER_URI=$PRINTER_URI
+PRINTER_URI=$PROFILE_PRINTER_URI
 PRINTER_PPD=$PRINTER_PPD
 LED_RING=$LED_RING
 AUTOSTART=$AUTOSTART

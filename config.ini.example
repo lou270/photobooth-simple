@@ -202,8 +202,9 @@ DISK_MIN_FREE_GB = 2.0
 DISK_MAX_USED_PERCENT = 90.0
 
 [Print]
-# The printer's name in CUPS (None to disable)
-PRINTER = DS620
+# The printer's queue name in CUPS (None to disable). The installer registers
+# the printer chosen from those it finds as 'photobooth', and sets it here.
+PRINTER = photobooth
 
 # Maximum number of prints allowed (None for unlimited)
 MAX_PRINTS = None

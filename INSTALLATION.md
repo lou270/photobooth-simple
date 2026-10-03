@@ -80,7 +80,7 @@ one answer is safe.
 | Screen | firmware config | `video=HDMI-A-1:1024x600M@60D` on the kernel command line for the Ingcool 7" panel |
 | Pi camera | firmware config | `camera_auto_detect=1`, the CMA bump libcamera needs, `python3-picamera2`, and a `simplejpeg` built for the venv's numpy |
 | DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
-| Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
+| Printer | - | CUPS, then the printer chosen from those found, as the queue `photobooth` |
 | LED ring | firmware config | Enables SPI, installs `python3-spidev` |
 | Autostart | systemd | `photobooth.service`: the booth alone on the screen from the console, in `cage`; the desktop is no longer started; USB drives mounted for the photo dump |
 | Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
@@ -203,15 +203,21 @@ optional once the services are disabled.
 
 ### The printer
 
-The installer registers the queue for you, using the name from `PRINTER` in
-`config.ini` (default `DS620`) and the PPD at `doc/DS620.ppd`, on the first USB
-printer CUPS reports. If the printer was not plugged in at the time, plug it in
-and run the installer again, or pin the device explicitly:
+The installer lists the printers CUPS can reach, USB first, and asks which one
+the booth uses (`r` searches again, for a printer switched on late). It
+registers it under the generic queue name `photobooth`, makes that the default
+queue, and sets `PRINTER = photobooth` in `config.ini`, so changing printers
+never means editing the configuration: run the installer again and pick the
+new one.
 
-```bash
-sudo lpinfo -v                 # find the URI
-# then set PRINTER_URI in setup/booth.conf
-```
+A printer Gutenprint drives, as the DNP models do, gets Gutenprint's driver for
+its own model. `doc/DS620.ppd` is used only for a DS620 Gutenprint does not
+drive, and a network printer gets the driverless IPP Everywhere driver.
+
+Unattended (`--yes`), the first printer found is taken. To pin one instead, set
+`PRINTER_URI` in `setup/booth.conf` to a URI from `sudo lpinfo -v`. A printer
+chosen from the list is not saved there: its URI carries the serial number, and
+would follow the profile to the next booth.
 
 CUPS's own web interface stays available at `https://<booth-ip>:631/admin/` for
 anything unusual.
