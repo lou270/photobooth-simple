@@ -178,6 +178,7 @@ def create_blueprint(server):
             Logger.error(f'WebServer: Error saving template {filename}: {e}')
             return jsonify({'error': 'Unable to save template'}), 500
 
+        server._templates_changed()
         return jsonify({'saved': True, 'filename': filename})
 
     @blueprint.route('/api/templates/preview', methods=['POST'])
@@ -229,6 +230,7 @@ def create_blueprint(server):
             Logger.error(f'WebServer: Error deleting template {safe_filename}: {e}')
             return jsonify({'error': 'Unable to delete template'}), 500
 
+        server._templates_changed()
         return jsonify({'deleted': True, 'filename': safe_filename})
 
     def assets_directory():

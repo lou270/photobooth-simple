@@ -136,6 +136,9 @@ class PhotoboothApp(App):
         self._startup_step_count = 0
         self._requested_screen = None
         self._requested_kwargs = None
+        self._templates_lock = threading.Lock()
+        self._templates_generation = 0
+        self._pending_print_formats = None
         self.pending_photo_tasks = []
         self._pending_photo_error = None
         self._pending_photo_lock = threading.Lock()
@@ -216,6 +219,44 @@ class PhotoboothApp(App):
         # template rather than returning an empty list.
         self.print_formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
 
+    def reload_templates(self):
+        """Pick up templates the editor saved or deleted, without a restart.
+
+        Callable from any thread. Loading and drawing the previews happen off
+        the main loop; the new list only replaces the old one on the start
+        screen, so a guest mid-session keeps the template they chose.
+        """
+        with self._templates_lock:
+            self._templates_generation += 1
+            generation = self._templates_generation
+
+        def load():
+            try:
+                formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
+                for print_format in formats:
+                    print_format.get_preview()
+            except Exception as exc:
+                Logger.error('PhotoboothApp: could not reload the templates: %s', exc)
+                return
+            Clock.schedule_once(lambda dt: self._receive_templates(generation, formats), 0)
+
+        threading.Thread(target=load, name='photobooth-template-reload', daemon=True).start()
+
+    def _receive_templates(self, generation, formats):
+        # Two saves in a row start two loads; only the last one is current.
+        if generation != self._templates_generation:
+            return
+        self._pending_print_formats = formats
+        self._install_pending_templates()
+
+    def _install_pending_templates(self):
+        if self._pending_print_formats is None or self.sm is None or self.sm.current != ScreenMgr.START:
+            return
+        self.print_formats = self._pending_print_formats
+        self._pending_print_formats = None
+        self.sm.get_screen(ScreenMgr.SELECT_FORMAT).rebuild_cards()
+        Logger.info('PhotoboothApp: templates reloaded, %s format(s)', len(self.print_formats))
+
     def _open_storage(self):
         config = self._config
         self.storage = SessionStorage(
@@ -275,6 +316,7 @@ class PhotoboothApp(App):
             admin_password=config.get_admin_password(),
             stats_store=self.stats_store,
             restart_callback=self.request_restart,
+            templates_changed_callback=self.reload_templates,
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,
@@ -347,6 +389,8 @@ class PhotoboothApp(App):
     def transition_to(self, new_state, **kwargs):
         self.sm.current_screen.on_exit()
         self.sm.current = new_state
+        # Templates the editor changed during a session wait for it to end.
+        self._install_pending_templates()
         self.sm.current_screen.on_entry(kwargs)
 
     def enter_maintenance_mode(self, message, show_continue=False, show_restart=True):
