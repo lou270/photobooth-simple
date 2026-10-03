@@ -420,6 +420,16 @@ if enabled "$PRINTER_SETUP"; then
     run sudo systemctl enable --now cups
     run sudo cupsctl --remote-admin --remote-any
 
+    # cupsctl restarts the scheduler. lpinfo sent straight after it met a
+    # cupsd still starting, got nothing back, and the printer was reported
+    # missing while it sat plugged in and switched on.
+    if ! is_dry_run; then
+        for _ in $(seq 30); do
+            lpstat -r > /dev/null 2>&1 && break
+            sleep 1
+        done
+    fi
+
     PRINTER_NAME="$(is_dry_run && echo "DS620" || booth_config PRINTER)"
 
     if [ -z "$PRINTER_NAME" ]; then
@@ -428,31 +438,58 @@ if enabled "$PRINTER_SETUP"; then
         if [ -z "$PRINTER_URI" ]; then
             # Pick the first USB device CUPS can see. Dye-sub booth printers are
             # USB, and a booth normally has exactly one. Through sudo: listing
-            # devices is an lpadmin operation, the group added above only
-            # counts from the next login, and lpinfo refused with "Forbidden" -
-            # which the 2>/dev/null turned into "no USB printer detected".
-            # Gutenprint's own backend first (gutenprint53+usb://dnp-ds620/...):
-            # it is the one that drives a dye-sub printer, which CUPS's plain usb
-            # backend often leaves out of its list - matching usb:// alone found
-            # nothing at all with a DS620 plugged in and switched on.
-            DEVICES="$(sudo lpinfo -v 2>/dev/null || true)"
-            PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^gutenprint[0-9]*\+usb:\/\// {print $2; exit}')"
-            if [ -z "$PRINTER_URI" ]; then
-                PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^usb:\/\// {print $2; exit}')"
-            fi
+            # devices is an lpadmin operation, and the group added above only
+            # counts from the next login. Gutenprint's own backend first
+            # (gutenprint53+usb://dnp-qw410/...): it is the one that drives a
+            # dye-sub printer, which CUPS's plain usb backend often leaves out.
+            # A few tries, since backends answer slowly right after a restart.
+            DEVICES=""
+            DEVICES_ERROR=""
+            DEVICES_ERROR_FILE="$(mktemp)"
+            for _ in 1 2 3; do
+                # Its error is kept to be shown: silenced, a refusal and an
+                # empty bus looked the same.
+                DEVICES="$(sudo lpinfo -v 2> "$DEVICES_ERROR_FILE" || true)"
+                DEVICES_ERROR="$(cat "$DEVICES_ERROR_FILE")"
+                PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^gutenprint[0-9]*\+usb:\/\// {print $2; exit}')"
+                if [ -z "$PRINTER_URI" ]; then
+                    PRINTER_URI="$(printf '%s\n' "$DEVICES" | awk '$1 == "direct" && $2 ~ /^usb:\/\// {print $2; exit}')"
+                fi
+                [ -n "$PRINTER_URI" ] && break
+                sleep 3
+            done
+            rm -f "$DEVICES_ERROR_FILE"
         fi
 
         if [ -z "$PRINTER_URI" ]; then
             print_warning "No USB printer detected. Switch it on, plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
             print_info "Devices CUPS sees (sudo lpinfo -v):"
-            printf '%s\n' "${DEVICES:-}" | sed 's/^/    /'
+            printf '%s\n' "${DEVICES:-}" "${DEVICES_ERROR:-}" | sed '/^$/d; s/^/    /'
         else
+            # The driver of the printer actually plugged in. The PPD in doc/ is
+            # a DS620's: registered on a QW410 it described another printer,
+            # with the wrong paper sizes. Gutenprint names its driver after the
+            # model in its own URI (gutenprint53+usb://dnp-qw410/serial ->
+            # gutenprint.5.3://dnp-qw410/expert); the PPD file is the fallback
+            # for a printer Gutenprint does not drive.
+            PRINTER_DRIVER=""
+            case "$PRINTER_URI" in
+                gutenprint*+usb://*)
+                    PRINTER_MODEL="${PRINTER_URI#*://}"
+                    PRINTER_MODEL="${PRINTER_MODEL%%/*}"
+                    PRINTER_DRIVER="$(sudo lpinfo -m 2> /dev/null \
+                        | awk -v model="$PRINTER_MODEL" '$1 ~ ("^gutenprint[.0-9]*://" model "/expert$") {print $1; exit}' || true)"
+                    ;;
+            esac
             PPD_PATH="$PHOTOBOOTH_DIR/$PRINTER_PPD"
-            if [ -f "$PPD_PATH" ]; then
+            if [ -n "$PRINTER_DRIVER" ]; then
+                print_info "Registering '$PRINTER_NAME' on $PRINTER_URI with the driver $PRINTER_DRIVER"
+                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m "$PRINTER_DRIVER" -E
+            elif [ -f "$PPD_PATH" ]; then
                 print_info "Registering '$PRINTER_NAME' on $PRINTER_URI using $PRINTER_PPD"
                 run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -P "$PPD_PATH" -E
             else
-                print_warning "PPD not found at $PPD_PATH; registering with the driverless default."
+                print_warning "No driver for this printer and no PPD at $PPD_PATH; registering with the driverless default."
                 run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m everywhere -E
             fi
             run sudo cupsaccept "$PRINTER_NAME"
