@@ -442,33 +442,60 @@ printer_candidates() {
         }' | sort -s -t "$(printf '\t')" -k1,1 | cut -f2-
 }
 
-# printer_driver <uri> - the driver lpadmin should use for that printer.
+# printer_driver <uri> - the driver lpadmin should use for that printer, as
+# "option<TAB>value", or nothing when there is none to trust.
 printer_driver() {
-    local uri="$1" model driver
+    local uri="$1" id="" key="" driver ppd_model
     case "$uri" in
-        gutenprint*+usb://*)
-            # gutenprint53+usb://dnp-qw410/serial -> gutenprint.5.3://dnp-qw410/expert
-            model="${uri#*://}"
-            model="${model%%/*}"
-            driver="$(sudo lpinfo -m 2> /dev/null \
-                | awk -v model="$model" '$1 ~ ("^gutenprint[.0-9]*://" model "/expert$") {print $1; exit}')"
-            if [ -n "$driver" ]; then
-                printf -- '-m\t%s' "$driver"
-                return
-            fi
-            ;;
         ipp://*|ipps://*|dnssd://*)
+            # Driverless: the printer describes itself over IPP.
             printf -- '-m\teverywhere'
             return
             ;;
+        gutenprint*+usb://*)
+            # gutenprint53+usb://dnp-qw410/serial: Gutenprint's model id.
+            id="${uri#*://}"
+            id="${id%%/*}"
+            key="${id#*-}"
+            ;;
+        usb://*)
+            # usb://DNP/QW410?serial=...: the model after the maker.
+            key="${uri#usb://*/}"
+            key="${key%%\?*}"
+            ;;
     esac
+    key="$(printf '%s' "$key" | tr 'A-Z' 'a-z' | sed 's/%20//g; s/[^a-z0-9]//g')"
+
+    if [ -n "$key" ]; then
+        # Matched loosely on the driver's name and description, so "dnp-qw410"
+        # finds its driver whatever the exact spelling: asking for one name
+        # verbatim found nothing, and the QW410 fell through to a driver it
+        # cannot use. The exact model id first, then Gutenprint's full driver
+        # before its simplified one.
+        driver="$(sudo lpinfo -m 2> /dev/null | awk -v id="$id" -v key="$key" '
+            {
+                name = $1
+                text = tolower($0)
+                gsub(/[^a-z0-9]/, "", text)
+                if (index(text, key) == 0) next
+                rank = 4
+                if (id != "" && name ~ ("://" id "/expert$")) rank = 0
+                else if (id != "" && name ~ ("://" id "/simple$")) rank = 1
+                else if (name ~ /\/expert$/) rank = 2
+                else if (name ~ /\/simple$/) rank = 3
+                print rank "\t" name
+            }' | sort -s -n -k1,1 | head -n 1 | cut -f2)"
+        if [ -n "$driver" ]; then
+            printf -- '-m\t%s' "$driver"
+            return
+        fi
+    fi
+
     # The PPD only for the printer it was written for, named in its file name
     # (doc/DS620.ppd): on any other model it describes the wrong paper.
-    model="$(basename "$PRINTER_PPD" .ppd)"
-    if [ -f "$PHOTOBOOTH_DIR/$PRINTER_PPD" ] && printf '%s' "$uri" | grep -qi -- "$model"; then
+    ppd_model="$(basename "$PRINTER_PPD" .ppd)"
+    if [ -f "$PHOTOBOOTH_DIR/$PRINTER_PPD" ] && printf '%s' "$uri" | grep -qi -- "$ppd_model"; then
         printf -- '-P\t%s' "$PHOTOBOOTH_DIR/$PRINTER_PPD"
-    else
-        printf -- '-m\teverywhere'
     fi
 }
 
@@ -542,15 +569,30 @@ if enabled "$PRINTER_SETUP"; then
     if [ -z "$PRINTER_URI" ]; then
         print_warning "No printer registered. Plug it in and run the installer again, or set PRINTER_URI in setup/booth.conf."
     else
-        IFS=$'\t' read -r DRIVER_OPTION DRIVER_VALUE <<< "$(printer_driver "$PRINTER_URI")"
-        print_info "Registering '$PRINTER_QUEUE' on $PRINTER_URI ($DRIVER_VALUE)"
-        run sudo lpadmin -p "$PRINTER_QUEUE" -v "$PRINTER_URI" "$DRIVER_OPTION" "$DRIVER_VALUE" -E
-        run sudo cupsaccept "$PRINTER_QUEUE"
-        run sudo cupsenable "$PRINTER_QUEUE"
-        # The default queue as well, for anything printing without a name.
-        run sudo lpadmin -d "$PRINTER_QUEUE"
-        config_ini_set PRINTER "$PRINTER_QUEUE"
-        print_success "Printer registered as '$PRINTER_QUEUE'"
+        DRIVER_OPTION=""
+        DRIVER_VALUE=""
+        IFS=$'\t' read -r DRIVER_OPTION DRIVER_VALUE <<< "$(printer_driver "$PRINTER_URI")" || true
+        if [ -z "$DRIVER_VALUE" ]; then
+            # IPP Everywhere, the old last resort, only talks to network
+            # printers: on a USB one lpadmin refused it and the install stopped.
+            print_warning "No driver found for $PRINTER_URI; printer not registered."
+            print_info "Drivers CUPS has for it: sudo lpinfo -m | grep -i <model>"
+            print_info "Then: sudo lpadmin -p $PRINTER_QUEUE -v '$PRINTER_URI' -m <driver> -E, and PRINTER = $PRINTER_QUEUE in config.ini"
+        else
+            print_info "Registering '$PRINTER_QUEUE' on $PRINTER_URI ($DRIVER_VALUE)"
+            # A refusal is reported, not fatal: the rest of the booth still
+            # installs, and the printer can be added in CUPS afterwards.
+            if run sudo lpadmin -p "$PRINTER_QUEUE" -v "$PRINTER_URI" "$DRIVER_OPTION" "$DRIVER_VALUE" -E; then
+                run sudo cupsaccept "$PRINTER_QUEUE"
+                run sudo cupsenable "$PRINTER_QUEUE"
+                # The default queue as well, for anything printing without a name.
+                run sudo lpadmin -d "$PRINTER_QUEUE"
+                config_ini_set PRINTER "$PRINTER_QUEUE"
+                print_success "Printer registered as '$PRINTER_QUEUE'"
+            else
+                print_warning "CUPS refused the printer; see the message above."
+            fi
+        fi
     fi
 else
     print_skip "Printer support not requested"
