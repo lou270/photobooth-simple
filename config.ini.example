@@ -183,6 +183,11 @@ CALIBRATION = None
 # If set to True, photo filters selection will be enabled on confirm screen
 FILTERS = False
 
+# Paint over the hot pixels of an ageing DSLR sensor (white or coloured dots,
+# mostly in dark areas) on its preview and photos. Only small isolated dots are
+# touched. gPhoto2 cameras only.
+DSLR_HOT_PIXEL_FILTER = False
+
 # Recompute blurred preview borders only every N frames to reduce CPU usage.
 # 1 = recompute every frame, 3 = reuse the same blur for 2 frames before refreshing.
 PREVIEW_BLUR_REFRESH_FRAMES = 3

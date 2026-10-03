@@ -23,6 +23,7 @@ except ImportError:
 try:
     import cv2
     import numpy as np
+    from libs.imaging.hot_pixels import remove_hot_pixels
 except ImportError:
     cv2 = None
 
@@ -149,8 +150,11 @@ class Gphoto2Camera(Camera):
     PREVIEW_IDLE_SECONDS = 60
     # How often an idle preview thread checks whether a screen wants frames again.
     PREVIEW_IDLE_POLL_SECONDS = 0.1
+    # Off unless config.ini asks: see libs/imaging/hot_pixels.py.
+    _hot_pixel_filter = False
 
-    def __init__(self, dslr_liveview_params=None, dslr_capture_params=None):
+    def __init__(self, dslr_liveview_params=None, dslr_capture_params=None, hot_pixel_filter=False):
+        self._hot_pixel_filter = hot_pixel_filter
         self._preview_failures = 0
         self._last_reopen_at = None
         self._preview_wanted_at = time.monotonic()
@@ -178,6 +182,12 @@ class Gphoto2Camera(Camera):
                     Logger.info('Could not set default DSLR settings, maybe unsupported camera model.')
 
         if not self._instance: raise Exception('Cannot find any gPhoto2 camera or gPhoto2 is not installed.')
+
+    def _clean_frame(self, image):
+        """Paint over the sensor's hot pixels, when config.ini asks for it."""
+        if not self._hot_pixel_filter:
+            return image
+        return remove_hot_pixels(image)
 
     def _get_param(self, params, key):
         """Returns the value if defined and non-empty, otherwise None."""
@@ -315,6 +325,7 @@ class Gphoto2Camera(Camera):
                 im = cv2.imdecode(buf, self._imread_preview)
                 if im is not None:
                     self._preview_failures = 0
+                    im = self._clean_frame(im)
                     im = cv2.rotate(im, cv2.ROTATE_180)
                     with self._preview_lock:
                         self._preview_frame = im
@@ -472,6 +483,7 @@ class Gphoto2Camera(Camera):
         im = cv2.imdecode(buf, cv2.IMREAD_COLOR)
         if im is None:
             raise IOError('gPhoto2 returned an unreadable image buffer')
+        im = self._clean_frame(im)
         #im = cv2.rotate(im, cv2.ROTATE_180)
         im = self._crop_to_aspect_ratio(im, aspect_ratio)
         im = self._apply_capture_zoom(im, zoom)
@@ -718,7 +730,8 @@ class DeviceUtils:
     _printer = None
 
     def __init__(self, printer_name=None, picamera2_port=0, cv2_port=-1, zoom=None,
-                 dslr_liveview_params=None, dslr_capture_params=None, camera_backend='auto'):
+                 dslr_liveview_params=None, dslr_capture_params=None, dslr_hot_pixel_filter=False,
+                 camera_backend='auto'):
         self._zoom = zoom
         backend = (camera_backend or 'auto').strip().lower()
 
@@ -744,7 +757,8 @@ class DeviceUtils:
         if backend in ('auto', 'gphoto2'):
             try:
                 g2_camera = Gphoto2Camera(dslr_liveview_params=dslr_liveview_params,
-                                          dslr_capture_params=dslr_capture_params)
+                                          dslr_capture_params=dslr_capture_params,
+                                          hot_pixel_filter=dslr_hot_pixel_filter)
             except Exception as e:
                 Logger.warning('DeviceUtils: gPhoto2 unavailable: %s', e)
         if backend in ('auto', 'opencv'):

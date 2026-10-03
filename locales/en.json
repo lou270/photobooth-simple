@@ -440,6 +440,10 @@
             "label": "Preview / photo calibration",
             "help": "Only when the preview and the photo come from two different cameras (say a Pi camera for the preview and a DSLR for the photo): crops the preview to match the final photo. Format (zoom, offset_x, offset_y), produced by tools/calibrate_zoom.py. Leave empty to disable."
           },
+          "DSLR_HOT_PIXEL_FILTER": {
+            "label": "Remove the DSLR's hot pixels",
+            "help": "Removes the small white or coloured dots an ageing sensor adds to the picture, mostly in dark areas, on the DSLR's preview and photos. Only those isolated dots are touched; the rest of the picture is left as it was. No effect on a webcam or a Raspberry Pi camera."
+          },
           "BLUR_CAMERA": {
             "label": "Blurred borders around the preview",
             "help": "Fills the empty bands around the live preview with a blurred copy of the image instead of plain bands."

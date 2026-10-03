@@ -398,6 +398,9 @@ class Config:
     def get_blur_collage(self):
         return self._get_boolean(('Capture', 'Picture'), 'BLUR_COLLAGE', fallback=False)
 
+    def get_dslr_hot_pixel_filter(self):
+        return self._get_boolean(('Capture',), 'DSLR_HOT_PIXEL_FILTER', fallback=False)
+
     def _get_dslr_params(self, section):
         """Returns a dict param -> value for the given DSLR section. Empty or None value = do not set."""
         keys = ['SHUTTERSPEED', 'APERTURE', 'FOCUSMODE', 'ISO']

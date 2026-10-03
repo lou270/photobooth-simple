@@ -379,6 +379,7 @@ GETTERS = {
     ('Capture', 'COUNTDOWN'): 'get_countdown',
     ('Capture', 'CALIBRATION'): 'get_calibration',
     ('Capture', 'FILTERS'): 'get_filters',
+    ('Capture', 'DSLR_HOT_PIXEL_FILTER'): 'get_dslr_hot_pixel_filter',
     ('Capture', 'PREVIEW_BLUR_REFRESH_FRAMES'): 'get_preview_blur_refresh_frames',
     ('Capture', 'BLUR_CAMERA'): 'get_blur_camera',
     ('Capture', 'BLUR_IMAGES'): 'get_blur_images',
