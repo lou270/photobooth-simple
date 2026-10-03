@@ -260,6 +260,43 @@ def test_the_template_editor_speaks_the_booth_language(tmp_path):
         assert i18n.translate('fr', key) != key, f'{key} has no French text'
 
 
+def editor_print_sizes(client):
+    import re
+    page = client.get('/admin/editor').get_data(as_text=True)
+    return json.loads(re.search(r'printSizes: (\[.*?\]),\n', page).group(1)), page
+
+
+def test_the_editor_offers_the_print_sizes_of_the_connected_printer(client, server):
+    server.page_sizes_provider = lambda: [('w288h432', '4x6'), ('w288h432-div2', '2x6*2')]
+    login(client)
+
+    sizes, page = editor_print_sizes(client)
+
+    assert [(size['page_size'], size['count']) for size in sizes] == [('w288h432', 1), ('w288h432-div2', 2)]
+    assert 'Aucune imprimante' not in page and 'No printer found' not in page
+
+
+def test_without_a_printer_the_editor_offers_the_qw410_sizes_and_says_so(client, server):
+    server.page_sizes_provider = lambda: []
+    login(client)
+
+    sizes, page = editor_print_sizes(client)
+
+    assert 'w288h432-div3' in [size['page_size'] for size in sizes]
+    assert 'QW410' in page
+
+
+def test_a_printer_that_cannot_be_asked_does_not_break_the_editor(client, server):
+    def broken():
+        raise RuntimeError('cups is down')
+    server.page_sizes_provider = broken
+    login(client)
+
+    sizes, _page = editor_print_sizes(client)
+
+    assert sizes
+
+
 def test_the_editor_script_only_asks_for_strings_the_page_hands_it():
     """A key missing from the bundle shows as `undefined` in the operator's face."""
     import re

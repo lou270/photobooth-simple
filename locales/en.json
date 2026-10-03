@@ -472,7 +472,7 @@
           },
           "MAX_COPIES": {
             "label": "Maximum copies per print",
-            "help": "Sheets a guest can ask for at once (10 at most). A template that duplicates its collage puts two photos on each sheet. 1 hides the copies selector."
+            "help": "Sheets a guest can ask for at once (10 at most). A template printed on a sheet the printer cuts (2x6*2, 2x4*3…) puts that many photos on each sheet. 1 hides the copies selector."
           },
           "COLLAGE_DPI": {
             "label": "Collage resolution",
@@ -712,10 +712,9 @@
       "portrait": "Portrait",
       "format": "Format:",
       "custom": "Custom",
+      "sizes_not_from_printer": "No printer found: these are the DNP QW410's print sizes. Connect the printer and reload the editor to see its own.",
       "size": "Size:",
       "size_info": "In pixels, at 300 dpi.",
-      "duplicate_horizontal": "Print twice side by side",
-      "duplicate_vertical": "Print twice one above the other",
       "grid": "Grid",
       "step": "Step:",
       "drop_image": "Drop the image here",
@@ -729,11 +728,8 @@
       "starting_point": "Starting point:",
       "starter_empty_landscape": "Empty page, 10x15 cm landscape",
       "starter_empty_portrait": "Empty page, 10x15 cm portrait",
-      "starter_empty_strip": "Empty page, 5x15 cm strip",
       "starter_full_landscape": "One full-page photo, 10x15 cm landscape",
       "starter_full_portrait": "One full-page photo, 10x15 cm portrait",
-      "starter_strip_portrait": "Three-photo strip, vertical",
-      "starter_strip_landscape": "Three-photo strip, horizontal",
       "starter_custom": "Empty page, custom size",
       "starter_info": "A starting point is only a base: nothing is written to the booth until \"Save to the booth\".",
       "cancel": "Cancel",
@@ -846,7 +842,8 @@
         "placeholder_event_title": "Event name, set in the settings",
         "placeholder_date_title": "Day the photo is taken",
         "placeholder_time_title": "Time the photo is taken",
-        "printed_twice": "Printed a second time here",
+        "printed_again": "Printed again here",
+        "per_sheet": "{count} per sheet",
         "status_hint": "Ctrl + wheel to zoom · Space + drag to move around · drop an image on the page to add it",
         "uploading_image": "Uploading the image…",
         "image_failed": "The image was not added: {error}",

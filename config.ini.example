@@ -215,8 +215,8 @@ PRINTER = photobooth
 MAX_PRINTS = None
 
 # Maximum sheets a guest can ask for in one print job (1 hides the selector).
-# A template that duplicates its collage puts two photos on each sheet, so the
-# booth offers up to twice this many finished photos.
+# A template printed on a sheet the printer cuts (2x6*2, 2x4*3...) puts that many
+# photos on each sheet, so the booth offers that many times more finished photos.
 MAX_COPIES = 3
 
 # Resolution the collage is assembled at: 300 or 600 dpi. Templates are drawn at

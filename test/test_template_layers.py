@@ -150,6 +150,51 @@ def test_a_template_duplicated_both_ways_is_four():
     assert template(duplicate_horizontal=True, duplicate_vertical=True).get_copies_per_sheet() == 4
 
 
+@pytest.fixture
+def photo(tmp_path):
+    path = tmp_path / 'shot.jpg'
+    cv2.imwrite(str(path), np.full((100, 100, 3), 90, dtype=np.uint8))
+    return str(path)
+
+
+def sheet_size(collage, photo):
+    return collage.assemble([photo], for_print=True).shape[1::-1]
+
+
+@pytest.mark.parametrize('page, sheet', [
+    ({'width': 600, 'height': 1200}, (1800, 1200)),   # 2x4 upright, three across: 6x4
+    ({'width': 1200, 'height': 600}, (1200, 1800)),   # 2x4 lying down, three high: 4x6
+])
+def test_a_2x4_cut_three_from_a_4x6_fills_the_sheet_whichever_way_it_is_drawn(page, sheet, photo):
+    """The QW410's 2x4*3: anything but a 4x6 sheet would put the cuts through the photos."""
+    collage = template(page=page, copies_per_sheet=3)
+
+    assert collage.get_copies_per_sheet() == 3
+    assert collage.uses_print_version()
+    assert sheet_size(collage, photo) == sheet
+
+
+def test_a_4x3_cut_two_from_a_4x6_is_laid_end_to_end(photo):
+    assert sheet_size(template(page={'width': 1200, 'height': 900}, copies_per_sheet=2), photo) == (1200, 1800)
+
+
+def test_the_collage_kept_for_the_gallery_is_one_print(tmp_path, photo):
+    collage = template(page={'width': 600, 'height': 1200}, copies_per_sheet=3)
+    output = tmp_path / 'collage.jpg'
+
+    collage.assemble([photo], output_path=str(output), for_print=True)
+
+    assert cv2.imread(str(output)).shape[1::-1] == (600, 1200)
+    assert cv2.imread(str(tmp_path / 'collage_print.jpg')).shape[1::-1] == (1800, 1200)
+
+
+def test_the_duplicate_flags_still_say_which_way(photo):
+    """A strip drawn before copies_per_sheet existed keeps printing as it did."""
+    strip = template(page={'width': 600, 'height': 1800}, duplicate_vertical=True)
+
+    assert sheet_size(strip, photo) == (600, 3600)
+
+
 # --- a designed template: images, photos and texts in any order ------------
 
 def solid_png(width, height, bgr, alpha=255):

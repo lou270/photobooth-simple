@@ -319,6 +319,7 @@ class PhotoboothApp(App):
             stats_store=self.stats_store,
             restart_callback=self.request_restart,
             templates_changed_callback=self.reload_templates,
+            page_sizes_provider=self.devices.get_page_sizes,
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,

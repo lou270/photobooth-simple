@@ -198,9 +198,10 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 - **Levels:** A design is a stack of levels, like layers in a drawing program: named, reordered, hidden (a hidden level is not printed), locked, each with its own opacity. Decoration may sit under the photos, over part of them, or between two of them.
 - **Elements:** PNG, JPEG or WebP images (transparency kept; add them from the toolbar, by dropping them on the page or by pasting), rectangles with rounded corners, ellipses, lines, fixed text in the welcome screen's letterings, photo slots and variable texts. Every element has a position, size, rotation and opacity; photo slots and variable texts are not rotated, since the booth draws those itself.
 - **Canvas:** Zoom (Ctrl + wheel) and pan (wheel, or Space + drag), snapping to the page and to other elements with guides, optional grid, multiple selection, align and distribute, undo and redo, copy, paste and duplicate, arrow keys to nudge.
+- **Print format:** The format list is read from the printer's own driver, so it offers what that printer can actually cut: on a DNP QW410, 2x4*3 is a 4x6 sheet cut into three 2x4 prints. Picking one sizes the page to one print, and the booth lays it on the sheet as many times as the printer cuts it. With no printer connected, the editor offers the QW410's sizes.
 - **Photo slots:** Shown with a sample photo cropped the way the booth crops the real one.
 - **Variable texts:** `{event}`, `{date}` and `{time}` placeholders, previewed in the booth's own font with today's values.
-- **Formats:** 10x15 cm, 5x15 cm strips and custom sizes; strips printed twice across the sheet.
+- **Formats:** Any print size the printer offers (see Print format above), or a custom size.
 - **Booth preview:** Shows the booth's own assembly of the template, with the sample photos, next to the editor's drawing.
 - **Import/Export:** A template exports as one JSON file with its images inside, which another booth can import or take as it is.
 - **The booth's templates and drafts:** The list shows the files in `templates/` apart from what is not saved yet; a file the booth refuses is listed with the reason. The ready-made layouts are starting points in the *New template* dialog.

@@ -648,6 +648,28 @@ class CupsPrinter(PrintDevice):
             raise RuntimeError(f"Printer '{self._name}' is not available")
         return self._instance.printFile(self._name, os.path.abspath(file_path), os.path.basename(file_path), print_params)
 
+    def get_page_sizes(self):
+        """The PageSize choices the printer's driver offers, as (name, label) pairs.
+
+        Read from its PPD, where Gutenprint labels each size after the prints
+        it comes out as ("2x4*3"): that label, not the name, says how the
+        sheet is cut, and it differs from one printer to the next.
+
+        Asked from the web server's thread, so on a connection of its own: the
+        booth's is in use by the print jobs it is following.
+        """
+        ppd_path = cups.Connection().getPPD(self._name)
+        try:
+            option = cups.PPD(ppd_path).findOption('PageSize')
+            if option is None:
+                return []
+            return [(choice['choice'], choice['text']) for choice in option.choices]
+        finally:
+            try:
+                os.unlink(ppd_path)
+            except OSError:
+                pass
+
     # IPP job-state values, RFC 8011 section 5.3.7. Naming them because the bare
     # numbers were read backwards: 9 is completed, not canceled, so every
     # successful print was reported as a failure and every failed one as a
@@ -831,6 +853,16 @@ class DeviceUtils:
     def print(self, file_path, print_params={}):
         if not self._printer: raise RuntimeError('No printer configured')
         return self._printer.print(file_path, print_params)
+
+    def get_page_sizes(self):
+        """The printer's (name, label) page sizes, or an empty list without one."""
+        if self._printer is None:
+            return []
+        try:
+            return self._printer.get_page_sizes()
+        except Exception as exc:
+            Logger.warning('DeviceUtils: could not read the printer page sizes: %s', exc)
+            return []
 
     def get_print_status(self, task_id):
         if not self._printer: return 'done'
