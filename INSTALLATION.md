@@ -26,7 +26,8 @@ cd py-photobooth-simple
 ```
 
 The installer asks what hardware this booth has, installs accordingly, and saves
-your answers to `setup/booth.conf`. Then check it:
+your answers to `setup/booth.conf`. Run again, it shows those answers and asks
+whether to reuse them or answer again. Then check it:
 
 ```bash
 ./setup/doctor.sh
@@ -58,10 +59,10 @@ changes nothing.
 The installer is idempotent. Host files are written either as a delimited block:
 
 ```
-# >>> photobooth:screen-ingcool7 >>>
-hdmi_group=2
-...
-# <<< photobooth:screen-ingcool7 <<<
+# >>> photobooth:led-spi >>>
+[all]
+dtparam=spi=on
+# <<< photobooth:led-spi <<<
 ```
 
 or as a whole file rendered from `setup/templates/`. Running it twice rewrites
@@ -72,16 +73,16 @@ one answer is safe.
 
 | Step | Needs | Effect |
 | --- | --- | --- |
-| Base packages | - | Build tools, ffmpeg, libturbojpeg, `gettext-base` for templating |
+| Base packages | - | Build tools, curl, ffmpeg, `libgl1` for Kivy and OpenCV, `gettext-base` for templating |
 | Python | - | Creates `.venv` and installs `requirements.txt` into it |
-| Configuration | - | Creates `config.ini`, generates an admin password if none is set |
-| Kiosk | Wayfire | Hides the panel and the cursor, stops the media-mount dialog |
-| Screen | firmware config | 1024x600 timings for the Ingcool 7" panel |
-| Pi camera | firmware config | `imx708` overlay and the CMA bump libcamera needs |
+| Configuration | - | Creates `config.ini`, generates an admin password if none is set, sets `FULLSCREEN = True` in kiosk mode, `PRINTER = None` and `RINGLED = False` when the booth has neither |
+| Kiosk | labwc or Wayfire | Hides the panel, stops the media-mount dialog; the booth hides the pointer itself in fullscreen |
+| Screen | firmware config | `video=HDMI-A-1:1024x600M@60D` on the kernel command line for the Ingcool 7" panel |
+| Pi camera | firmware config | `camera_auto_detect=1`, the CMA bump libcamera needs, `python3-picamera2`, and a `simplejpeg` built for the venv's numpy |
 | DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
-| Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
-| LED ring | firmware config | Enables SPI, installs `spidev` |
-| Autostart | systemd | `photobooth.service`, restarts on crash, starts at boot |
+| Printer | - | CUPS, then the printer chosen from those found, as the queue `photobooth` |
+| LED ring | firmware config | Enables SPI, installs `python3-spidev` |
+| Autostart | systemd | `photobooth.service`: the booth alone on the screen from the console, in `cage`; the desktop is no longer started; USB drives mounted for the photo dump |
 | Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
 
 ### The boot splash
@@ -101,8 +102,8 @@ loading. With `BOOT_SPLASH=yes` all three show the welcome picture, dimmed:
   go into `/etc/default/grub.d/photobooth-splash.cfg`; hold Shift or press Esc
   during boot to reach the GRUB menu. The maker's logo before that belongs to
   the firmware: turn on its "quiet boot" option.
-- **The desktop** gets the picture as wallpaper, wherever pcmanfm already has a
-  settings file.
+- **The desktop**, on a booth that still starts one (no `AUTOSTART`), gets the
+  picture as wallpaper, wherever pcmanfm already has a settings file.
 - **The application** then shows its own loading screen on the same picture,
   with each step it is at, until the welcome screen is ready.
 
@@ -117,6 +118,31 @@ To go back to the boot messages on a Pi, remove the `photobooth:boot-splash`
 block and the arguments above from `cmdline.txt`; on a mini PC, delete the GRUB
 drop-in and run `sudo update-grub`.
 
+### Without a desktop
+
+With `AUTOSTART=yes` the booth starts straight from the console, alone on the
+screen: `photobooth.service` takes tty1 in place of the login prompt and runs
+the application inside [cage](https://github.com/cage-kiosk/cage), a compositor
+that shows one application fullscreen and nothing else. No taskbar, no "update
+available" notice, no dialog can draw over the booth, and Raspberry Pi OS Lite
+is enough.
+
+The desktop, if the image has one, stays installed but is no longer started,
+and the machine boots to `multi-user.target`. For maintenance:
+
+- Ctrl+Alt+F2 gives a login console beside the booth, Ctrl+Alt+F1 goes back;
+- `sudo systemctl stop photobooth && sudo systemctl start lightdm` brings the
+  desktop back until the next boot;
+- to keep the desktop for good, `sudo systemctl disable photobooth`, then
+  `sudo raspi-config nonint do_boot_behaviour B4` and reboot.
+
+Since nothing else mounts USB drives without a desktop, the installer adds a
+udev rule (`/etc/udev/rules.d/99-photobooth-usb.rules`) mounting FAT32 and exFAT
+drives under `/media/<user>/` for the photo dump.
+
+To run the booth by hand from the console, stop the service first, then
+`cage -- .venv/bin/python photoboothapp.py`.
+
 ### The virtual environment
 
 Dependencies go into `.venv` rather than into the system Python. The environment
@@ -124,7 +150,7 @@ is created with `--system-site-packages`, which is required rather than
 cosmetic: `picamera2`, `libcamera` and `python3-cups` are apt packages with no
 usable pip equivalent, and `libs/device_utils.py` imports them by name.
 
-Run the booth by hand with:
+Run the booth by hand from a desktop with:
 
 ```bash
 .venv/bin/python photoboothapp.py
@@ -177,15 +203,21 @@ optional once the services are disabled.
 
 ### The printer
 
-The installer registers the queue for you, using the name from `PRINTER` in
-`config.ini` (default `DS620`) and the PPD at `doc/DS620.ppd`, on the first USB
-printer CUPS reports. If the printer was not plugged in at the time, plug it in
-and run the installer again, or pin the device explicitly:
+The installer lists the printers CUPS can reach, USB first, and asks which one
+the booth uses (`r` searches again, for a printer switched on late). It
+registers it under the generic queue name `photobooth`, makes that the default
+queue, and sets `PRINTER = photobooth` in `config.ini`, so changing printers
+never means editing the configuration: run the installer again and pick the
+new one.
 
-```bash
-lpinfo -v                      # find the URI
-# then set PRINTER_URI in setup/booth.conf
-```
+A printer Gutenprint drives, as the DNP models do, gets Gutenprint's driver for
+its own model. `doc/DS620.ppd` is used only for a DS620 Gutenprint does not
+drive, and a network printer gets the driverless IPP Everywhere driver.
+
+Unattended (`--yes`), the first printer found is taken. To pin one instead, set
+`PRINTER_URI` in `setup/booth.conf` to a URI from `sudo lpinfo -v`. A printer
+chosen from the list is not saved there: its URI carries the serial number, and
+would follow the profile to the next booth.
 
 CUPS's own web interface stays available at `https://<booth-ip>:631/admin/` for
 anything unusual.
@@ -234,8 +266,13 @@ ring.
 
 ## Troubleshooting
 
+**The booth does not start at boot.** `systemctl status photobooth.service`
+and `/var/log/photobooth.log`. Ctrl+Alt+F2 opens a console beside the booth to
+look.
+
 **Camera not detected.** Run `./setup/doctor.sh` first: it says which backends
-are present. For a Pi camera, `libcamera-still --list-cameras` after a reboot.
+are present. For a Pi camera, `rpicam-still --list-cameras` after a reboot
+(`libcamera-still` on older images).
 For a DSLR, `gphoto2 --capture-image`; if it reports the device is busy, the
 gvfs handlers are back - the installer disables them.
 
@@ -258,9 +295,11 @@ set `REMOTE_URL` to the right address. On a network without internet, Android
 may quietly move the phone back onto mobile data - the capture page tells
 guests how to stay connected.
 
-**Screen resolution wrong.** For the Ingcool panel, confirm the
-`photobooth:screen-ingcool7` block is present in the firmware config. Other
-panels usually negotiate their own mode; set `SCREEN=none`. Then set
+**Screen resolution wrong.** For the Ingcool panel, confirm
+`video=HDMI-A-1:1024x600M@60D` is on the line in `cmdline.txt` (beside
+`config.txt`); the `hdmi_cvt` lines older versions wrote there are ignored by
+the KMS display driver. Other panels usually negotiate their own mode; set
+`SCREEN=none`. Then set
 `WINDOW_WIDTH` and `WINDOW_HEIGHT` in `config.ini` to that same mode: the booth
 asks for a real fullscreen rather than a desktop-sized one, so a panel running
 1920x1080 has to be named there as well.

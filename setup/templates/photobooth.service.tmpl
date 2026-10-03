@@ -1,16 +1,38 @@
 [Unit]
-Description=Simple PhotoBooth application
-After=network-online.target display-manager.service graphical.target
+Description=Simple PhotoBooth application, alone on the screen
+# Started straight from the console, in place of the login prompt on tty1 and
+# of any desktop: cage shows the booth fullscreen and nothing else, so no panel,
+# no "update available" notice and no desktop dialog can ever draw over it.
+After=systemd-user-sessions.service network-online.target plymouth-start.service
 Wants=network-online.target
+# No After=getty@tty1: getty waits for plymouth-quit-wait, which waits for the
+# booth (below), and the cycle would make systemd drop one of them.
+Conflicts=getty@tty1.service
+# The boot splash stays up until the booth draws over it, rather than giving
+# way to the console in between: the booth tells Plymouth to go while keeping
+# its picture (ExecStartPre), before the usual quit would clear the screen.
+Before=plymouth-quit.service plymouth-quit-wait.service
 
 [Service]
 Type=simple
 User=${PHOTOBOOTH_USER}
 Group=${PHOTOBOOTH_GROUP}
 WorkingDirectory=${PHOTOBOOTH_DIR_ESCAPED}
+# A login session on tty1 is what lets cage take the screen and the touch input
+# without running as root: pam_systemd registers it with logind on the seat.
+PAMName=photobooth
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+StandardInput=tty-fail
+UtmpIdentifier=tty1
+UtmpMode=user
+Environment=XDG_SESSION_TYPE=wayland
 Environment=PYTHONUNBUFFERED=1
-Environment=DISPLAY=${DISPLAY_TARGET}
-ExecStart=${PHOTOBOOTH_PYTHON_ESCAPED} ${PHOTOBOOTH_DIR_ESCAPED}/photoboothapp.py
+ExecStartPre=-/usr/bin/plymouth quit --retain-splash
+# -s keeps Ctrl+Alt+F2 working, for a maintenance console beside the booth.
+ExecStart=/usr/bin/cage -s -- ${PHOTOBOOTH_PYTHON_ESCAPED} ${PHOTOBOOTH_DIR_ESCAPED}/photoboothapp.py
 Restart=always
 RestartSec=5
 StartLimitIntervalSec=300
@@ -21,4 +43,4 @@ StandardOutput=append:/var/log/photobooth.log
 StandardError=append:/var/log/photobooth.log
 
 [Install]
-WantedBy=graphical.target
+WantedBy=multi-user.target

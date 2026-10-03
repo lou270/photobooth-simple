@@ -90,6 +90,21 @@ elif [ -f "$SETUP_DIR/booth.conf" ]; then
     # shellcheck source=/dev/null
     source "$SETUP_DIR/booth.conf"
     print_info "Profile: setup/booth.conf (found automatically)"
+    # Loaded silently, the answers of an earlier run left a plain ./install.sh
+    # with no question to ask, and no way to change one short of editing the
+    # file. Run interactively, it shows them and offers to answer again; the
+    # values it never asks about (PRINTER_URI, PRINTER_PPD, GPHOTO2_*) are kept.
+    if [ "$ASSUME_YES" != "true" ]; then
+        echo ""
+        grep -E '^(KIOSK|SCREEN|CAMERA_PICAMERA|CAMERA_DSLR|PRINTER_SETUP|LED_RING|AUTOSTART|BOOT_SPLASH)=' \
+            "$SETUP_DIR/booth.conf" | sed 's/^/    /'
+        echo ""
+        if ! ask_yes_no "Reuse these answers?"; then
+            for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH; do
+                printf -v "$var" 'ask'
+            done
+        fi
+    fi
 fi
 
 is_dry_run && print_warning "Dry run: nothing will be modified."
@@ -124,9 +139,14 @@ else
     ask_yes_no_var CAMERA_DSLR "Use a DSLR over USB (gPhoto2)?"
     ask_yes_no_var PRINTER_SETUP "Install printer support (CUPS)?"
     ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
-    ask_yes_no_var AUTOSTART "Start the booth automatically on boot?"
+    ask_yes_no_var AUTOSTART "Start the booth on boot, alone on the screen (the desktop is no longer started)?"
     ask_yes_no_var BOOT_SPLASH "Show the welcome picture instead of boot messages while the booth starts?"
 fi
+
+# What the profile itself says, before step 7 fills PRINTER_URI with the
+# printer chosen from a list: that one carries this machine's serial number,
+# and saved into the profile it would follow the profile to the next booth.
+PROFILE_PRINTER_URI="$PRINTER_URI"
 
 # ---------------------------------------------------------------------------
 # Step 1 - base packages
@@ -134,9 +154,12 @@ fi
 
 print_info "Step 1/8: base system packages"
 
-# gettext-base carries envsubst, which renders every template below.
-apt_ensure gcc make build-essential git scons swig \
-    ffmpeg libturbojpeg0 libgl1 \
+# gettext-base carries envsubst, which renders every template below. libgl1 is
+# what the pip builds of Kivy and OpenCV load at import. Only names that exist
+# unchanged from Bookworm to Trixie: apt_ensure stops the whole install on a
+# package the release no longer has.
+apt_ensure gcc make build-essential git curl \
+    ffmpeg libgl1 \
     python3-pip python3-venv gettext-base
 
 # ---------------------------------------------------------------------------
@@ -197,6 +220,22 @@ if ! is_dry_run && [ -f "$PHOTOBOOTH_DIR/config.ini" ]; then
     fi
 fi
 
+# config.ini.example describes a full booth: fullscreen off for development, a
+# DS620 and a ring light expected. Left as it is, a kiosk booth came up in a
+# window, and one without a printer or a ring was reported broken by the
+# doctor and showed guests a print button that could only fail. The answers
+# above are the truth about this hardware, so they win on these three settings
+# and only in that direction: a printer added by hand is never switched off.
+if enabled "$KIOSK"; then
+    config_ini_set FULLSCREEN True
+fi
+if ! enabled "$PRINTER_SETUP"; then
+    config_ini_set PRINTER None
+fi
+if ! enabled "$LED_RING"; then
+    config_ini_set RINGLED False
+fi
+
 # ---------------------------------------------------------------------------
 # Step 4 - kiosk mode
 # ---------------------------------------------------------------------------
@@ -213,12 +252,25 @@ if enabled "$KIOSK"; then
             print_skip "Wayfire background already configured"
         fi
         print_success "Wayfire panel hidden"
-    else
-        print_skip "Wayfire not installed; leaving the desktop alone"
+    fi
+    if has_labwc; then
+        # Commented rather than deleted, and already commented on a second run.
+        for labwc_autostart in /etc/xdg/labwc/autostart "$HOME/.config/labwc/autostart"; do
+            [ -f "$labwc_autostart" ] || continue
+            as_owner=()
+            case "$labwc_autostart" in
+                /etc/*) as_owner=(sudo) ;;
+            esac
+            run "${as_owner[@]}" sed -i '/^[^#].*wf-panel-pi/ s/^/# /' "$labwc_autostart"
+        done
+        print_success "labwc panel hidden"
+    fi
+    if ! has_wayfire && ! has_labwc; then
+        print_skip "Neither Wayfire nor labwc installed; leaving the desktop alone"
     fi
 
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "kiosk" <<'KIOSK_BLOCK'
+        boot_config_block "kiosk" <<'KIOSK_BLOCK'
 # Suppress the low-voltage warning overlay, which would otherwise draw over the
 # booth's own fullscreen interface during an event.
 avoid_warnings=1
@@ -249,15 +301,25 @@ print_info "Step 5/8: screen"
 
 if [ "$SCREEN" = "ingcool7" ]; then
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "screen-ingcool7" <<'SCREEN_BLOCK'
-# Ingcool 7in 1024x600 touchscreen: it reports no usable EDID, so the mode has
-# to be stated rather than negotiated.
+        BOOT_CONFIG="$(boot_config_path)"
+        boot_config_block "screen-ingcool7" <<'SCREEN_BLOCK'
+# Ingcool 7in 1024x600 touchscreen, powered from the Pi's USB ports. Its mode is
+# set on the kernel command line (video=), see below.
 max_usb_current=1
-hdmi_group=2
-hdmi_mode=87
-hdmi_cvt 1024 600 60 6 0 0 0
-hdmi_drive=1
+usb_max_current_enable=1
 SCREEN_BLOCK
+        # The panel reports no usable EDID, so the mode has to be stated. The
+        # hdmi_group/hdmi_cvt lines this used to write belong to the legacy
+        # firmware display stack: under the KMS driver every current Raspberry
+        # Pi OS uses, and the only one a Pi 5 has, they are ignored, and the
+        # panel came up in whatever mode it guessed. KMS takes the mode from
+        # video=, with CVT timings (M) and the output forced on (D).
+        KERNEL_CMDLINE="$(dirname "$BOOT_CONFIG")/cmdline.txt"
+        if [ -f "$KERNEL_CMDLINE" ]; then
+            kernel_cmdline_set "$KERNEL_CMDLINE" "video=HDMI-A-1:1024x600M@60D"
+        else
+            print_warning "No $KERNEL_CMDLINE; the 1024x600 mode cannot be forced."
+        fi
         NEED_REBOOT=true
     else
         print_warning "No firmware config on this host; set the 1024x600 mode through the display settings instead."
@@ -278,15 +340,28 @@ if enabled "$CAMERA_PICAMERA"; then
         # Anchored at end of line on purpose: the unanchored version appended
         # ',cma-512' again on every run, ending up with cma-512,cma-512.
         run sudo sed -i 's/^dtoverlay=vc4-kms-v3d$/dtoverlay=vc4-kms-v3d,cma-512/' "$BOOT_CONFIG"
-        managed_block "$BOOT_CONFIG" "camera-imx708" <<'CAMERA_BLOCK'
-# Raspberry Pi Camera Module V3
-dtoverlay=imx708,cam0
+        # Same block name as the dtoverlay=imx708,cam0 this used to write, so a
+        # re-run replaces it. That overlay pinned the camera to the CAM0 port:
+        # a Pi 4 has no such port, and on a Pi 5 the ribbon usually sits in the
+        # other one, so the camera was never found. Auto-detection finds it on
+        # whichever port it is plugged into.
+        boot_config_block "camera-imx708" <<'CAMERA_BLOCK'
+# Raspberry Pi Camera Module V3, on whichever camera port it is plugged into.
+camera_auto_detect=1
 CAMERA_BLOCK
         NEED_REBOOT=true
-        print_info "After reboot: libcamera-still --list-cameras"
+        print_info "After reboot: rpicam-still --list-cameras"
     else
         print_warning "No firmware config on this host; the Pi camera cannot be enabled here."
     fi
+    # Preinstalled on the desktop image only: a Lite image has no picamera2,
+    # and the booth fell back to another camera without saying why.
+    apt_ensure python3-picamera2
+    # The venv's numpy 2 shadows Debian's numpy 1.24 on Bookworm, and the apt
+    # simplejpeg that picamera2 imports was built against the latter: the
+    # import fails with "numpy.dtype size changed". A pip simplejpeg in the
+    # venv is built against numpy 2.
+    run "$PHOTOBOOTH_PYTHON" -m pip install --upgrade simplejpeg
 else
     print_skip "Pi Camera not requested"
 fi
@@ -294,7 +369,11 @@ fi
 if enabled "$CAMERA_DSLR"; then
     # libs/gphoto2.py binds libgphoto2.so directly through ctypes, so the shared
     # library and its udev rules are what matter here, not a Python package.
-    apt_ensure gphoto2 libgphoto2-6 libgphoto2-dev
+    # The library itself comes in as a dependency: it is libgphoto2-6 on
+    # Bookworm and libgphoto2-6t64 on Trixie, and naming the first stopped the
+    # install there. libgphoto2-dev carries the unversioned libgphoto2.so that
+    # libs/gphoto2.py loads.
+    apt_ensure gphoto2 libgphoto2-dev
 
     if enabled "$GPHOTO2_UPDATER"; then
         if [ -z "$GPHOTO2_UPDATER_REF" ]; then
@@ -339,38 +418,180 @@ fi
 
 print_info "Step 7/8: printer"
 
+# The queue the booth prints to, whatever printer is behind it: the model is
+# chosen below from what CUPS sees, and config.ini only ever names this queue,
+# so changing printers never means editing it.
+PRINTER_QUEUE=photobooth
+
+# printer_candidates - one "uri<TAB>description" line per printer CUPS can
+# reach, Gutenprint's own USB backend first: it is the one that drives a
+# dye-sub printer, and the same printer often shows up a second time through
+# CUPS's plain usb backend.
+printer_candidates() {
+    sudo lpinfo -l -v 2> /dev/null | awk '
+        /^Device: uri = / { uri = $0; sub(/^Device: uri = /, "", uri); next }
+        /^[ \t]+class = / { class = $0; sub(/^[ \t]+class = /, "", class); next }
+        /^[ \t]+info = / {
+            info = $0; sub(/^[ \t]+info = /, "", info)
+            # Bare backend names ("network lpd") are ways to add a printer by
+            # hand, not printers.
+            if (uri ~ /:\/\// && (class == "direct" || class == "network")) {
+                rank = uri ~ /^gutenprint[0-9]*\+usb:/ ? 0 : (uri ~ /^usb:/ ? 1 : 2)
+                print rank "\t" uri "\t" info
+            }
+        }' | sort -s -t "$(printf '\t')" -k1,1 | cut -f2-
+}
+
+# printer_driver <uri> - the driver lpadmin should use for that printer, as
+# "option<TAB>value", or nothing when there is none to trust.
+printer_driver() {
+    local uri="$1" id="" key="" driver ppd_model
+    case "$uri" in
+        ipp://*|ipps://*|dnssd://*)
+            # Driverless: the printer describes itself over IPP.
+            printf -- '-m\teverywhere'
+            return
+            ;;
+        gutenprint*+usb://*)
+            # gutenprint53+usb://dnp-qw410/serial: Gutenprint's model id.
+            id="${uri#*://}"
+            id="${id%%/*}"
+            key="${id#*-}"
+            ;;
+        usb://*)
+            # usb://DNP/QW410?serial=...: the model after the maker.
+            key="${uri#usb://*/}"
+            key="${key%%\?*}"
+            ;;
+    esac
+    key="$(printf '%s' "$key" | tr 'A-Z' 'a-z' | sed 's/%20//g; s/[^a-z0-9]//g')"
+
+    if [ -n "$key" ]; then
+        # Matched loosely on the driver's name and description, so "dnp-qw410"
+        # finds its driver whatever the exact spelling: asking for one name
+        # verbatim found nothing, and the QW410 fell through to a driver it
+        # cannot use. The exact model id first, then Gutenprint's full driver
+        # before its simplified one.
+        driver="$(sudo lpinfo -m 2> /dev/null | awk -v id="$id" -v key="$key" '
+            {
+                name = $1
+                text = tolower($0)
+                gsub(/[^a-z0-9]/, "", text)
+                if (index(text, key) == 0) next
+                rank = 4
+                if (id != "" && name ~ ("://" id "/expert$")) rank = 0
+                else if (id != "" && name ~ ("://" id "/simple$")) rank = 1
+                else if (name ~ /\/expert$/) rank = 2
+                else if (name ~ /\/simple$/) rank = 3
+                print rank "\t" name
+            }' | sort -s -n -k1,1 | head -n 1 | cut -f2)"
+        if [ -n "$driver" ]; then
+            printf -- '-m\t%s' "$driver"
+            return
+        fi
+    fi
+
+    # The PPD only for the printer it was written for, named in its file name
+    # (doc/DS620.ppd): on any other model it describes the wrong paper.
+    ppd_model="$(basename "$PRINTER_PPD" .ppd)"
+    if [ -f "$PHOTOBOOTH_DIR/$PRINTER_PPD" ] && printf '%s' "$uri" | grep -qi -- "$ppd_model"; then
+        printf -- '-P\t%s' "$PHOTOBOOTH_DIR/$PRINTER_PPD"
+    fi
+}
+
 if enabled "$PRINTER_SETUP"; then
     apt_ensure cups libcups2-dev python3-cups printer-driver-gutenprint
 
     run sudo usermod -a -G lpadmin "$(id -un)"
+    run sudo systemctl enable --now cups
     run sudo cupsctl --remote-admin --remote-any
 
-    PRINTER_NAME="$(is_dry_run && echo "DS620" || booth_config PRINTER)"
+    # cupsctl restarts the scheduler, and lpinfo sent straight after it got
+    # nothing back: a printer plugged in and switched on was reported missing.
+    if ! is_dry_run; then
+        for _ in $(seq 30); do
+            lpstat -r > /dev/null 2>&1 && break
+            sleep 1
+        done
+    fi
 
-    if [ -z "$PRINTER_NAME" ]; then
-        print_info "PRINTER is None in config.ini; CUPS installed but no queue registered."
-    else
-        if [ -z "$PRINTER_URI" ]; then
-            # Pick the first USB device CUPS can see. Dye-sub booth printers are
-            # USB, and a booth normally has exactly one.
-            PRINTER_URI="$(lpinfo -v 2>/dev/null | awk '/^direct usb:/ {print $2; exit}' || true)"
-        fi
+    if [ -z "$PRINTER_URI" ]; then
+        while true; do
+            print_info "Looking for printers..."
+            CANDIDATES=()
+            while IFS= read -r line; do
+                CANDIDATES+=("$line")
+            done < <(printer_candidates)
 
-        if [ -z "$PRINTER_URI" ]; then
-            print_warning "No USB printer detected. Plug it in and re-run, or set PRINTER_URI in setup/booth.conf."
-            print_info "Available devices: lpinfo -v"
-        else
-            PPD_PATH="$PHOTOBOOTH_DIR/$PRINTER_PPD"
-            if [ -f "$PPD_PATH" ]; then
-                print_info "Registering '$PRINTER_NAME' on $PRINTER_URI using $PRINTER_PPD"
-                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -P "$PPD_PATH" -E
-            else
-                print_warning "PPD not found at $PPD_PATH; registering with the driverless default."
-                run sudo lpadmin -p "$PRINTER_NAME" -v "$PRINTER_URI" -m everywhere -E
+            if [ "${#CANDIDATES[@]}" -eq 0 ]; then
+                print_warning "No printer found. Is it switched on and plugged in?"
+                if [ "$ASSUME_YES" = "true" ] || is_dry_run || ! ask_yes_no "Search again?"; then
+                    break
+                fi
+                continue
             fi
-            run sudo cupsaccept "$PRINTER_NAME"
-            run sudo cupsenable "$PRINTER_NAME"
-            print_success "Printer '$PRINTER_NAME' registered"
+
+            if [ "$ASSUME_YES" = "true" ] || is_dry_run; then
+                # Unattended: the first one, which is the USB printer when
+                # there is one. Said out loud, since nobody chose it.
+                PRINTER_URI="${CANDIDATES[0]%%$'\t'*}"
+                print_info "Using the first printer found: ${CANDIDATES[0]#*$'\t'} ($PRINTER_URI)"
+                break
+            fi
+
+            echo ""
+            echo "  Printers found:"
+            for i in "${!CANDIDATES[@]}"; do
+                printf '    %d) %s\n       %s\n' "$((i + 1))" "${CANDIDATES[$i]#*$'\t'}" "${CANDIDATES[$i]%%$'\t'*}"
+            done
+            echo "    r) search again"
+            echo "    0) none, no printer on this booth"
+            echo ""
+            read -r -p "Which printer should the booth use? [1]: " choice
+            choice="${choice:-1}"
+            case "$choice" in
+                r|R) continue ;;
+                0) break ;;
+                *[!0-9]*|'') echo "Please answer with a number from the list." ;;
+                *)
+                    if [ "$choice" -ge 1 ] && [ "$choice" -le "${#CANDIDATES[@]}" ]; then
+                        PRINTER_URI="${CANDIDATES[$((choice - 1))]%%$'\t'*}"
+                        break
+                    fi
+                    echo "Please answer with a number from the list."
+                    ;;
+            esac
+        done
+    else
+        print_info "Printer from the profile: $PRINTER_URI"
+    fi
+
+    if [ -z "$PRINTER_URI" ]; then
+        print_warning "No printer registered. Plug it in and run the installer again, or set PRINTER_URI in setup/booth.conf."
+    else
+        DRIVER_OPTION=""
+        DRIVER_VALUE=""
+        IFS=$'\t' read -r DRIVER_OPTION DRIVER_VALUE <<< "$(printer_driver "$PRINTER_URI")" || true
+        if [ -z "$DRIVER_VALUE" ]; then
+            # IPP Everywhere, the old last resort, only talks to network
+            # printers: on a USB one lpadmin refused it and the install stopped.
+            print_warning "No driver found for $PRINTER_URI; printer not registered."
+            print_info "Drivers CUPS has for it: sudo lpinfo -m | grep -i <model>"
+            print_info "Then: sudo lpadmin -p $PRINTER_QUEUE -v '$PRINTER_URI' -m <driver> -E, and PRINTER = $PRINTER_QUEUE in config.ini"
+        else
+            print_info "Registering '$PRINTER_QUEUE' on $PRINTER_URI ($DRIVER_VALUE)"
+            # A refusal is reported, not fatal: the rest of the booth still
+            # installs, and the printer can be added in CUPS afterwards.
+            if run sudo lpadmin -p "$PRINTER_QUEUE" -v "$PRINTER_URI" "$DRIVER_OPTION" "$DRIVER_VALUE" -E; then
+                run sudo cupsaccept "$PRINTER_QUEUE"
+                run sudo cupsenable "$PRINTER_QUEUE"
+                # The default queue as well, for anything printing without a name.
+                run sudo lpadmin -d "$PRINTER_QUEUE"
+                config_ini_set PRINTER "$PRINTER_QUEUE"
+                print_success "Printer registered as '$PRINTER_QUEUE'"
+            else
+                print_warning "CUPS refused the printer; see the message above."
+            fi
         fi
     fi
 else
@@ -385,7 +606,7 @@ print_info "Step 8/8: LED ring"
 
 if enabled "$LED_RING"; then
     if has_boot_config; then
-        managed_block "$(boot_config_path)" "led-spi" <<'SPI_BLOCK'
+        boot_config_block "led-spi" <<'SPI_BLOCK'
 # WS2812 ring light: libs/hardware/led.py bit-bangs the WS2812 timing over SPI0.
 # Wiring: GND to pin 6/9/14/20/25, DIN to pin 19 (GPIO 10 / MOSI), VCC to 5V.
 dtparam=spi=on
@@ -396,10 +617,13 @@ SPI_BLOCK
     else
         print_warning "No SPI bus on this host; libs/hardware/led.py will fall back to NullLed."
     fi
-    # A build failure here must not take the whole install down: libs/hardware/
-    # led.py already treats a missing spidev as "no ring light" and returns
-    # NullLed, so the booth still runs.
-    if ! run "$PHOTOBOOTH_PYTHON" -m pip install spidev; then
+    # The apt package first: spidev has no wheel on PyPI, and building it needs
+    # python3-dev, which nothing installs - so the pip route failed on almost
+    # every fresh image and the ring stayed dark. The venv sees the apt module
+    # through --system-site-packages. A failure here must not take the whole
+    # install down: libs/hardware/led.py treats a missing spidev as "no ring
+    # light" and returns NullLed, so the booth still runs.
+    if ! apt_ensure python3-spidev && ! run "$PHOTOBOOTH_PYTHON" -m pip install spidev; then
         print_warning "spidev did not install; the ring light will fall back to NullLed."
     fi
 else
@@ -418,24 +642,62 @@ escape_systemd_value() {
 
 if enabled "$AUTOSTART"; then
     if has_systemd; then
+        # The booth starts from the console, alone on the screen, inside cage:
+        # a compositor that runs one application fullscreen and nothing else.
+        # A desktop was what it used to run in, and with it came the taskbar,
+        # update notices and dialogs drawn over the booth during an event - and
+        # the service was started with DISPLAY set to a login session id ("c1",
+        # from `loginctl show-user -p Display`), so it never opened a window
+        # at all. Xwayland lets the booth's SDL window run inside cage as it
+        # did on X11. A Lite image works too: no desktop is needed.
+        apt_ensure cage xwayland libpam-systemd
+
         PHOTOBOOTH_USER="$(id -un)"
         PHOTOBOOTH_GROUP="$(id -gn)"
+        PHOTOBOOTH_UID="$(id -u)"
+        PHOTOBOOTH_GID="$(id -g)"
         PHOTOBOOTH_DIR_ESCAPED="$(escape_systemd_value "$PHOTOBOOTH_DIR")"
         PHOTOBOOTH_PYTHON_ESCAPED="$(escape_systemd_value "$VENV_PYTHON")"
-        DISPLAY_TARGET="$(loginctl show-user "$PHOTOBOOTH_USER" -p Display --value 2>/dev/null || true)"
-        DISPLAY_TARGET="${DISPLAY_TARGET:-:0}"
 
-        export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_DIR_ESCAPED
-        export PHOTOBOOTH_PYTHON_ESCAPED DISPLAY_TARGET
+        export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_UID PHOTOBOOTH_GID
+        export PHOTOBOOTH_DIR_ESCAPED PHOTOBOOTH_PYTHON_ESCAPED
 
+        # The screen, the GPU and the touchscreen. Raspberry Pi OS's first user
+        # already has these, a user made by hand may not.
+        run sudo usermod -a -G video,render,input "$PHOTOBOOTH_USER"
+
+        render "$TEMPLATES/photobooth.pam.tmpl" /etc/pam.d/photobooth 0644
         render "$TEMPLATES/photobooth.service.tmpl" /etc/systemd/system/photobooth.service 0644
+        if [ "$ROOT_FILE_CHANGED" = true ]; then
+            NEED_REBOOT=true
+        fi
+
+        # Nothing mounts a USB drive without a desktop; the USB photo dump
+        # waits for one under /media.
+        render "$TEMPLATES/99-photobooth-usb.rules.tmpl" /etc/udev/rules.d/99-photobooth-usb.rules 0644
+        if [ "$ROOT_FILE_CHANGED" = true ]; then
+            run sudo udevadm control --reload
+        fi
+
+        # The desktop would fight the booth for the screen. It stays installed:
+        # `sudo systemctl start lightdm` brings it back for maintenance.
+        if [ -L /etc/systemd/system/display-manager.service ]; then
+            DESKTOP_MANAGER="$(basename "$(readlink -f /etc/systemd/system/display-manager.service)")"
+            run sudo systemctl disable "$DESKTOP_MANAGER"
+            print_success "Desktop ($DESKTOP_MANAGER) no longer started at boot"
+            NEED_REBOOT=true
+        fi
+        if [ "$(systemctl get-default 2>/dev/null)" != multi-user.target ]; then
+            run sudo systemctl set-default multi-user.target
+            NEED_REBOOT=true
+        fi
 
         run sudo touch /var/log/photobooth.log
         run sudo chown "$PHOTOBOOTH_USER:$PHOTOBOOTH_GROUP" /var/log/photobooth.log
         run sudo systemctl daemon-reload
         run sudo systemctl enable photobooth.service
 
-        print_success "photobooth.service enabled"
+        print_success "photobooth.service enabled: the booth starts from the console, without the desktop"
     else
         print_warning "No systemd here; cannot install the autostart unit."
     fi
@@ -492,7 +754,7 @@ if enabled "$BOOT_SPLASH"; then
 
     if has_boot_config; then
         BOOT_CONFIG="$(boot_config_path)"
-        managed_block "$BOOT_CONFIG" "boot-splash" <<'SPLASH_BLOCK'
+        boot_config_block "boot-splash" <<'SPLASH_BLOCK'
 # No rainbow square from the firmware before the booth's own splash.
 disable_splash=1
 SPLASH_BLOCK
@@ -573,7 +835,7 @@ CAMERA_DSLR=$CAMERA_DSLR
 GPHOTO2_UPDATER=$GPHOTO2_UPDATER
 GPHOTO2_UPDATER_REF=$GPHOTO2_UPDATER_REF
 PRINTER_SETUP=$PRINTER_SETUP
-PRINTER_URI=$PRINTER_URI
+PRINTER_URI=$PROFILE_PRINTER_URI
 PRINTER_PPD=$PRINTER_PPD
 LED_RING=$LED_RING
 AUTOSTART=$AUTOSTART
@@ -606,5 +868,6 @@ fi
 echo ""
 print_info "To start the booth by hand:"
 echo "  cd $PHOTOBOOTH_DIR"
-echo "  .venv/bin/python photoboothapp.py"
+echo "  .venv/bin/python photoboothapp.py          (from a desktop)"
+echo "  cage -- .venv/bin/python photoboothapp.py  (from the console)"
 echo ""

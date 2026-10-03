@@ -46,13 +46,16 @@ GPHOTO2_UPDATER=no
 
 # --- Printer ----------------------------------------------------------------
 
-# Install CUPS and register the printer named by PRINTER in config.ini, using
-# the PPD in doc/. Leave PRINTER_URI empty to detect the USB printer, or pin it
-# to a specific device URI (see `lpinfo -v`).
+# Install CUPS, list the printers it can reach and register the one chosen as
+# the queue 'photobooth', which config.ini's PRINTER then names. Unattended
+# (--yes), the first one found is taken, a USB printer before a network one.
+# Leave PRINTER_URI empty for that, or pin a device URI (see `sudo lpinfo -v`).
+# A Gutenprint printer gets Gutenprint's driver for its model.
 PRINTER_SETUP=yes
 PRINTER_URI=
 
-# PPD used when registering the printer, relative to the project root.
+# PPD for a printer Gutenprint does not drive, relative to the project root.
+# Used only for the model in its file name.
 PRINTER_PPD=doc/DS620.ppd
 
 # --- Ring light -------------------------------------------------------------
@@ -63,8 +66,11 @@ LED_RING=yes
 
 # --- Autostart --------------------------------------------------------------
 
-# Install the systemd unit that starts the booth at boot and restarts it on
-# crash. Needs systemd; works on any Linux, not just a Pi.
+# Start the booth at boot straight from the console, alone on the screen (in
+# cage), and restart it on crash. The desktop, if there is one, is no longer
+# started: no taskbar, update notice or dialog can draw over the booth. USB
+# drives are mounted for the photo dump. Needs systemd; works on any Linux,
+# Raspberry Pi OS Lite included.
 AUTOSTART=yes
 
 # --- Boot splash ------------------------------------------------------------
