@@ -319,8 +319,7 @@ def create_blueprint(server):
             return server._render_admin_login_page(error_message=i18n.translate(g.lang, 'web.admin.invalid_password')), 403
 
         server.login_throttle.record_success(client_key)
-        session.clear()
-        session['is_admin_authenticated'] = True
+        server._start_admin_session()
         return redirect('/admin')
 
     @blueprint.route('/admin/logout')
@@ -396,6 +395,10 @@ def create_blueprint(server):
         if server.admin_password is None:
             session.clear()
             return server._render_admin_login_page(success_message=i18n.translate(g.lang, 'web.admin.config_saved_password_disabled'))
+
+        # A new password logs every other browser out; the one that set it
+        # stays in.
+        server._start_admin_session()
 
         # Every setting is read when the booth starts, so saving is nearly
         # always followed by a restart: one button does both.
