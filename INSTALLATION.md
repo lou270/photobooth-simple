@@ -81,7 +81,7 @@ one answer is safe.
 | DSLR | - | `libgphoto2` and its tools, and disables the gvfs claim on the camera |
 | Printer | - | CUPS, then registers the queue named in `config.ini` using `doc/DS620.ppd` |
 | LED ring | firmware config | Enables SPI, installs `python3-spidev` |
-| Autostart | systemd | `photobooth.service`: waits for the desktop's display, restarts on crash, starts at boot |
+| Autostart | systemd | `photobooth.service`: the booth alone on the screen from the console, in `cage`; the desktop is no longer started; USB drives mounted for the photo dump |
 | Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
 
 ### The boot splash
@@ -101,8 +101,8 @@ loading. With `BOOT_SPLASH=yes` all three show the welcome picture, dimmed:
   go into `/etc/default/grub.d/photobooth-splash.cfg`; hold Shift or press Esc
   during boot to reach the GRUB menu. The maker's logo before that belongs to
   the firmware: turn on its "quiet boot" option.
-- **The desktop** gets the picture as wallpaper, wherever pcmanfm already has a
-  settings file.
+- **The desktop**, on a booth that still starts one (no `AUTOSTART`), gets the
+  picture as wallpaper, wherever pcmanfm already has a settings file.
 - **The application** then shows its own loading screen on the same picture,
   with each step it is at, until the welcome screen is ready.
 
@@ -117,6 +117,31 @@ To go back to the boot messages on a Pi, remove the `photobooth:boot-splash`
 block and the arguments above from `cmdline.txt`; on a mini PC, delete the GRUB
 drop-in and run `sudo update-grub`.
 
+### Without a desktop
+
+With `AUTOSTART=yes` the booth starts straight from the console, alone on the
+screen: `photobooth.service` takes tty1 in place of the login prompt and runs
+the application inside [cage](https://github.com/cage-kiosk/cage), a compositor
+that shows one application fullscreen and nothing else. No taskbar, no "update
+available" notice, no dialog can draw over the booth, and Raspberry Pi OS Lite
+is enough.
+
+The desktop, if the image has one, stays installed but is no longer started,
+and the machine boots to `multi-user.target`. For maintenance:
+
+- Ctrl+Alt+F2 gives a login console beside the booth, Ctrl+Alt+F1 goes back;
+- `sudo systemctl stop photobooth && sudo systemctl start lightdm` brings the
+  desktop back until the next boot;
+- to keep the desktop for good, `sudo systemctl disable photobooth`, then
+  `sudo raspi-config nonint do_boot_behaviour B4` and reboot.
+
+Since nothing else mounts USB drives without a desktop, the installer adds a
+udev rule (`/etc/udev/rules.d/99-photobooth-usb.rules`) mounting FAT32 and exFAT
+drives under `/media/<user>/` for the photo dump.
+
+To run the booth by hand from the console, stop the service first, then
+`cage -- .venv/bin/python photoboothapp.py`.
+
 ### The virtual environment
 
 Dependencies go into `.venv` rather than into the system Python. The environment
@@ -124,7 +149,7 @@ is created with `--system-site-packages`, which is required rather than
 cosmetic: `picamera2`, `libcamera` and `python3-cups` are apt packages with no
 usable pip equivalent, and `libs/device_utils.py` imports them by name.
 
-Run the booth by hand with:
+Run the booth by hand from a desktop with:
 
 ```bash
 .venv/bin/python photoboothapp.py
@@ -235,9 +260,8 @@ ring.
 ## Troubleshooting
 
 **The booth does not start at boot.** `systemctl status photobooth.service`
-and `/var/log/photobooth.log`. The service waits up to two minutes for the
-desktop's display (`/tmp/.X11-unix/X0`): the machine has to boot to the desktop
-with automatic login (`sudo raspi-config`, System Options, Boot / Auto Login).
+and `/var/log/photobooth.log`. Ctrl+Alt+F2 opens a console beside the booth to
+look.
 
 **Camera not detected.** Run `./setup/doctor.sh` first: it says which backends
 are present. For a Pi camera, `rpicam-still --list-cameras` after a reboot

@@ -124,7 +124,7 @@ else
     ask_yes_no_var CAMERA_DSLR "Use a DSLR over USB (gPhoto2)?"
     ask_yes_no_var PRINTER_SETUP "Install printer support (CUPS)?"
     ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
-    ask_yes_no_var AUTOSTART "Start the booth automatically on boot?"
+    ask_yes_no_var AUTOSTART "Start the booth on boot, alone on the screen (the desktop is no longer started)?"
     ask_yes_no_var BOOT_SPLASH "Show the welcome picture instead of boot messages while the booth starts?"
 fi
 
@@ -484,30 +484,62 @@ escape_systemd_value() {
 
 if enabled "$AUTOSTART"; then
     if has_systemd; then
+        # The booth starts from the console, alone on the screen, inside cage:
+        # a compositor that runs one application fullscreen and nothing else.
+        # A desktop was what it used to run in, and with it came the taskbar,
+        # update notices and dialogs drawn over the booth during an event - and
+        # the service was started with DISPLAY set to a login session id ("c1",
+        # from `loginctl show-user -p Display`), so it never opened a window
+        # at all. Xwayland lets the booth's SDL window run inside cage as it
+        # did on X11. A Lite image works too: no desktop is needed.
+        apt_ensure cage xwayland libpam-systemd
+
         PHOTOBOOTH_USER="$(id -un)"
         PHOTOBOOTH_GROUP="$(id -gn)"
+        PHOTOBOOTH_UID="$(id -u)"
+        PHOTOBOOTH_GID="$(id -g)"
         PHOTOBOOTH_DIR_ESCAPED="$(escape_systemd_value "$PHOTOBOOTH_DIR")"
         PHOTOBOOTH_PYTHON_ESCAPED="$(escape_systemd_value "$VENV_PYTHON")"
-        PHOTOBOOTH_UID="$(id -u)"
-        PHOTOBOOTH_HOME_ESCAPED="$(escape_systemd_value "$HOME")"
-        # The desktop the booth draws on: X11's :0, or the X server Wayland
-        # starts for X clients, which takes the same name. This used to come
-        # from `loginctl show-user -p Display`, which names a login session
-        # ("c1"), not an X display: the service was started with DISPLAY=c1
-        # and Kivy never opened a window.
-        DISPLAY_TARGET=":0"
 
-        export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_DIR_ESCAPED
-        export PHOTOBOOTH_PYTHON_ESCAPED DISPLAY_TARGET PHOTOBOOTH_UID PHOTOBOOTH_HOME_ESCAPED
+        export PHOTOBOOTH_USER PHOTOBOOTH_GROUP PHOTOBOOTH_UID PHOTOBOOTH_GID
+        export PHOTOBOOTH_DIR_ESCAPED PHOTOBOOTH_PYTHON_ESCAPED
 
+        # The screen, the GPU and the touchscreen. Raspberry Pi OS's first user
+        # already has these, a user made by hand may not.
+        run sudo usermod -a -G video,render,input "$PHOTOBOOTH_USER"
+
+        render "$TEMPLATES/photobooth.pam.tmpl" /etc/pam.d/photobooth 0644
         render "$TEMPLATES/photobooth.service.tmpl" /etc/systemd/system/photobooth.service 0644
+        if [ "$ROOT_FILE_CHANGED" = true ]; then
+            NEED_REBOOT=true
+        fi
+
+        # Nothing mounts a USB drive without a desktop; the USB photo dump
+        # waits for one under /media.
+        render "$TEMPLATES/99-photobooth-usb.rules.tmpl" /etc/udev/rules.d/99-photobooth-usb.rules 0644
+        if [ "$ROOT_FILE_CHANGED" = true ]; then
+            run sudo udevadm control --reload
+        fi
+
+        # The desktop would fight the booth for the screen. It stays installed:
+        # `sudo systemctl start lightdm` brings it back for maintenance.
+        if [ -L /etc/systemd/system/display-manager.service ]; then
+            DESKTOP_MANAGER="$(basename "$(readlink -f /etc/systemd/system/display-manager.service)")"
+            run sudo systemctl disable "$DESKTOP_MANAGER"
+            print_success "Desktop ($DESKTOP_MANAGER) no longer started at boot"
+            NEED_REBOOT=true
+        fi
+        if [ "$(systemctl get-default 2>/dev/null)" != multi-user.target ]; then
+            run sudo systemctl set-default multi-user.target
+            NEED_REBOOT=true
+        fi
 
         run sudo touch /var/log/photobooth.log
         run sudo chown "$PHOTOBOOTH_USER:$PHOTOBOOTH_GROUP" /var/log/photobooth.log
         run sudo systemctl daemon-reload
         run sudo systemctl enable photobooth.service
 
-        print_success "photobooth.service enabled"
+        print_success "photobooth.service enabled: the booth starts from the console, without the desktop"
     else
         print_warning "No systemd here; cannot install the autostart unit."
     fi
@@ -678,5 +710,6 @@ fi
 echo ""
 print_info "To start the booth by hand:"
 echo "  cd $PHOTOBOOTH_DIR"
-echo "  .venv/bin/python photoboothapp.py"
+echo "  .venv/bin/python photoboothapp.py          (from a desktop)"
+echo "  cage -- .venv/bin/python photoboothapp.py  (from the console)"
 echo ""

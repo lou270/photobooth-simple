@@ -1,0 +1,5 @@
+# Written by install.sh (AUTOSTART). Without a desktop nothing mounts a USB
+# drive when it is plugged in, and libs/usb_transfer.py, which waits for one to
+# appear under /media, never saw it. FAT32 and exFAT drives are mounted there,
+# writable by ${PHOTOBOOTH_USER}; systemd unmounts them when they are pulled out.
+ACTION=="add", SUBSYSTEM=="block", ENV{ID_BUS}=="usb", ENV{ID_FS_USAGE}=="filesystem", ENV{ID_FS_TYPE}=="vfat|exfat", RUN{program}+="/usr/bin/systemd-mount --no-block --collect --options=uid=${PHOTOBOOTH_UID},gid=${PHOTOBOOTH_GID},umask=0022 %N /media/${PHOTOBOOTH_USER}/%k"

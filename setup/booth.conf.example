@@ -63,8 +63,11 @@ LED_RING=yes
 
 # --- Autostart --------------------------------------------------------------
 
-# Install the systemd unit that starts the booth at boot and restarts it on
-# crash. Needs systemd; works on any Linux, not just a Pi.
+# Start the booth at boot straight from the console, alone on the screen (in
+# cage), and restart it on crash. The desktop, if there is one, is no longer
+# started: no taskbar, update notice or dialog can draw over the booth. USB
+# drives are mounted for the photo dump. Needs systemd; works on any Linux,
+# Raspberry Pi OS Lite included.
 AUTOSTART=yes
 
 # --- Boot splash ------------------------------------------------------------
