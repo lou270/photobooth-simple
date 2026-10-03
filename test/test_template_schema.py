@@ -46,6 +46,18 @@ def test_a_minimal_template_is_accepted_and_normalised():
     assert validated['duplicate_horizontal'] is False
 
 
+@pytest.mark.parametrize('flags, copies', [
+    ({}, 1),
+    ({'duplicate_horizontal': True}, 2),
+    ({'duplicate_vertical': True}, 2),
+    ({'duplicate_horizontal': True, 'duplicate_vertical': True}, 4),
+    ({'copies_per_sheet': 3}, 3),
+    ({'duplicate_horizontal': True, 'copies_per_sheet': 2}, 2),
+])
+def test_copies_per_sheet_follows_the_duplicate_flags_of_older_templates(flags, copies):
+    assert validate_template(minimal_template(**flags))['copies_per_sheet'] == copies
+
+
 def test_unknown_keys_are_dropped():
     validated = validate_template(minimal_template(surprise='<script>'))
     assert 'surprise' not in validated
@@ -66,6 +78,11 @@ def test_unknown_keys_are_dropped():
     minimal_template(margin_percent=90),
     minimal_template(print_params={'PageSize': 4}),
     minimal_template(print_params='w288h432'),
+    minimal_template(copies_per_sheet=0),
+    minimal_template(copies_per_sheet=5),
+    minimal_template(copies_per_sheet='3'),
+    minimal_template(copies_per_sheet=True),
+    minimal_template(copies_per_sheet=3, duplicate_horizontal=True),
 ])
 def test_malformed_templates_are_rejected(template):
     with pytest.raises(TemplateValidationError):

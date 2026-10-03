@@ -472,11 +472,15 @@
           },
           "MAX_COPIES": {
             "label": "Copies maximum par impression",
-            "help": "Nombre de feuilles qu'un invité peut demander d'un coup (10 au plus). Un modèle qui duplique son montage met deux photos par feuille. 1 masque le choix du nombre de copies."
+            "help": "Nombre de feuilles qu'un invité peut demander d'un coup (10 au plus). Un modèle imprimé sur une feuille que l'imprimante découpe (2x6*2, 2x4*3…) met autant de photos sur chaque feuille. 1 masque le choix du nombre de copies."
           },
           "COLLAGE_DPI": {
             "label": "Résolution du montage",
             "help": "Les modèles sont dessinés à 300 dpi, la résolution de l'imprimante : 600 dpi ne change donc rien au tirage. Le montage est plus net dans la galerie et sur le téléphone des invités, mais les fichiers sont environ quatre fois plus lourds et le montage prend un peu plus de temps à construire."
+          },
+          "CUT_OFFSET": {
+            "label": "Point de départ des coupes",
+            "help": "Pour un modèle imprimé sur une feuille que l'imprimante découpe en plusieurs tirages (2x4*3…) : à quelle distance du début de la page l'imprimante commence à mesurer ses coupes, en pixels à 300 dpi. La borne place chaque exemplaire sur son propre tirage à partir de là, pour que les coupes tombent entre les exemplaires. 20 sur une DNP QW410 ; une autre imprimante se mesure avec tools/manual/cut_calibration.py."
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Attente si l'imprimante ne répond plus",
@@ -712,10 +716,9 @@
       "portrait": "Portrait",
       "format": "Format :",
       "custom": "Personnalisé",
+      "sizes_not_from_printer": "Aucune imprimante détectée : voici les formats de la DNP QW410. Branchez l'imprimante et rechargez l'éditeur pour voir les siens.",
       "size": "Taille :",
       "size_info": "En pixels, à 300 dpi.",
-      "duplicate_horizontal": "Imprimer en double côte à côte",
-      "duplicate_vertical": "Imprimer en double l'un sous l'autre",
       "grid": "Grille",
       "step": "Pas :",
       "drop_image": "Déposer l'image ici",
@@ -729,11 +732,8 @@
       "starting_point": "Point de départ :",
       "starter_empty_landscape": "Page vide, 10x15 cm paysage",
       "starter_empty_portrait": "Page vide, 10x15 cm portrait",
-      "starter_empty_strip": "Page vide, bandelette 5x15 cm",
       "starter_full_landscape": "Une photo pleine page, 10x15 cm paysage",
       "starter_full_portrait": "Une photo pleine page, 10x15 cm portrait",
-      "starter_strip_portrait": "Bandelette de trois photos, verticale",
-      "starter_strip_landscape": "Bandelette de trois photos, horizontale",
       "starter_custom": "Page vide, format personnalisé",
       "starter_info": "Le point de départ n'est qu'une base : rien n'est écrit sur la borne avant « Enregistrer sur la borne ».",
       "cancel": "Annuler",
@@ -846,7 +846,8 @@
         "placeholder_event_title": "Nom de l'événement, défini dans les réglages",
         "placeholder_date_title": "Jour où la photo est prise",
         "placeholder_time_title": "Heure à laquelle la photo est prise",
-        "printed_twice": "Imprimé une seconde fois ici",
+        "printed_again": "Imprimé encore ici",
+        "per_sheet": "{count} par feuille",
         "status_hint": "Ctrl + molette pour zoomer · Espace + glisser pour se déplacer · déposez une image sur la page pour l'ajouter",
         "uploading_image": "Envoi de l'image…",
         "image_failed": "L'image n'a pas été ajoutée : {error}",

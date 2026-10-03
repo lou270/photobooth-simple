@@ -23,6 +23,9 @@ MAX_NAME_LENGTH = 80
 MAX_DESCRIPTION_LENGTH = 300
 MAX_PRINT_PARAMS = 20
 MAX_PRINT_PARAM_LENGTH = 120
+# The most prints a dye-sub printer cuts one sheet into: four 2x6 strips from a
+# 6x8 sheet on a DS620, four 2x4 from a 4x8 one on a QW410.
+MAX_COPIES_PER_SHEET = 4
 MAX_EMBEDDED_IMAGE_BYTES = 12 * 1024 * 1024
 # All the images one template embeds, together: the web server refuses a
 # request above 32 MB, and base64 grows the bytes by a third on the way.
@@ -327,6 +330,25 @@ def _validate_print_params(print_params):
     return validated
 
 
+def _validate_copies_per_sheet(value, duplicate_horizontal, duplicate_vertical):
+    """How many times the collage is laid on the printed sheet.
+
+    Written as two flags before printers that cut a sheet in three or four
+    were supported: a template that still says duplicate_horizontal means two.
+    """
+    implied = (2 if duplicate_horizontal else 1) * (2 if duplicate_vertical else 1)
+    if value is None:
+        return implied
+    if isinstance(value, bool) or not isinstance(value, int):
+        raise TemplateValidationError('copies_per_sheet must be a whole number')
+    if not 1 <= value <= MAX_COPIES_PER_SHEET:
+        raise TemplateValidationError(f'copies_per_sheet must be between 1 and {MAX_COPIES_PER_SHEET}')
+    if implied > 1 and value != implied:
+        raise TemplateValidationError(
+            f'duplicate_horizontal and duplicate_vertical already mean {implied} copies per sheet')
+    return value
+
+
 def _validate_text(value, field, max_length, required=False):
     if value is None:
         if required:
@@ -366,6 +388,8 @@ def validate_template(data):
         'duplicate_horizontal': bool(data.get('duplicate_horizontal', False)),
         'duplicate_vertical': bool(data.get('duplicate_vertical', False)),
     }
+    template['copies_per_sheet'] = _validate_copies_per_sheet(
+        data.get('copies_per_sheet'), template['duplicate_horizontal'], template['duplicate_vertical'])
 
     for key in LAYER_KEYS:
         template[key] = _validate_layer(data.get(key), key)

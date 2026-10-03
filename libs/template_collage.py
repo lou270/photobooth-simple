@@ -7,7 +7,7 @@ import tempfile
 import numpy as np
 from PIL import Image, ImageColor, ImageDraw, ImageFont
 
-from libs import event
+from libs import event, print_sizes
 from libs.file_utils import FileUtils
 from libs.template_schema import TemplateValidationError, validate_template
 
@@ -93,6 +93,10 @@ class TemplateCollage:
         self._margin_percent = self._template.get('margin_percent', 5)
         self._duplicate_horizontal = self._template.get('duplicate_horizontal', False)
         self._duplicate_vertical = self._template.get('duplicate_vertical', False)
+        self._copies_per_sheet = self._template['copies_per_sheet']
+        # Where the copies go on the printer's own page, once the booth has
+        # read it from the driver: see set_printer_page.
+        self._cut_layout = None
         
         # What is drawn, bottom first: the editor's own order for a designed
         # template, the historical one for a template that only has a
@@ -162,7 +166,7 @@ class TemplateCollage:
 
     def uses_print_version(self):
         """Return True when printing needs the generated _print collage."""
-        return self._duplicate_horizontal or self._duplicate_vertical
+        return self._copies_per_sheet > 1
 
     def get_copies_per_sheet(self):
         """How many finished photos one printed sheet carries.
@@ -172,7 +176,72 @@ class TemplateCollage:
         counts sheets, because that is what the printer and the paper budget
         count; what it shows the guest has to be what they will hold.
         """
-        return (2 if self._duplicate_horizontal else 1) * (2 if self._duplicate_vertical else 1)
+        return self._copies_per_sheet
+
+    def set_printer_page(self, page, cut_offset):
+        """Lay the sheet out on the page the printer's driver describes for this template.
+
+        page is the driver's entry for the template's PageSize (see
+        print_sizes.read_ppd), or None when there is no printer to ask. Only a
+        sheet the printer cuts into several prints is affected: see
+        print_sizes.cut_layout.
+        """
+        page_size = self._print_params.get('PageSize', '')
+        self._cut_layout = None
+        if page and not (self._duplicate_horizontal or self._duplicate_vertical):
+            self._cut_layout = print_sizes.cut_layout(
+                page_size, page, self._copies_per_sheet, (self._page_width, self._page_height), cut_offset)
+        if self._copies_per_sheet > 1:
+            Logger.info('TemplateCollage: %s on %s laid out %s', self._name, page_size,
+                        'on the driver\'s page, %s' % (self._cut_layout,) if self._cut_layout else 'and fitted')
+
+    def _lay_out_sheet(self, canvas):
+        """The collage repeated as many times as the printer cuts the sheet.
+
+        A template written with the two duplicate flags says which way. One
+        that only gives a count is laid out the way that comes out closest to
+        square: the prints of a cut sheet always tile it, and sheets are never
+        long and thin, so of a 2x4 laid three times side by side (6x4) or end
+        to end (2x12), only the first is a sheet. Which way round the sheet
+        then sits is the driver's business: CUPS turns the image to the page,
+        as it already does for a landscape 10x15 on a portrait 4x6.
+        """
+        if self._duplicate_horizontal or self._duplicate_vertical:
+            if self._duplicate_horizontal:
+                canvas = cv2.hconcat([canvas, canvas])
+            if self._duplicate_vertical:
+                canvas = cv2.vconcat([canvas, canvas])
+            return canvas
+
+        count = self._copies_per_sheet
+        if count == 1:
+            return canvas
+        if self._cut_layout:
+            return self._lay_out_on_printer_page(canvas)
+        height, width = canvas.shape[:2]
+        side_by_side = max(width * count, height) / min(width * count, height)
+        end_to_end = max(width, height * count) / min(width, height * count)
+        if side_by_side <= end_to_end:
+            return cv2.hconcat([canvas] * count)
+        return cv2.vconcat([canvas] * count)
+
+    def _lay_out_on_printer_page(self, canvas):
+        """The copies where the cutter separates them, on a page the driver prints as it is.
+
+        The canvas may be at 600 dpi: the layout is in 300 dpi pixels and
+        grows with it, and CUPS then halves the whole page evenly.
+        """
+        layout = self._cut_layout
+        if layout['rotate']:
+            canvas = cv2.rotate(canvas, cv2.ROTATE_90_CLOCKWISE)
+        concat = cv2.hconcat if layout['along_x'] else cv2.vconcat
+        sheet = concat([canvas] * self._copies_per_sheet)
+        scale = canvas.shape[0] // (self._page_width if layout['rotate'] else self._page_height)
+        top, bottom, left, right = (side * scale for side in layout['pad'])
+        # Everything outside the copies is printed past the edge of the paper:
+        # prolonging the design keeps a white line from showing should the
+        # paper sit a pixel or two off.
+        return cv2.copyMakeBorder(sheet, top, bottom, left, right, cv2.BORDER_REPLICATE)
     
     def _decode_image(self, image_data, imread_flags=cv2.IMREAD_UNCHANGED):
         """
@@ -350,13 +419,10 @@ class TemplateCollage:
         
         # Step 6: Apply duplication for printing if needed
         if for_print:
-            if self._duplicate_horizontal:
-                canvas = cv2.hconcat([canvas, canvas])
-            if self._duplicate_vertical:
-                canvas = cv2.vconcat([canvas, canvas])
-            
+            canvas = self._lay_out_sheet(canvas)
+
             # Save print version if different from base
-            if output_path and (self._duplicate_horizontal or self._duplicate_vertical):
+            if output_path and self.uses_print_version():
                 print_path = output_path.replace('.jpg', '_print.jpg')
                 FileUtils.write_image(print_path, canvas)
                 Logger.info(f'TemplateCollage: Saved print version to {print_path}')

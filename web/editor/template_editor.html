@@ -896,10 +896,9 @@
                         <option value="portrait">{{ t('web.editor.portrait') }}</option>
                     </select>
                 </label>
-                <label>{{ t('web.editor.format') }}
+                <label{% if not print_sizes.from_printer %} title="{{ t('web.editor.sizes_not_from_printer') }}"{% endif %}>{{ t('web.editor.format') }}
                     <select id="formatSelect">
-                        <option value="10x15">10x15 cm</option>
-                        <option value="5x15">5x15 cm</option>
+                        {# Filled from EDITOR_CONFIG.printSizes, the printer's own list. #}
                         <option value="custom">{{ t('web.editor.custom') }}</option>
                     </select>
                 </label>
@@ -909,8 +908,6 @@
                     <input type="number" id="heightInput" min="1" max="{{ page_limits.side }}">
                     <span class="size-cm" id="sizeCm"></span>
                 </label>
-                <label><input type="checkbox" id="duplicateHorizontal"> {{ t('web.editor.duplicate_horizontal') }}</label>
-                <label><input type="checkbox" id="duplicateVertical"> {{ t('web.editor.duplicate_vertical') }}</label>
                 <label><input type="checkbox" id="gridToggle"> {{ t('web.editor.grid') }}</label>
                 <label>{{ t('web.editor.step') }}
                     <input type="number" id="gridSizeInput" value="30" min="5" max="200" step="5">
@@ -952,11 +949,8 @@
                 <select id="newTemplateStarter">
                     <option value="empty_landscape">{{ t('web.editor.starter_empty_landscape') }}</option>
                     <option value="empty_portrait">{{ t('web.editor.starter_empty_portrait') }}</option>
-                    <option value="empty_strip">{{ t('web.editor.starter_empty_strip') }}</option>
                     <option value="full_landscape">{{ t('web.editor.starter_full_landscape') }}</option>
                     <option value="full_portrait">{{ t('web.editor.starter_full_portrait') }}</option>
-                    <option value="strip_portrait">{{ t('web.editor.starter_strip_portrait') }}</option>
-                    <option value="strip_landscape">{{ t('web.editor.starter_strip_landscape') }}</option>
                     <option value="custom">{{ t('web.editor.starter_custom') }}</option>
                 </select>
             </div>
@@ -1010,6 +1004,7 @@
             assetBytesLimit: {{ asset_bytes_limit|tojson }},
             fonts: {{ design_fonts|tojson }},
             samplePhotoCount: {{ sample_photo_count|tojson }},
+            printSizes: {{ print_sizes.sizes|tojson }},
         };
     </script>
     <script src="{{ url_for('static', filename='vendor/fabric/fabric-7.4.0.min.js') }}"></script>

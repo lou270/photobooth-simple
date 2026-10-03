@@ -28,12 +28,10 @@
     const SNAP_DISTANCE = 6;
     const MIN_BOX = 20;
     const TEXT_LINE_SPACING = 0.15;
-    const PRESET_FORMATS = {
-        '10x15': { long: 1800, short: 1200 },
-        '5x15': { long: 1800, short: 600 },
-    };
+    // What the printer cuts a sheet into, read from its driver by the booth:
+    // { page_size, label, short_in, long_in, count }.
+    const PRINT_SIZES = CONFIG.printSizes || [];
     const PRINT_10X15 = { PageSize: 'w288h432', 'print-scaling': 'fit' };
-    const PRINT_STRIP = { PageSize: 'w288h432-div2', 'print-scaling': 'fit' };
     const SLOT_KINDS = ['photo', 'field'];
     const ELEMENT_KINDS = ['image', 'rect', 'ellipse', 'line', 'label', 'photo', 'field'];
 
@@ -277,7 +275,7 @@
             console.error('Template could not be opened', error);
             return false;
         }
-        entry.customFormat = detectFormat(entry.template.page) === 'custom';
+        entry.customFormat = detectFormat(entry.template) === 'custom';
         entry.history = { states: [snapshot(entry)], index: 0 };
         return true;
     }
@@ -362,6 +360,8 @@
             page: entry.template.page,
             duplicate_horizontal: !!entry.template.duplicate_horizontal,
             duplicate_vertical: !!entry.template.duplicate_vertical,
+            copies_per_sheet: entry.template.copies_per_sheet,
+            print_params: entry.template.print_params,
             customFormat: entry.customFormat,
             design: entry.design,
         });
@@ -385,6 +385,8 @@
         entry.template.page = data.page;
         entry.template.duplicate_horizontal = data.duplicate_horizontal;
         entry.template.duplicate_vertical = data.duplicate_vertical;
+        entry.template.copies_per_sheet = data.copies_per_sheet;
+        entry.template.print_params = data.print_params;
         entry.customFormat = data.customFormat;
         entry.design = data.design;
         entry.dirty = true;
@@ -894,17 +896,16 @@
         ctx.strokeStyle = 'rgba(29, 32, 51, 0.3)';
         ctx.strokeRect(0, 0, width, height);
 
-        if (entry.template.duplicate_horizontal || entry.template.duplicate_vertical) {
+        const copies = sheetCopyOffsets(entry.template, width, height);
+        if (copies.length) {
             ctx.setLineDash([12 / zoom, 8 / zoom]);
             ctx.strokeStyle = 'rgba(29, 32, 51, 0.35)';
-            const dx = entry.template.duplicate_horizontal ? width : 0;
-            const dy = entry.template.duplicate_vertical ? height : 0;
-            ctx.strokeRect(dx, dy, width, height);
+            copies.forEach(([dx, dy]) => ctx.strokeRect(dx, dy, width, height));
             ctx.setLineDash([]);
             ctx.font = `${13 / zoom}px sans-serif`;
             ctx.fillStyle = 'rgba(29, 32, 51, 0.55)';
             ctx.textAlign = 'center';
-            ctx.fillText(I18N.printed_twice, dx + width / 2, dy + height / 2);
+            copies.forEach(([dx, dy]) => ctx.fillText(I18N.printed_again, dx + width / 2, dy + height / 2));
         }
 
         if (guides.length) {
@@ -2000,14 +2001,65 @@
         bar.textContent = statusMessage || I18N.status_hint;
     }
 
-    function detectFormat(page) {
-        const long = Math.max(page.width, page.height);
-        const short = Math.min(page.width, page.height);
-        for (const [name, preset] of Object.entries(PRESET_FORMATS)) {
-            if (preset.long === long && preset.short === short) return name;
-        }
-        return 'custom';
+    function copiesPerSheet(template) {
+        if (template.copies_per_sheet) return template.copies_per_sheet;
+        return (template.duplicate_horizontal ? 2 : 1) * (template.duplicate_vertical ? 2 : 1);
     }
+
+    // Where the booth lays the other copies of the page on the printed sheet,
+    // the way TemplateCollage._lay_out_sheet does: as the duplicate flags say,
+    // or else whichever way comes out closest to square.
+    function sheetCopyOffsets(template, width, height) {
+        if (template.duplicate_horizontal || template.duplicate_vertical) {
+            const offsets = [];
+            const columns = template.duplicate_horizontal ? 2 : 1;
+            const rows = template.duplicate_vertical ? 2 : 1;
+            for (let row = 0; row < rows; row++) {
+                for (let column = 0; column < columns; column++) {
+                    if (row || column) offsets.push([column * width, row * height]);
+                }
+            }
+            return offsets;
+        }
+        const count = copiesPerSheet(template);
+        const ratio = (a, b) => Math.max(a, b) / Math.min(a, b);
+        const sideBySide = ratio(width * count, height) <= ratio(width, height * count);
+        const offsets = [];
+        for (let index = 1; index < count; index++) {
+            offsets.push(sideBySide ? [index * width, 0] : [0, index * height]);
+        }
+        return offsets;
+    }
+
+    function printSizePixels(size) {
+        return { short: Math.round(size.short_in * TEMPLATE_DPI), long: Math.round(size.long_in * TEMPLATE_DPI) };
+    }
+
+    function detectFormat(template) {
+        const pageSize = (template.print_params || {}).PageSize;
+        const size = PRINT_SIZES.find(candidate => candidate.page_size === pageSize);
+        if (!size || size.count !== copiesPerSheet(template)) return 'custom';
+        const pixels = printSizePixels(size);
+        const page = template.page;
+        const matches = Math.min(page.width, page.height) === pixels.short && Math.max(page.width, page.height) === pixels.long;
+        return matches ? size.page_size : 'custom';
+    }
+
+    function fillFormatSelect() {
+        const select = byId('formatSelect');
+        const custom = select.querySelector('option[value="custom"]');
+        const cm = inches => (Math.round(inches * 2.54 * 10) / 10).toLocaleString(document.documentElement.lang || undefined);
+        PRINT_SIZES.forEach(size => {
+            const option = document.createElement('option');
+            option.value = size.page_size;
+            const parts = [size.label, `${cm(size.short_in)} × ${cm(size.long_in)} cm`];
+            if (size.count > 1) parts.push(fmt(I18N.per_sheet, { count: size.count }));
+            option.textContent = parts.join(' · ');
+            select.insertBefore(option, custom);
+        });
+    }
+
+    fillFormatSelect();
 
     function sizeInCm(width, height) {
         const cm = pixels => (Math.round(pixels / TEMPLATE_DPI * 2.54 * 10) / 10).toLocaleString(document.documentElement.lang || undefined);
@@ -2029,11 +2081,11 @@
 
     function updatePageControls() {
         const entry = currentEntry();
-        const controls = ['orientationSelect', 'formatSelect', 'widthInput', 'heightInput', 'duplicateHorizontal', 'duplicateVertical'];
+        const controls = ['orientationSelect', 'formatSelect', 'widthInput', 'heightInput'];
         controls.forEach(id => { byId(id).disabled = !entry; });
         if (!entry) return;
         const page = entry.template.page;
-        const format = entry.customFormat ? 'custom' : detectFormat(page);
+        const format = entry.customFormat ? 'custom' : detectFormat(entry.template);
         byId('orientationSelect').value = page.width > page.height ? 'landscape' : 'portrait';
         byId('formatSelect').value = format;
         byId('widthInput').value = page.width;
@@ -2041,8 +2093,6 @@
         byId('widthInput').disabled = format !== 'custom';
         byId('heightInput').disabled = format !== 'custom';
         byId('sizeCm').textContent = sizeInCm(page.width, page.height);
-        byId('duplicateHorizontal').checked = !!entry.template.duplicate_horizontal;
-        byId('duplicateVertical').checked = !!entry.template.duplicate_vertical;
     }
 
     function resizePage(width, height) {
@@ -2062,9 +2112,16 @@
             return;
         }
         entry.customFormat = false;
-        const preset = PRESET_FORMATS[format];
+        const size = PRINT_SIZES.find(candidate => candidate.page_size === format);
+        const pixels = printSizePixels(size);
         const landscape = byId('orientationSelect').value === 'landscape';
-        resizePage(landscape ? preset.long : preset.short, landscape ? preset.short : preset.long);
+        // The page is one print; the printer gets the sheet it is cut from,
+        // with the page laid on it as many times as it is cut.
+        entry.template.print_params = Object.assign({ 'print-scaling': 'fit' }, entry.template.print_params, { PageSize: size.page_size });
+        entry.template.copies_per_sheet = size.count;
+        entry.template.duplicate_horizontal = false;
+        entry.template.duplicate_vertical = false;
+        resizePage(landscape ? pixels.long : pixels.short, landscape ? pixels.short : pixels.long);
     });
 
     byId('orientationSelect').addEventListener('change', () => {
@@ -2089,18 +2146,6 @@
     byId('widthInput').addEventListener('change', onPageSizeTyped);
     byId('heightInput').addEventListener('change', onPageSizeTyped);
     ['widthInput', 'heightInput', 'gridSizeInput'].forEach(id => commitOnEnter(byId(id)));
-
-    ['duplicateHorizontal', 'duplicateVertical'].forEach(id => {
-        byId(id).addEventListener('change', () => {
-            const entry = currentEntry();
-            const horizontal = id === 'duplicateHorizontal';
-            const checked = byId(id).checked;
-            // Printed twice one way or the other, not both.
-            entry.template.duplicate_horizontal = horizontal ? checked : (checked ? false : entry.template.duplicate_horizontal);
-            entry.template.duplicate_vertical = horizontal ? (checked ? false : entry.template.duplicate_vertical) : checked;
-            commit();
-        });
-    });
 
     byId('gridToggle').addEventListener('change', () => {
         state.gridEnabled = byId('gridToggle').checked;
@@ -2418,29 +2463,8 @@
     const STARTERS = {
         empty_landscape: () => ({ page: { width: 1800, height: 1200 }, photos: [], print_params: PRINT_10X15 }),
         empty_portrait: () => ({ page: { width: 1200, height: 1800 }, photos: [], print_params: PRINT_10X15 }),
-        empty_strip: () => ({ page: { width: 600, height: 1800 }, photos: [], print_params: PRINT_STRIP, duplicate_horizontal: true }),
         full_landscape: () => ({ page: { width: 1800, height: 1200 }, photos: [{ x: 60, y: 60, width: 1680, height: 1080 }], print_params: PRINT_10X15 }),
         full_portrait: () => ({ page: { width: 1200, height: 1800 }, photos: [{ x: 60, y: 60, width: 1080, height: 1680 }], print_params: PRINT_10X15 }),
-        strip_portrait: () => ({
-            page: { width: 600, height: 1800 },
-            photos: [
-                { x: 30, y: 30, width: 540, height: 540 },
-                { x: 30, y: 600, width: 540, height: 540 },
-                { x: 30, y: 1170, width: 540, height: 540 },
-            ],
-            print_params: PRINT_STRIP,
-            duplicate_horizontal: true,
-        }),
-        strip_landscape: () => ({
-            page: { width: 1800, height: 600 },
-            photos: [
-                { x: 30, y: 30, width: 540, height: 540 },
-                { x: 630, y: 30, width: 540, height: 540 },
-                { x: 1230, y: 30, width: 540, height: 540 },
-            ],
-            print_params: PRINT_STRIP,
-            duplicate_vertical: true,
-        }),
         custom: () => ({ page: readNewTemplateSize(), photos: [], print_params: PRINT_10X15 }),
     };
 
@@ -2699,6 +2723,7 @@
             margin_percent: finite(entry.template.margin_percent, 5),
             duplicate_horizontal: !!entry.template.duplicate_horizontal,
             duplicate_vertical: !!entry.template.duplicate_vertical,
+            copies_per_sheet: copiesPerSheet(entry.template),
             design: savedDesign,
         };
     }

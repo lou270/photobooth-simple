@@ -55,7 +55,7 @@ EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
     'fill', 'fill_color', 'outline', 'outline_color', 'corner_radius', 'color', 'text', 'font', 'font_print',
     'font_size', 'alignment', 'text_left', 'text_center', 'text_right', 'bold', 'italic', 'new_label_text',
     'label_info', 'photo_order', 'photo_info', 'field_info', 'placeholder_event_title', 'placeholder_date_title',
-    'placeholder_time_title', 'printed_twice', 'status_hint',
+    'placeholder_time_title', 'printed_again', 'per_sheet', 'status_hint',
     # images, preview, export
     'uploading_image', 'image_failed', 'image_unsupported', 'image_too_heavy', 'image_loading', 'image_missing',
     'image_missing_help', 'images_missing_error', 'no_photo_slot', 'hidden_slot_error', 'too_many_layers',
@@ -108,6 +108,7 @@ def create_blueprint(server):
                 for font_id, label, regular, bold in DESIGN_FONTS
             ],
             sample_photo_count=SAMPLE_PHOTO_COUNT,
+            print_sizes=server._print_sizes(),
         )
 
     @blueprint.route('/admin/editor/fonts/<variant>')

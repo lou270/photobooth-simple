@@ -105,6 +105,7 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Print', 'option': 'MAX_COPIES', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 10, 'step': 1, 'unit': 'copies', 'default': '3'},
             {'section': 'Print', 'option': 'COLLAGE_DPI', 'control': 'select', 'default': '300',
              'choices': [('300', 'web.config.choices.collage_dpi.300'), ('600', 'web.config.choices.collage_dpi.600')]},
+            {'section': 'Print', 'option': 'CUT_OFFSET', 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 1, 'unit': 'pixels', 'default': '20'},
             {'section': 'Print', 'option': 'PRINTER_WAIT_TIMEOUT', 'control': 'number', 'number_type': 'int', 'min': 5, 'step': 1, 'unit': 'seconds', 'default': '45'},
         ),
     },

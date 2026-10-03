@@ -106,6 +106,7 @@ class PhotoboothApp(App):
         self.MAX_PRINTS = config.get_max_prints()
         self.MAX_COPIES = config.get_max_copies()
         self.COLLAGE_DPI = config.get_collage_dpi()
+        self.CUT_OFFSET = config.get_cut_offset()
         self.CALIBRATION = config.get_calibration()
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
@@ -219,7 +220,15 @@ class PhotoboothApp(App):
     def _load_templates(self):
         # Always at least one format: load_templates() falls back to a built-in
         # template rather than returning an empty list.
-        self.print_formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
+        self.print_formats = self._read_templates()
+
+    def _read_templates(self):
+        """The templates on disk, each laid out on the page the printer's driver gives it."""
+        formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
+        pages = self.devices.get_printer_pages() if self.devices else {}
+        for print_format in formats:
+            print_format.set_printer_page(pages.get(print_format.get_print_params().get('PageSize')), self.CUT_OFFSET)
+        return formats
 
     def reload_templates(self):
         """Pick up templates the editor saved or deleted, without a restart.
@@ -234,7 +243,7 @@ class PhotoboothApp(App):
 
         def load():
             try:
-                formats = load_templates('templates', text_values=self.get_text_values, dpi=self.COLLAGE_DPI)
+                formats = self._read_templates()
                 for print_format in formats:
                     print_format.get_preview()
             except Exception as exc:
@@ -319,6 +328,7 @@ class PhotoboothApp(App):
             stats_store=self.stats_store,
             restart_callback=self.request_restart,
             templates_changed_callback=self.reload_templates,
+            page_sizes_provider=self.devices.get_page_sizes,
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,

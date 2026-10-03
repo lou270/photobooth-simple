@@ -12,7 +12,7 @@ from flask import Flask, g, jsonify, request, render_template, redirect, session
 from werkzeug.serving import make_server
 from kivy.logger import Logger
 
-from libs import event, i18n
+from libs import event, i18n, print_sizes
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
@@ -41,7 +41,7 @@ class WebServer:
     })
 
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
-                 restart_callback=None, templates_changed_callback=None, remote_store=None, remote_enabled=False, share_enabled=False,
+                 restart_callback=None, templates_changed_callback=None, page_sizes_provider=None, remote_store=None, remote_enabled=False, share_enabled=False,
                  booth_language=i18n.DEFAULT_LANGUAGE):
         self.save_directory = save_directory
         self.host = host
@@ -61,6 +61,9 @@ class WebServer:
         # Told whenever the editor saves or deletes a template, so the booth
         # offers it without being restarted.
         self.templates_changed_callback = templates_changed_callback
+        # Returns the printer's (name, label) page sizes, for the editor to
+        # offer: what one printer cuts a sheet into is not what another does.
+        self.page_sizes_provider = page_sizes_provider
         # The queue phones send photos to. Kept as a flag of its own rather than
         # inferred from the store: the operator turns the feature off without
         # the photos already received going anywhere.
@@ -381,6 +384,19 @@ class WebServer:
             self.templates_changed_callback()
         except Exception as exc:
             Logger.error(f'WebServer: could not ask the booth to reload its templates: {exc}')
+
+    def _print_sizes(self):
+        """The print sizes the editor offers, and whether they came from the printer."""
+        choices = []
+        if callable(self.page_sizes_provider):
+            try:
+                choices = self.page_sizes_provider() or []
+            except Exception as exc:
+                Logger.warning(f'WebServer: printer page sizes unavailable: {exc}')
+        sizes = print_sizes.describe_all(choices)
+        if sizes:
+            return {'from_printer': True, 'sizes': sizes}
+        return {'from_printer': False, 'sizes': print_sizes.describe_all(print_sizes.FALLBACK_PAGE_SIZES)}
 
     def _event_text_values(self):
         """Today's values for template placeholders, from config.ini as it stands."""

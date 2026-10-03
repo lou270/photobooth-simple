@@ -6,6 +6,7 @@ import traceback
 import numpy as np
 from kivy.logger import Logger
 
+from libs import print_sizes
 from libs.file_utils import FileUtils
 from libs.hardware import Camera, FakeCamera
 
@@ -648,6 +649,26 @@ class CupsPrinter(PrintDevice):
             raise RuntimeError(f"Printer '{self._name}' is not available")
         return self._instance.printFile(self._name, os.path.abspath(file_path), os.path.basename(file_path), print_params)
 
+    def get_pages(self):
+        """Every page size the printer's driver offers, see print_sizes.read_ppd.
+
+        Read from its PPD, where Gutenprint labels each size after the prints
+        it comes out as ("2x4*3"): that label, not the name, says how the
+        sheet is cut, and it differs from one printer to the next.
+
+        Asked from the web server's thread too, so on a connection of its own:
+        the booth's is in use by the print jobs it is following.
+        """
+        ppd_path = cups.Connection().getPPD(self._name)
+        try:
+            with open(ppd_path, 'r', encoding='latin-1') as handle:
+                return print_sizes.read_ppd(handle.read())
+        finally:
+            try:
+                os.unlink(ppd_path)
+            except OSError:
+                pass
+
     # IPP job-state values, RFC 8011 section 5.3.7. Naming them because the bare
     # numbers were read backwards: 9 is completed, not canceled, so every
     # successful print was reported as a failure and every failed one as a
@@ -831,6 +852,20 @@ class DeviceUtils:
     def print(self, file_path, print_params={}):
         if not self._printer: raise RuntimeError('No printer configured')
         return self._printer.print(file_path, print_params)
+
+    def get_printer_pages(self):
+        """The printer's page sizes and their geometry, or an empty dict without one."""
+        if self._printer is None:
+            return {}
+        try:
+            return self._printer.get_pages()
+        except Exception as exc:
+            Logger.warning('DeviceUtils: could not read the printer page sizes: %s', exc)
+            return {}
+
+    def get_page_sizes(self):
+        """The printer's (name, label) page sizes, in its driver's order."""
+        return [(name, page['label']) for name, page in self.get_printer_pages().items()]
 
     def get_print_status(self, task_id):
         if not self._printer: return 'done'
