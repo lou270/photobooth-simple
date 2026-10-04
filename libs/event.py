@@ -39,6 +39,18 @@ WELCOME_FONTS = {
 }
 DEFAULT_WELCOME_FONT = 'elegant'
 
+# Fonts a template's text may be set in besides the booth's own print font:
+# the welcome screen's letterings, already shipped. (id, name shown, regular
+# file, bold file or None.) The editor flattens fixed text in the browser, but
+# text that changes with each photo is drawn here, so both need the files.
+DESIGN_FONTS = (
+    ('playfair', 'Playfair Display', 'PlayfairDisplay.ttf', None),
+    ('great-vibes', 'Great Vibes', 'GreatVibes-Regular.ttf', None),
+    ('montserrat', 'Montserrat', 'Montserrat-Medium.ttf', 'Montserrat-Bold.ttf'),
+    ('fredoka', 'Fredoka', 'Fredoka-Medium.ttf', 'Fredoka-SemiBold.ttf'),
+)
+DESIGN_FONT_IDS = tuple(font[0] for font in DESIGN_FONTS)
+
 # The words a template may put in its text: {event}, {date}, {time}. Anything
 # else between braces is left as written, so a stray brace in an event name, or
 # a placeholder from a newer version, prints as text instead of failing.
@@ -77,13 +89,23 @@ def fill_placeholders(text, values):
     return PLACEHOLDER_PATTERN.sub(lambda match: str(values.get(match.group(1), '')), text or '')
 
 
-def font_path(bold=False):
+def font_path(bold=False, font=None):
     """The font printed text is drawn in, and the one the template editor shows.
 
-    Roboto, as shipped inside Kivy: the booth already depends on it, so text on
-    a print needs no font of its own in the repository. Located without
-    importing Kivy, which would open a window in a headless process.
+    `font` is one of DESIGN_FONT_IDS, or None for the booth's own: Roboto, as
+    shipped inside Kivy, so text on a print needs no font of its own in the
+    repository. Located without importing Kivy, which would open a window in a
+    headless process. A design font with no bold face is drawn regular, as the
+    editor shows it: there is no bold to draw.
     """
+    for font_id, _label, regular, bold_file in DESIGN_FONTS:
+        if font_id == font:
+            path = WELCOME_FONT_DIRECTORY / (bold_file if bold and bold_file else regular)
+            if path.is_file():
+                return path
+            Logger.warning('Event: font %s not found, using the print font', path)
+            break
+
     spec = importlib.util.find_spec('kivy')
     if spec is None or not spec.submodule_search_locations:
         return None

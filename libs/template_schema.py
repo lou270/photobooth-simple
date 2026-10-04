@@ -13,6 +13,8 @@ import binascii
 import json
 import re
 
+from libs import event
+
 # A 10x15 cm page at 300 dpi is about 2.1 Mpx; the ceiling leaves room for
 # large or duplicated layouts while keeping a single canvas well under the
 # memory a Raspberry Pi can spare.
@@ -146,13 +148,22 @@ def _validate_texts(texts, page):
         if align not in TEXT_ALIGNMENTS:
             raise TemplateValidationError(f'{field}.align must be one of {", ".join(TEXT_ALIGNMENTS)}')
 
-        validated.append({
+        # Absent means the booth's own print font, as in every template made
+        # before texts could have another; such a template stays as it was.
+        font = text.get('font')
+        if font is not None and font not in event.DESIGN_FONT_IDS:
+            raise TemplateValidationError(f'{field}.font must be one of {", ".join(event.DESIGN_FONT_IDS)}')
+
+        box = {
             'x': x, 'y': y, 'width': width, 'height': height,
             'text': content,
             'color': color.lower(),
             'align': align,
             'bold': bool(text.get('bold', False)),
-        })
+        }
+        if font is not None:
+            box['font'] = font
+        validated.append(box)
 
     return validated
 

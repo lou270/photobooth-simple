@@ -52,6 +52,23 @@ def test_the_print_font_is_found_without_importing_kivy():
     assert event.font_path(bold=True).name == 'Roboto-Bold.ttf'
 
 
+def test_a_design_font_is_found_in_its_bold_face_when_it_has_one():
+    assert event.font_path(font='montserrat').name == 'Montserrat-Medium.ttf'
+    assert event.font_path(bold=True, font='montserrat').name == 'Montserrat-Bold.ttf'
+    # No bold Great Vibes is shipped: regular, as the editor shows it.
+    assert event.font_path(bold=True, font='great-vibes').name == 'GreatVibes-Regular.ttf'
+
+
+def test_an_unknown_font_prints_in_the_booth_s_own():
+    assert event.font_path(font='comic-sans').name == 'Roboto-Regular.ttf'
+
+
+def test_every_design_font_ships_its_files():
+    for _font_id, _label, regular, bold in event.DESIGN_FONTS:
+        assert (event.WELCOME_FONT_DIRECTORY / regular).is_file()
+        assert bold is None or (event.WELCOME_FONT_DIRECTORY / bold).is_file()
+
+
 # --- config.ini --------------------------------------------------------------
 
 def write_config(tmp_path, monkeypatch, body):
@@ -155,10 +172,25 @@ def test_a_template_without_texts_has_none():
     {'align': 'justify'},
     {'text': 'x' * 201},
     {'text': 42},
+    {'font': 'comic-sans'},
+    {'font': 'print'},           # the print font is written by leaving font out
 ])
 def test_a_malformed_text_box_is_refused(override):
     with pytest.raises(TemplateValidationError):
         validate_template(text_template(**override))
+
+
+@pytest.mark.parametrize('font', event.DESIGN_FONT_IDS)
+def test_a_text_box_keeps_its_font(font):
+    assert validate_template(text_template(font=font))['texts'][0]['font'] == font
+
+
+def test_a_text_box_is_printed_in_its_own_font():
+    roboto = ink(assemble(text_template(), 'Lou & Max'))
+    script = ink(assemble(text_template(font='great-vibes'), 'Lou & Max'))
+
+    assert len(script) and len(roboto)
+    assert len(script) != len(roboto) or (script != roboto).any()
 
 
 def ink(canvas):

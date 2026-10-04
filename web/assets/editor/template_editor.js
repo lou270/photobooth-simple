@@ -147,7 +147,7 @@
         line: { stroke: '#232946', strokeWidth: 8 },
         label: { text: '', font: 'playfair', fontSize: 120, bold: false, italic: false, color: '#232946', align: 'center' },
         photo: { number: 1 },
-        field: { text: '{event}', color: '#000000', align: 'center', bold: false },
+        field: { text: '{event}', font: 'print', color: '#000000', align: 'center', bold: false },
     };
 
     function makeElement(kind, props) {
@@ -220,6 +220,7 @@
                 color: isColor(text.color) ? text.color : '#000000',
                 align: ['left', 'center', 'right'].includes(text.align) ? text.align : 'center',
                 bold: text.bold === true,
+                font: designFont(text.font) ? text.font : 'print',
             }));
         });
         const layer = src => makeElement('image', Object.assign({ src }, fullPage));
@@ -525,10 +526,29 @@
         return FONTS.some(font => font.id === id) && id !== 'print' ? `design-${id}` : 'PrintFont';
     }
 
+    // One of the shipped design fonts, or null for the print font.
+    function designFont(id) {
+        return CONFIG.fonts.find(font => font.id === id) || null;
+    }
+
+    // A variable text is drawn by the booth, which cannot embolden a font that
+    // ships no bold face: it prints regular, so it is shown regular.
+    function fieldBold(item) {
+        const font = designFont(item.font);
+        return item.bold && (!font || !!font.bold);
+    }
+
+    // Counts the fonts that have arrived: a variable text fitted to its box in
+    // the fallback font is fitted again once its own is there.
+    let fontGeneration = 0;
+
     async function loadFonts(design) {
         const wanted = new Set(['16px PrintFont', 'bold 16px PrintFont']);
         allElements(design).filter(item => item.kind === 'label').forEach(item => {
             wanted.add(`${item.italic ? 'italic ' : ''}${item.bold ? 'bold ' : ''}40px ${fontFamily(item.font)}`);
+        });
+        allElements(design).filter(item => item.kind === 'field').forEach(item => {
+            wanted.add(`${fieldBold(item) ? 'bold ' : ''}40px ${fontFamily(item.font)}`);
         });
         await Promise.all([...wanted].map(font => document.fonts.load(font).catch(() => null)));
     }
@@ -596,8 +616,8 @@
         return String(text || '').replace(/\{(event|date|time)\}/g, (match, key) => state.textValues[key] || '');
     }
 
-    function measureTextBlock(ctx, lines, size, bold) {
-        ctx.font = `${bold ? 'bold ' : ''}${size}px PrintFont, sans-serif`;
+    function measureTextBlock(ctx, lines, size, bold, family) {
+        ctx.font = `${bold ? 'bold ' : ''}${size}px ${family}, sans-serif`;
         let width = 0;
         let ascent = size * 0.93;
         let descent = size * 0.24;
@@ -615,12 +635,12 @@
     }
 
     // The same search the booth runs: the largest size the lines fit the box in.
-    function fitTextSize(ctx, lines, width, height, bold) {
+    function fitTextSize(ctx, lines, width, height, bold, family) {
         let low = 1;
         let high = Math.max(1, Math.floor(height));
         while (low < high) {
             const size = Math.floor((low + high + 1) / 2);
-            const block = measureTextBlock(ctx, lines, size, bold);
+            const block = measureTextBlock(ctx, lines, size, bold, family);
             if (block.width <= width && block.height <= height) low = size;
             else high = size - 1;
         }
@@ -644,13 +664,13 @@
             const content = fillPlaceholders(this.fieldText).trim();
             if (content) {
                 const lines = content.split('\n').map(line => line.trim());
-                const key = `${lines.join('\n')}|${width}|${height}|${this.fieldBold}`;
+                const key = `${lines.join('\n')}|${width}|${height}|${this.fieldBold}|${this.fieldFamily}|${fontGeneration}`;
                 if (this._fitKey !== key) {
                     this._fitKey = key;
-                    this._fitSize = fitTextSize(ctx, lines, width, height, this.fieldBold);
+                    this._fitSize = fitTextSize(ctx, lines, width, height, this.fieldBold, this.fieldFamily);
                 }
                 const size = this._fitSize;
-                const block = measureTextBlock(ctx, lines, size, this.fieldBold);
+                const block = measureTextBlock(ctx, lines, size, this.fieldBold, this.fieldFamily);
                 ctx.fillStyle = this.fieldColor;
                 ctx.textBaseline = 'alphabetic';
                 let top = -height / 2 + Math.floor((height - block.height) / 2);
@@ -756,7 +776,8 @@
                 object.fieldText = item.text;
                 object.fieldColor = item.color;
                 object.fieldAlign = item.align;
-                object.fieldBold = item.bold;
+                object.fieldBold = fieldBold(item);
+                object.fieldFamily = fontFamily(item.font);
                 break;
             default:
                 return null;
@@ -1931,7 +1952,10 @@
                     row(textGrid, I18N.color, colorInput(item.color, value => liveEdit(item, { color: value }), value => finalEdit(item, { color: value })));
                     row(textGrid, I18N.alignment, alignmentSelect(item));
                 }
-                checkbox(look, I18N.bold, item.bold, value => finalEdit(item, { bold: value }));
+                row(look, I18N.font, selectInput(FONTS.map(font => ({ value: font.id, label: font.label })), item.font, value => finalEdit(item, { font: value })));
+                // Offered only where the booth has a bold face to print.
+                const font = designFont(item.font);
+                if (!font || font.bold) checkbox(look, I18N.bold, item.bold, value => finalEdit(item, { bold: value }));
                 look.append(element('div', 'info-text', I18N.field_info));
                 break;
             }
@@ -2689,10 +2713,13 @@
                     if (item.kind === 'photo') {
                         stack.push({ type: 'photo', index: slots.indexOf(item), opacity });
                     } else {
-                        texts.push({
+                        const text = {
                             x: item.x, y: item.y, width: item.width, height: item.height,
-                            text: item.text, color: item.color, align: item.align, bold: item.bold,
-                        });
+                            text: item.text, color: item.color, align: item.align, bold: fieldBold(item),
+                        };
+                        // Left out for the print font, as templates have always been.
+                        if (designFont(item.font)) text.font = item.font;
+                        texts.push(text);
                         stack.push({ type: 'text', index: texts.length - 1, opacity });
                     }
                 } else if (level.visible && opacity > 0) {
@@ -2868,6 +2895,7 @@
     // Fonts arrive after the first drawing; text measured in a fallback font
     // is measured again once the real one is there.
     document.fonts.addEventListener('loadingdone', () => {
+        fontGeneration += 1;
         fabric.cache.clearFontCache();
         scheduleRender();
     });

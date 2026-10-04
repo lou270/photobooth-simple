@@ -200,7 +200,7 @@ The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin aut
 - **Canvas:** Zoom (Ctrl + wheel) and pan (wheel, or Ctrl + drag), snapping to the page and to other elements with guides, optional grid, multiple selection, align and distribute, undo and redo, copy, paste and duplicate, arrow keys to nudge.
 - **Print format:** The format list is read from the printer's own driver, so it offers what that printer can actually cut: on a DNP QW410, 2x4*3 is a 4x6 sheet cut into three 2x4 prints. Picking one sizes the page to one print, and the booth lays it on the sheet as many times as the printer cuts it. With no printer connected, the editor offers the QW410's sizes.
 - **Photo slots:** Shown with a sample photo cropped the way the booth crops the real one.
-- **Variable texts:** `{event}`, `{date}` and `{time}` placeholders, previewed in the booth's own font with today's values.
+- **Variable texts:** `{event}`, `{date}` and `{time}` placeholders, in the booth's own font or one of the welcome screen's letterings, previewed with today's values.
 - **Formats:** Any print size the printer offers (see Print format above), or a custom size.
 - **Booth preview:** Shows the booth's own assembly of the template, with the sample photos, next to the editor's drawing.
 - **Import/Export:** A template exports as one JSON file with its images inside, which another booth can import or take as it is.
@@ -241,9 +241,11 @@ Each setting there says what it does, its default, and its name in `config.ini`.
 ### Text on the prints
 
 A template can carry variable text boxes, added in the template editor with **Variable**. The text is
-sized to fill its box - a long event name shrinks instead of running off the sheet - and drawn in
-Roboto, the font Kivy already ships, at the level the design puts it (over everything in a template
-without levels).
+sized to fill its box - a long event name shrinks instead of running off the sheet - and drawn at the
+level the design puts it (over everything in a template without levels). Its font is Roboto, the one
+Kivy already ships, unless the box names one of the welcome screen's letterings in `font`:
+`playfair`, `great-vibes`, `montserrat` or `fredoka`. Playfair Display and Great Vibes ship no bold
+face, so `bold` does nothing with them.
 
 | Placeholder | Prints as |
 | --- | --- |
@@ -256,7 +258,8 @@ Anything else between braces prints as written. In a template file, a box looks 
 ```json
 "texts": [
   {"x": 600, "y": 1020, "width": 600, "height": 120,
-   "text": "{event}\n{date}", "color": "#a0522d", "align": "center", "bold": true}
+   "text": "{event}\n{date}", "color": "#a0522d", "align": "center", "bold": true,
+   "font": "montserrat"}
 ]
 ```
 
