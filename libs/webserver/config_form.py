@@ -46,15 +46,17 @@ DSLR_ISO_CHOICES = [LEAVE_UNCHANGED] + [
 def _dslr_fields(section):
     # Both DSLR sections take the same four settings, so they share their words.
     return (
-        {'section': section, 'option': 'SHUTTERSPEED', 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_SHUTTERSPEED_CHOICES, 'default': ''},
-        {'section': section, 'option': 'APERTURE', 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_APERTURE_CHOICES, 'default': ''},
-        {'section': section, 'option': 'FOCUSMODE', 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_FOCUSMODE_CHOICES, 'default': ''},
-        {'section': section, 'option': 'ISO', 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_ISO_CHOICES, 'default': ''},
+        {'section': section, 'option': 'SHUTTERSPEED', 'advanced': True, 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_SHUTTERSPEED_CHOICES, 'default': ''},
+        {'section': section, 'option': 'APERTURE', 'advanced': True, 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_APERTURE_CHOICES, 'default': ''},
+        {'section': section, 'option': 'FOCUSMODE', 'advanced': True, 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_FOCUSMODE_CHOICES, 'default': ''},
+        {'section': section, 'option': 'ISO', 'advanced': True, 'text_key': 'DSLR', 'control': 'select', 'choices': DSLR_ISO_CHOICES, 'default': ''},
     )
 
 
 # Ordered the way an operator sets a booth up for an evening, not the way
 # config.ini happens to be laid out: each field still names its own [Section].
+# 'advanced' marks what is set once at install, or only to work around a
+# problem: the admin page hides it until the operator asks for every setting.
 # 'default' is what libs/config.py falls back to when the option is absent, as
 # it would be written in the file; test_config_form holds the two together.
 CONFIG_FORM_SECTIONS = (
@@ -67,21 +69,21 @@ CONFIG_FORM_SECTIONS = (
              'choices': [('elegant', 'web.config.choices.welcome_font.elegant'), ('script', 'web.config.choices.welcome_font.script'),
                          ('modern', 'web.config.choices.welcome_font.modern'), ('playful', 'web.config.choices.welcome_font.playful')]},
             {'section': 'Event', 'option': 'EVENT_NAME', 'control': 'text', 'placeholder': 'Lou & Max', 'default': ''},
-            {'section': 'Event', 'option': 'DATE_FORMAT', 'control': 'text', 'placeholder': '%d/%m/%Y', 'default': '%d/%m/%Y'},
+            {'section': 'Event', 'option': 'DATE_FORMAT', 'advanced': True, 'control': 'text', 'placeholder': '%d/%m/%Y', 'default': '%d/%m/%Y'},
         ),
     },
     {
         'id': 'slideshow',
         'fields': (
             {'section': 'Slideshow', 'option': 'SLIDESHOW', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Slideshow', 'option': 'SLIDESHOW_IDLE_SECONDS', 'control': 'number', 'number_type': 'int', 'min': 10, 'step': 1, 'unit': 'seconds', 'default': '60'},
-            {'section': 'Slideshow', 'option': 'SLIDESHOW_PHOTO_SECONDS', 'control': 'number', 'number_type': 'int', 'min': 2, 'step': 1, 'unit': 'seconds', 'default': '6'},
+            {'section': 'Slideshow', 'option': 'SLIDESHOW_IDLE_SECONDS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 10, 'step': 1, 'unit': 'seconds', 'default': '60'},
+            {'section': 'Slideshow', 'option': 'SLIDESHOW_PHOTO_SECONDS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 2, 'step': 1, 'unit': 'seconds', 'default': '6'},
         ),
     },
     {
         'id': 'timing',
         'fields': tuple(
-            {'section': 'Timing', 'option': option, 'control': 'number', 'number_type': 'int', 'min': minimum, 'step': 1, 'unit': 'seconds', 'default': str(timings.DEFAULTS[name])}
+            {'section': 'Timing', 'option': option, 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': minimum, 'step': 1, 'unit': 'seconds', 'default': str(timings.DEFAULTS[name])}
             for name, (option, minimum) in TIMING_OPTIONS.items()
         ),
     },
@@ -94,12 +96,12 @@ CONFIG_FORM_SECTIONS = (
              'choices': [('auto', 'web.config.choices.camera.auto'), ('gphoto2', 'web.config.choices.camera.gphoto2'),
                          ('picamera2', 'web.config.choices.camera.picamera2'), ('opencv', 'web.config.choices.camera.opencv'),
                          ('fake', 'web.config.choices.camera.fake')]},
-            {'section': 'Capture', 'option': 'CALIBRATION', 'control': 'text', 'placeholder': '(1.4, 0, 0)', 'default': 'None', 'default_key': 'web.config.value.disabled'},
-            {'section': 'Capture', 'option': 'DSLR_HOT_PIXEL_FILTER', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Capture', 'option': 'BLUR_CAMERA', 'control': 'checkbox', 'default': 'True'},
-            {'section': 'Capture', 'option': 'PREVIEW_BLUR_REFRESH_FRAMES', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'frames', 'default': '3'},
-            {'section': 'Capture', 'option': 'BLUR_IMAGES', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Capture', 'option': 'BLUR_COLLAGE', 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Capture', 'option': 'CALIBRATION', 'advanced': True, 'control': 'text', 'placeholder': '(1.4, 0, 0)', 'default': 'None', 'default_key': 'web.config.value.disabled'},
+            {'section': 'Capture', 'option': 'DSLR_HOT_PIXEL_FILTER', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Capture', 'option': 'BLUR_CAMERA', 'advanced': True, 'control': 'checkbox', 'default': 'True'},
+            {'section': 'Capture', 'option': 'PREVIEW_BLUR_REFRESH_FRAMES', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'frames', 'default': '3'},
+            {'section': 'Capture', 'option': 'BLUR_IMAGES', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Capture', 'option': 'BLUR_COLLAGE', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
         ),
     },
     {
@@ -108,10 +110,10 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Print', 'option': 'PRINTER', 'control': 'text', 'placeholder': 'photobooth', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.printing_disabled'},
             {'section': 'Print', 'option': 'MAX_PRINTS', 'control': 'number', 'number_type': 'optional_int', 'min': 0, 'step': 1, 'unit': 'prints', 'placeholder_key': 'web.config.value.unlimited', 'default': 'None', 'default_key': 'web.config.value.unlimited'},
             {'section': 'Print', 'option': 'MAX_COPIES', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 10, 'step': 1, 'unit': 'copies', 'default': '3'},
-            {'section': 'Print', 'option': 'COLLAGE_DPI', 'control': 'select', 'default': '300',
+            {'section': 'Print', 'option': 'COLLAGE_DPI', 'advanced': True, 'control': 'select', 'default': '300',
              'choices': [('300', 'web.config.choices.collage_dpi.300'), ('600', 'web.config.choices.collage_dpi.600')]},
-            {'section': 'Print', 'option': 'CUT_OFFSET', 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 1, 'unit': 'pixels', 'default': '20'},
-            {'section': 'Print', 'option': 'PRINTER_WAIT_TIMEOUT', 'control': 'number', 'number_type': 'int', 'min': 5, 'step': 1, 'unit': 'seconds', 'default': '45'},
+            {'section': 'Print', 'option': 'CUT_OFFSET', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 1, 'unit': 'pixels', 'default': '20'},
+            {'section': 'Print', 'option': 'PRINTER_WAIT_TIMEOUT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 5, 'step': 1, 'unit': 'seconds', 'default': '45'},
         ),
     },
     {
@@ -119,11 +121,11 @@ CONFIG_FORM_SECTIONS = (
         'fields': (
             {'section': 'Global', 'option': 'SHARE', 'control': 'checkbox', 'default': 'True'},
             {'section': 'Remote', 'option': 'REMOTE_CAPTURE', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Remote', 'option': 'REMOTE_MAX_UPLOAD_MB', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'megabytes', 'default': '12'},
-            {'section': 'Remote', 'option': 'REMOTE_MAX_IMAGE_PIXELS', 'control': 'number', 'number_type': 'int', 'min': 640, 'step': 10, 'unit': 'pixels', 'default': '2400'},
-            {'section': 'Remote', 'option': 'REMOTE_MAX_PER_SENDER', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'photos', 'default': '20'},
-            {'section': 'Remote', 'option': 'REMOTE_MAX_PENDING', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'photos', 'default': '200'},
-            {'section': 'Remote', 'option': 'REMOTE_MIN_UPLOAD_INTERVAL', 'control': 'number', 'number_type': 'int', 'min': 0, 'step': 1, 'unit': 'seconds', 'default': '3'},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_UPLOAD_MB', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'megabytes', 'default': '12'},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_IMAGE_PIXELS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 640, 'step': 10, 'unit': 'pixels', 'default': '2400'},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_PER_SENDER', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'photos', 'default': '20'},
+            {'section': 'Remote', 'option': 'REMOTE_MAX_PENDING', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'photos', 'default': '200'},
+            {'section': 'Remote', 'option': 'REMOTE_MIN_UPLOAD_INTERVAL', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 0, 'step': 1, 'unit': 'seconds', 'default': '3'},
         ),
     },
     {
@@ -131,8 +133,8 @@ CONFIG_FORM_SECTIONS = (
         'fields': (
             {'section': 'WiFi', 'option': 'WIFI_SSID', 'control': 'text', 'placeholder': 'Photobooth', 'default': ''},
             {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'control': 'text', 'placeholder_key': 'web.config.value.open_network', 'default': ''},
-            {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Remote', 'option': 'REMOTE_URL', 'control': 'text', 'placeholder': '192.168.8.20:5000', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.automatic'},
+            {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Remote', 'option': 'REMOTE_URL', 'advanced': True, 'control': 'text', 'placeholder': '192.168.8.20:5000', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.automatic'},
         ),
     },
     {
@@ -140,44 +142,42 @@ CONFIG_FORM_SECTIONS = (
         'fields': (
             {'section': 'Global', 'option': 'LANGUAGE', 'control': 'select', 'default': 'en',
              'choices': [('en', 'web.config.choices.language.en'), ('fr', 'web.config.choices.language.fr')]},
-            {'section': 'Global', 'option': 'FULLSCREEN', 'control': 'checkbox', 'default': 'True'},
-            {'section': 'Global', 'option': 'WINDOW_WIDTH', 'control': 'number', 'number_type': 'int', 'min': 320, 'step': 1, 'unit': 'pixels', 'default': '1024'},
-            {'section': 'Global', 'option': 'WINDOW_HEIGHT', 'control': 'number', 'number_type': 'int', 'min': 320, 'step': 1, 'unit': 'pixels', 'default': '600'},
-            {'section': 'Global', 'option': 'ROTATION', 'control': 'select', 'default': '0',
+            {'section': 'Global', 'option': 'FULLSCREEN', 'advanced': True, 'control': 'checkbox', 'default': 'True'},
+            {'section': 'Global', 'option': 'WINDOW_WIDTH', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 320, 'step': 1, 'unit': 'pixels', 'default': '1024'},
+            {'section': 'Global', 'option': 'WINDOW_HEIGHT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 320, 'step': 1, 'unit': 'pixels', 'default': '600'},
+            {'section': 'Global', 'option': 'ROTATION', 'advanced': True,'control': 'select', 'default': '0',
              'choices': [('0', 'web.config.choices.rotation.0'), ('90', 'web.config.choices.rotation.90'),
                          ('180', 'web.config.choices.rotation.180'), ('270', 'web.config.choices.rotation.270')]},
-            {'section': 'Global', 'option': 'RINGLED', 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Global', 'option': 'RINGLED_PIXELS', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 256, 'step': 1, 'unit': 'leds', 'default': '12'},
+            {'section': 'Global', 'option': 'RINGLED', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Global', 'option': 'RINGLED_PIXELS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 256, 'step': 1, 'unit': 'leds', 'default': '12'},
         ),
     },
     {
         'id': 'storage',
         'fields': (
-            {'section': 'Storage', 'option': 'DCIM_DIRECTORY', 'control': 'text', 'placeholder': './DCIM', 'default': './DCIM'},
-            {'section': 'Storage', 'option': 'DISK_MIN_FREE_GB', 'control': 'number', 'number_type': 'float', 'min': 0, 'step': 0.1, 'unit': 'gigabytes', 'default': '2.0'},
-            {'section': 'Storage', 'option': 'DISK_MAX_USED_PERCENT', 'control': 'number', 'number_type': 'float', 'min': 0, 'max': 100, 'step': 0.1, 'unit': 'percent', 'default': '90.0'},
+            {'section': 'Storage', 'option': 'DCIM_DIRECTORY', 'advanced': True, 'control': 'text', 'placeholder': './DCIM', 'default': './DCIM'},
+            {'section': 'Storage', 'option': 'DISK_MIN_FREE_GB', 'advanced': True, 'control': 'number', 'number_type': 'float', 'min': 0, 'step': 0.1, 'unit': 'gigabytes', 'default': '2.0'},
+            {'section': 'Storage', 'option': 'DISK_MAX_USED_PERCENT', 'advanced': True, 'control': 'number', 'number_type': 'float', 'min': 0, 'max': 100, 'step': 0.1, 'unit': 'percent', 'default': '90.0'},
             {'section': 'USB', 'option': 'USB_EXPORT', 'control': 'checkbox', 'default': 'True'},
-            {'section': 'USB', 'option': 'USB_MIN_FREE_GB', 'control': 'number', 'number_type': 'float', 'min': 0, 'step': 0.1, 'unit': 'gigabytes', 'default': '1.0'},
+            {'section': 'USB', 'option': 'USB_MIN_FREE_GB', 'advanced': True, 'control': 'number', 'number_type': 'float', 'min': 0, 'step': 0.1, 'unit': 'gigabytes', 'default': '1.0'},
         ),
     },
     {
         'id': 'access',
         'fields': (
             {'section': 'Global', 'option': 'ADMIN_PASSWORD', 'control': 'password', 'placeholder_key': 'web.config.password_placeholder'},
-            {'section': 'Web', 'option': 'WEB_PORT', 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 65535, 'step': 1, 'default': '5000'},
-            {'section': 'Web', 'option': 'WEB_HOST', 'control': 'text', 'placeholder': '0.0.0.0', 'default': '0.0.0.0'},
-            {'section': 'Log', 'option': 'LOG_RETENTION_DAYS', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'days', 'default': '14'},
-            {'section': 'Log', 'option': 'LOG_MAX_FILES', 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'files', 'default': '40'},
+            {'section': 'Web', 'option': 'WEB_PORT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 65535, 'step': 1, 'default': '5000'},
+            {'section': 'Web', 'option': 'WEB_HOST', 'advanced': True, 'control': 'text', 'placeholder': '0.0.0.0', 'default': '0.0.0.0'},
+            {'section': 'Log', 'option': 'LOG_RETENTION_DAYS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'days', 'default': '14'},
+            {'section': 'Log', 'option': 'LOG_MAX_FILES', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'files', 'default': '40'},
         ),
     },
     {
         'id': 'dslr_liveview',
-        'advanced': True,
         'fields': _dslr_fields('DSLR_Liveview'),
     },
     {
         'id': 'dslr_capture',
-        'advanced': True,
         'fields': _dslr_fields('DSLR_Capture'),
     },
 )
@@ -322,7 +322,8 @@ def render_sections(parser, form_values=None, lang=i18n.DEFAULT_LANGUAGE):
             'id': section_spec['id'],
             'title': i18n.translate(lang, f'web.config.sections.{section_spec["id"]}.title'),
             'description': i18n.translate(lang, f'web.config.sections.{section_spec["id"]}.description'),
-            'advanced': section_spec.get('advanced', False),
+            # A section with nothing simple in it disappears along with its fields.
+            'advanced': all(field.get('advanced', False) for field in rendered_fields),
             'fields': rendered_fields,
         })
 

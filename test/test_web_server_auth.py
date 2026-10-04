@@ -240,7 +240,10 @@ def test_the_admin_page_names_every_setting_as_config_ini_does(client, editable_
     login(client)
     page = client.get('/admin').get_data(as_text=True)
 
-    assert page.count('class="setting-row"') == sum(len(s['fields']) for s in CONFIG_FORM_SECTIONS)
+    fields = [f for s in CONFIG_FORM_SECTIONS for f in s['fields']]
+    # Advanced settings are hidden by the page's switch, never left out of it.
+    assert page.count('class="setting-row') == len(fields)
+    assert page.count('class="setting-row is-advanced"') == sum(1 for f in fields if f.get('advanced'))
     assert '[Capture] COUNTDOWN' in page
 
 

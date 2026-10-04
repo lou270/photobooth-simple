@@ -161,6 +161,65 @@
             text-transform: uppercase;
         }
 
+        /* Simple / Advanced. Without the script there is no switch and every
+           setting shows, so nothing ever becomes unreachable. */
+        .settings-mode,
+        .settings-mode-hint {
+            display: none;
+        }
+
+        #settings[data-mode] .settings-mode {
+            display: inline-flex;
+            gap: 4px;
+            margin-top: 14px;
+            padding: 4px;
+            border: 1px solid var(--panel-border);
+            border-radius: 999px;
+            background: var(--panel-muted);
+        }
+
+        .settings-mode-btn {
+            padding: 6px 16px;
+            border: none;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--text-secondary);
+            font: inherit;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+
+        .settings-mode-btn[aria-pressed="true"] {
+            background: var(--accent-soft);
+            color: var(--text-primary);
+        }
+
+        #settings[data-mode="simple"] .settings-mode-hint[data-for-mode="simple"],
+        #settings[data-mode="advanced"] .settings-mode-hint[data-for-mode="advanced"] {
+            display: block;
+            margin-top: 10px;
+            font-size: 14px;
+        }
+
+        #settings[data-mode="simple"] .is-advanced {
+            display: none;
+        }
+
+        /* The first visible row draws no divider, even when hidden rows precede it. */
+        #settings[data-mode="simple"] .setting-row {
+            border-top: none;
+        }
+
+        #settings[data-mode="simple"] .setting-row:not(.is-advanced) ~ .setting-row:not(.is-advanced) {
+            border-top: 1px solid var(--panel-border);
+        }
+
+        .setting-text .badge {
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+
         .setting-row {
             display: grid;
             grid-template-columns: minmax(0, 1fr) minmax(220px, 300px);
@@ -531,20 +590,28 @@
                 <header class="settings-header">
                     <h2>{{ t('web.config.heading') }}</h2>
                     <p>{{ t('web.config.intro') }}</p>
+                    {% if config_sections %}
+                    <div class="settings-mode" role="group" aria-label="{{ t('web.config.mode.label') }}">
+                        <button type="button" class="settings-mode-btn" data-mode="simple" aria-pressed="true">{{ t('web.config.mode.simple') }}</button>
+                        <button type="button" class="settings-mode-btn" data-mode="advanced" aria-pressed="false">{{ t('web.config.mode.advanced') }}</button>
+                    </div>
+                    <p class="settings-mode-hint" data-for-mode="simple">{{ t('web.config.mode.simple_hint') }}</p>
+                    <p class="settings-mode-hint" data-for-mode="advanced">{{ t('web.config.mode.advanced_hint') }}</p>
+                    {% endif %}
                 </header>
 
                 <div class="settings-layout">
                     <nav class="settings-toc" aria-label="{{ t('web.config.toc') }}">
                         <ol>
                             {% for section in config_sections %}
-                            <li><a href="#section-{{ section.id }}">{{ section.title }}</a></li>
+                            <li{% if section.advanced %} class="is-advanced"{% endif %}><a href="#section-{{ section.id }}">{{ section.title }}</a></li>
                             {% endfor %}
                         </ol>
                     </nav>
 
                     <form id="config-form" method="post" action="/admin/config">
                         {% for section in config_sections %}
-                        <section class="settings-section" id="section-{{ section.id }}">
+                        <section class="settings-section{% if section.advanced %} is-advanced{% endif %}" id="section-{{ section.id }}">
                             <header class="settings-section-header">
                                 <h3>{{ section.title }}{% if section.advanced %} <span class="badge">{{ t('web.config.advanced') }}</span>{% endif %}</h3>
                                 <p>{{ section.description }}</p>
@@ -573,9 +640,10 @@
 
                             <div class="setting-list">
                                 {% for field in section.fields %}
-                                <div class="setting-row">
+                                <div class="setting-row{% if field.advanced %} is-advanced{% endif %}">
                                     <div class="setting-text">
                                         <label for="{{ field.id }}">{{ field.label }}</label>
+                                        {% if field.advanced and not section.advanced %}<span class="badge">{{ t('web.config.advanced') }}</span>{% endif %}
                                         <code class="setting-key" title="{{ t('web.config.key_title') }}">[{{ field.section }}] {{ field.option }}</code>
                                         <p class="field-help">{{ field.help }}</p>
                                         {% if field.default_text is not none %}
@@ -677,7 +745,39 @@
                 window.addEventListener('beforeunload', warnBeforeLeaving);
             }
 
+            // Simple shows what changes from one evening to the next; Advanced
+            // adds what is set once at install. The choice is remembered per
+            // browser, and is only a view: hidden fields are still submitted.
+            var settings = document.getElementById('settings');
+            var MODE_KEY = 'photobooth.admin.settingsMode';
+
+            function setMode(mode) {
+                settings.setAttribute('data-mode', mode);
+                settings.querySelectorAll('.settings-mode-btn').forEach(function (button) {
+                    button.setAttribute('aria-pressed', String(button.getAttribute('data-mode') === mode));
+                });
+                try { window.localStorage.setItem(MODE_KEY, mode); } catch (e) { /* private window */ }
+            }
+
             if (form) {
+                var savedMode = null;
+                try { savedMode = window.localStorage.getItem(MODE_KEY); } catch (e) { /* private window */ }
+                setMode(savedMode === 'advanced' ? 'advanced' : 'simple');
+
+                settings.querySelectorAll('.settings-mode-btn').forEach(function (button) {
+                    button.addEventListener('click', function () {
+                        setMode(button.getAttribute('data-mode'));
+                    });
+                });
+
+                // A hidden field the browser refuses could not be shown to
+                // the operator, so a refusal brings every setting into view.
+                form.addEventListener('invalid', function (event) {
+                    if (event.target.closest('.is-advanced')) {
+                        setMode('advanced');
+                    }
+                }, true);
+
                 form.addEventListener('input', markDirty);
                 form.addEventListener('change', markDirty);
                 form.addEventListener('submit', function () {

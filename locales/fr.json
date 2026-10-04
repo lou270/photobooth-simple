@@ -265,6 +265,13 @@
       "intro": "Chaque réglage explique à quoi il sert, indique sa valeur par défaut et le nom qu'il porte dans config.ini, pour s'y retrouver aussi en ouvrant le fichier à la main.",
       "toc": "Sections",
       "advanced": "Avancé",
+      "mode": {
+        "label": "Réglages affichés",
+        "simple": "Simple",
+        "advanced": "Avancé",
+        "simple_hint": "Les réglages qui changent d'un événement à l'autre. Le reste se règle une fois à l'installation : passe en Avancé pour tout voir.",
+        "advanced_hint": "Tous les réglages, y compris les plus techniques, marqués Avancé. En cas de doute, garde leur valeur par défaut."
+      },
       "default": "Par défaut : {value}",
       "key_title": "Nom de ce réglage dans le fichier config.ini",
       "current_value": "Actuel : {value}",

@@ -206,6 +206,24 @@ def test_a_checkbox_is_rendered_checked_from_the_file():
     assert fullscreen['checked'] is True
 
 
+def test_a_section_is_advanced_only_when_all_its_fields_are():
+    sections = {s['id']: s for s in render_sections(load_parser(SAMPLE))}
+
+    # Whole sections hide in simple mode, with their entry in the contents.
+    assert sections['dslr_capture']['advanced'] is True
+    assert sections['timing']['advanced'] is True
+    # A section keeping one everyday field stays, showing only that field.
+    assert sections['capture']['advanced'] is False
+    assert [f['option'] for f in sections['print']['fields'] if not f.get('advanced')] == ['PRINTER', 'MAX_PRINTS', 'MAX_COPIES']
+
+
+def test_every_section_but_the_technical_ones_has_something_simple():
+    # Simple mode is for the evening: losing a whole everyday section from it
+    # by marking one field too many would go unnoticed on the page.
+    simple_sections = [s['id'] for s in render_sections(load_parser(SAMPLE)) if not s['advanced']]
+    assert simple_sections == ['event', 'slideshow', 'capture', 'print', 'phones', 'guest_network', 'screen', 'storage', 'access']
+
+
 def test_a_rejected_submission_is_shown_back_to_the_operator():
     submitted = {field_name('Capture', 'COUNTDOWN'): '12'}
 

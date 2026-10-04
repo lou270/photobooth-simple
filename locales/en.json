@@ -265,6 +265,13 @@
       "intro": "Each setting explains what it does, shows its default value and the name it has in config.ini, so the file still makes sense when opened by hand.",
       "toc": "Sections",
       "advanced": "Advanced",
+      "mode": {
+        "label": "Settings shown",
+        "simple": "Simple",
+        "advanced": "Advanced",
+        "simple_hint": "The settings that change from one event to the next. The rest is set once at install: switch to Advanced to see everything.",
+        "advanced_hint": "Every setting, including the technical ones marked Advanced. When in doubt, keep their default."
+      },
       "default": "Default: {value}",
       "key_title": "Name of this setting in the config.ini file",
       "current_value": "Current: {value}",
