@@ -849,7 +849,7 @@
         "label_info": "Texte fixe, imprimé tel quel. Double-cliquez dessus pour l'écrire directement sur la page.",
         "photo_order": "Ordre de prise de vue",
         "photo_info": "La photo d'exemple montre le recadrage : la borne remplit l'emplacement et coupe ce qui dépasse, au centre. Un décor dans un niveau au-dessus peut la recouvrir en partie.",
-        "field_info": "Le texte s'ajuste à son cadre : un nom d'événement plus long rétrécit au lieu de déborder. {event}, {date} et {time} sont remplacés au moment de la photo ; l'aperçu utilise les valeurs du jour. Il est toujours écrit dans la police d'impression de la borne.",
+        "field_info": "Le texte s'ajuste à son cadre : un nom d'événement plus long rétrécit au lieu de déborder. {event}, {date} et {time} sont remplacés au moment de la photo ; l'aperçu utilise les valeurs du jour. Playfair Display et Great Vibes n'existent pas en gras.",
         "placeholder_event_title": "Nom de l'événement, défini dans les réglages",
         "placeholder_date_title": "Jour où la photo est prise",
         "placeholder_time_title": "Heure à laquelle la photo est prise",

@@ -431,11 +431,11 @@ class TemplateCollage:
     
     # --- texts --------------------------------------------------------------
 
-    def _font(self, size, bold):
-        key = (size, bold)
+    def _font(self, size, bold, family=None):
+        key = (size, bold, family)
         font = self._fonts.get(key)
         if font is None:
-            path = event.font_path(bold)
+            path = event.font_path(bold, family)
             font = ImageFont.truetype(str(path), size) if path else ImageFont.load_default(size)
             self._fonts[key] = font
         return font
@@ -457,7 +457,7 @@ class TemplateCollage:
         low, high = 1, max(1, box['height'])
         while low < high:
             size = (low + high + 1) // 2
-            width, height, _line = self._text_block_size(lines, self._font(size, bold), size)
+            width, height, _line = self._text_block_size(lines, self._font(size, bold, box.get('font')), size)
             if width <= box['width'] and height <= box['height']:
                 low = size
             else:
@@ -510,7 +510,7 @@ class TemplateCollage:
     def _draw_text_lines(self, draw, box, lines, origin, fill):
         """Fit the lines to their box and draw them, `origin` being where `draw` starts on the page."""
         size = self._fit_font(lines, box, box['bold'])
-        font = self._font(size, box['bold'])
+        font = self._font(size, box['bold'], box.get('font'))
         _width, block_height, line_height = self._text_block_size(lines, font, size)
         y = box['y'] - origin[1] + (box['height'] - block_height) // 2
         for line in lines:

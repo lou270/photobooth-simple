@@ -63,16 +63,8 @@ EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
 )}
 
 
-# Fonts a design's fixed text may use: the welcome screen's letterings, shipped
-# for the offline booth. (id, name shown, regular file, bold file or None.)
-# Text that changes with each photo stays in the booth's print font, which is
-# the only one it can draw.
-DESIGN_FONTS = (
-    ('playfair', 'Playfair Display', 'PlayfairDisplay.ttf', None),
-    ('great-vibes', 'Great Vibes', 'GreatVibes-Regular.ttf', None),
-    ('montserrat', 'Montserrat', 'Montserrat-Medium.ttf', 'Montserrat-Bold.ttf'),
-    ('fredoka', 'Fredoka', 'Fredoka-Medium.ttf', 'Fredoka-SemiBold.ttf'),
-)
+# Fonts a design's text may use, fixed or variable: see event.DESIGN_FONTS.
+DESIGN_FONTS = event.DESIGN_FONTS
 # assets/icons/dummy0.png to dummy3.png, the photos previews are made with.
 SAMPLE_PHOTO_COUNT = 4
 

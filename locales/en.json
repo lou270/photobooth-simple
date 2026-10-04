@@ -849,7 +849,7 @@
         "label_info": "Fixed text, printed as written. Double-click it to type straight on the page.",
         "photo_order": "Shooting order",
         "photo_info": "The sample photo shows the crop: the booth fills the slot and cuts what overflows, around the centre. Decoration in a level above may cover part of it.",
-        "field_info": "The text is sized to fill its box, so a longer event name shrinks instead of overflowing. {event}, {date} and {time} are replaced when the photo is taken; the preview uses today's values. It is always set in the booth's print font.",
+        "field_info": "The text is sized to fill its box, so a longer event name shrinks instead of overflowing. {event}, {date} and {time} are replaced when the photo is taken; the preview uses today's values. Playfair Display and Great Vibes have no bold.",
         "placeholder_event_title": "Event name, set in the settings",
         "placeholder_date_title": "Day the photo is taken",
         "placeholder_time_title": "Time the photo is taken",
