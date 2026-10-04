@@ -38,7 +38,7 @@ LOGS_PAGE_JS_KEYS = {
 EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
     # templates
     'sample_event', 'section_booth', 'section_drafts', 'booth_empty', 'booth_load_failed', 'page_too_large',
-    'duplicate_template', 'delete_template', 'copy_name', 'keep_one_template', 'confirm_delete_with_file',
+    'duplicate_template', 'rename_template', 'delete_template', 'copy_name', 'keep_one_template', 'confirm_delete_with_file',
     'confirm_delete', 'delete_failed', 'new_template_name', 'saved', 'save_failed', 'saving', 'invalid_file',
     'imported', 'parse_failed', 'unsaved_changes', 'booth_rejected', 'cannot_open',
     # elements and levels
@@ -90,6 +90,7 @@ def create_blueprint(server):
             # size is refused while it is typed rather than at save time.
             page_limits={'side': template_schema.MAX_PAGE_SIDE, 'pixels': template_schema.MAX_PAGE_PIXELS},
             stack_limit=template_schema.MAX_STACK_ENTRIES,
+            name_limit=template_schema.MAX_NAME_LENGTH,
             asset_bytes_limit=template_schema.MAX_EMBEDDED_IMAGE_BYTES,
             design_fonts=[
                 {

@@ -758,6 +758,7 @@
         "booth_load_failed": "Could not read the booth's templates: {error}",
         "page_too_large": "The page must be between 1 and {side} pixels on each side, and at most {pixels} pixels in all.",
         "duplicate_template": "Duplicate template",
+        "rename_template": "Rename (the name shown on the booth)",
         "delete_template": "Delete template",
         "copy_name": "{name} (copy)",
         "keep_one_template": "You must keep at least one template on the booth.",

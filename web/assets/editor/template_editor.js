@@ -62,6 +62,7 @@
         unlock: '<rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 7.5-2"/>',
         up: '<path d="m6 15 6-6 6 6"/>',
         down: '<path d="m6 9 6 6 6-6"/>',
+        rename: '<path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z"/>',
         trash: '<path d="M3 6h18"/><path d="M8 6V4h8v2"/><path d="M6 6l1 14h10l1-14"/>',
         copy: '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M4 16V5a2 2 0 0 1 2-2h11"/>',
     };
@@ -1654,6 +1655,9 @@
         input.type = 'number';
         input.value = roundTo(value, 1);
         input.step = (options && options.step) || 1;
+        // Selected whole on the way in, so a value is replaced by typing over
+        // it, as in any design tool, however the field was reached.
+        input.addEventListener('focus', () => input.select());
         if (options && options.min !== undefined) input.min = options.min;
         if (options && options.max !== undefined) input.max = options.max;
         input.addEventListener('change', () => {
@@ -2369,6 +2373,11 @@
         // admin session that opened this editor.
         const meta = element('div', 'template-item-meta');
         const name = element('div', 'template-item-name', String(entry.template.name || entry.filename || ''));
+        name.title = I18N.rename_template;
+        name.addEventListener('dblclick', event => {
+            event.stopPropagation();
+            renameTemplate(index, name);
+        });
         if (entry.dirty) {
             const dot = element('span', 'dirty', '●');
             dot.title = I18N.unsaved_changes;
@@ -2380,11 +2389,47 @@
 
         const actions = element('div', 'template-item-actions');
         actions.append(
+            rowButton('rename', I18N.rename_template, () => renameTemplate(index, name)),
             rowButton('copy', I18N.duplicate_template, () => duplicateTemplate(index)),
             rowButton('trash', I18N.delete_template, () => deleteTemplate(index)),
         );
         item.append(meta, actions);
         return item;
+    }
+
+    // The name the booth shows under the template, typed in place of the
+    // name in the list. Enter or leaving the field keeps it, Escape does not.
+    function renameTemplate(index, nameNode) {
+        const entry = state.entries[index];
+        if (!entry) return;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'template-item-rename';
+        input.maxLength = CONFIG.nameLimit;
+        input.value = String(entry.template.name || '');
+        input.setAttribute('aria-label', I18N.rename_template);
+        let done = false;
+        const finish = keep => {
+            if (done) return;
+            done = true;
+            const value = input.value.trim().slice(0, CONFIG.nameLimit);
+            if (keep && value && value !== entry.template.name) {
+                entry.template.name = value;
+                markDirty(entry);
+                if (index === state.current) renderProperties();
+            }
+            renderTemplateList();
+        };
+        input.addEventListener('click', event => event.stopPropagation());
+        input.addEventListener('keydown', event => {
+            event.stopPropagation();
+            if (event.key === 'Enter') finish(true);
+            if (event.key === 'Escape') finish(false);
+        });
+        input.addEventListener('blur', () => finish(true));
+        nameNode.replaceWith(input);
+        input.focus();
+        input.select();
     }
 
     function selectTemplate(index) {

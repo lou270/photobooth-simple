@@ -758,6 +758,7 @@
         "booth_load_failed": "Impossible de lire les modèles de la borne : {error}",
         "page_too_large": "La page doit faire entre 1 et {side} pixels de côté, et au plus {pixels} pixels en tout.",
         "duplicate_template": "Dupliquer le modèle",
+        "rename_template": "Renommer (le nom affiché sur la borne)",
         "delete_template": "Supprimer le modèle",
         "copy_name": "{name} (copie)",
         "keep_one_template": "Il faut garder au moins un modèle sur la borne.",

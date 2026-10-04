@@ -159,6 +159,12 @@
             overflow-wrap: anywhere;
         }
 
+        .template-item-rename {
+            width: 100%;
+            font: inherit;
+            font-weight: 600;
+        }
+
         .template-item-name .dirty {
             color: var(--warning);
             margin-left: 4px;
@@ -1001,6 +1007,7 @@
             i18n: {{ js_i18n|tojson }},
             pageLimits: {{ page_limits|tojson }},
             stackLimit: {{ stack_limit|tojson }},
+            nameLimit: {{ name_limit|tojson }},
             assetBytesLimit: {{ asset_bytes_limit|tojson }},
             fonts: {{ design_fonts|tojson }},
             samplePhotoCount: {{ sample_photo_count|tojson }},
