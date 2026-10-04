@@ -185,7 +185,9 @@ CONFIG_FORM_SECTIONS = (
 TRUE_VALUES = ('1', 'true', 'yes', 'on')
 
 SECTION_PATTERN = re.compile(r'^\s*\[(.+?)\]\s*$')
-OPTION_PATTERN = re.compile(r'^(\s*)([^=;#][^=]*?)(\s*=\s*)(.*?)(\r?\n?)$')
+# Spaces and tabs only around '=': \s would swallow the line break after an
+# empty value ('APERTURE = '), and the new value would land on its own line.
+OPTION_PATTERN = re.compile(r'^([ \t]*)([^=;#][^=]*?)([ \t]*=[ \t]*)(.*?)(\r?\n?)$')
 
 
 def load_parser(content):

@@ -85,6 +85,18 @@ def test_untouched_values_are_left_byte_for_byte():
     assert result == SAMPLE
 
 
+@pytest.mark.parametrize('ending', ['\n', '\r\n'])
+@pytest.mark.parametrize('empty_line', ['APERTURE = ', 'APERTURE =', 'APERTURE='])
+def test_an_empty_value_is_filled_in_on_its_own_line(empty_line, ending):
+    # The form writes 'APERTURE = ' for "leave unchanged"; choosing a value
+    # later used to put it on the next line, and config.ini no longer parsed.
+    content = f'[DSLR]{ending}{empty_line}{ending}ISO = 100{ending}'
+    result = apply_updates(content, {('DSLR', 'APERTURE'): '3.5'})
+
+    assert result == f'[DSLR]{ending}{empty_line}3.5{ending}ISO = 100{ending}'
+    assert load_parser(result).get('DSLR', 'APERTURE') == '3.5'
+
+
 def test_a_missing_option_is_added_to_its_section():
     result = apply_updates(SAMPLE, {('Capture', 'CAMERA'): 'fake'})
 
