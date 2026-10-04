@@ -27,8 +27,13 @@ LEAVE_UNCHANGED = ('', 'web.config.leave_unchanged')
 DSLR_SHUTTERSPEED_CHOICES = [LEAVE_UNCHANGED] + [
     (speed, None) for speed in ('1/30', '1/60', '1/80', '1/100', '1/125', '1/160', '1/200', '1/250', '1/320', '1/400', '1/500')
 ]
+# Third stops, spelled the way gphoto2 lists them: the camera refuses any value
+# that is not on its own list, so an in-between f/3 could never be applied.
 DSLR_APERTURE_CHOICES = [LEAVE_UNCHANGED] + [
-    (aperture, None) for aperture in ('1.8', '2', '2.8', '4', '5.6', '8', '11', '13', '16', '22')
+    (aperture, None) for aperture in (
+        '1.8', '2', '2.2', '2.5', '2.8', '3.2', '3.5', '4', '4.5', '5', '5.6', '6.3', '7.1',
+        '8', '9', '10', '11', '13', '14', '16', '18', '20', '22',
+    )
 ]
 DSLR_FOCUSMODE_CHOICES = [LEAVE_UNCHANGED] + [
     (mode, None) for mode in ('One Shot', 'AF-S', 'AF-A', 'AF-C', 'Manual')
