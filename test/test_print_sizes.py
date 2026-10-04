@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.print_sizes import FALLBACK_PAGE_SIZES, cut_layout, describe, describe_all, read_ppd
+from libs.print_sizes import FALLBACK_PAGE_SIZES, sheet_layout, describe, describe_all, read_ppd
 
 
 def test_the_qw410_cuts_a_4x6_into_three_2x4():
@@ -100,6 +100,9 @@ QW410_GEOMETRY = '''
 *ImageableArea w288h432-div3/2x4*3:     "17.040 0.000 320.880 440.640"
 *PaperDimension w288h288-div2/2x4*2:    "296.640 337.920"
 *PaperDimension w288h432-div3/2x4*3:    "337.920 440.640"
+*PageSize w288h216/4x3: "<</PageSize[440.640 337.920]/ImagingBBox null>>setpagedevice"
+*ImageableArea w288h216/4x3:    "216.000 17.040 440.640 320.880"
+*PaperDimension w288h216/4x3:   "440.640 337.920"
 '''
 
 
@@ -113,13 +116,13 @@ def test_the_ppd_gives_each_size_its_label_and_page():
 @pytest.mark.parametrize('design, rotate', [((600, 1200), True), ((1200, 600), False)])
 def test_three_2x4_start_where_the_qw410_cuts_a_4x6(design, rotate):
     """Measured: the cuts fall at 620 and 1220 on a 1836 px page, 20 px in."""
-    layout = cut_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], 3, design, 20)
+    layout = sheet_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], 3, design, 20)
 
     assert layout == {'rotate': rotate, 'along_x': False, 'pad': (20, 16, 33, 33)}
 
 
 def test_on_a_page_the_driver_turns_the_copies_follow_each_other_along_x():
-    layout = cut_layout('w288h288-div2', read_ppd(QW410_GEOMETRY)['w288h288-div2'], 2, (600, 1200), 20)
+    layout = sheet_layout('w288h288-div2', read_ppd(QW410_GEOMETRY)['w288h288-div2'], 2, (600, 1200), 20)
 
     assert layout == {'rotate': False, 'along_x': True, 'pad': (33, 33, 20, 16)}
 
@@ -129,8 +132,21 @@ def test_on_a_page_the_driver_turns_the_copies_follow_each_other_along_x():
     (2, (600, 1200)),   # the sheet is cut in three, not two
 ])
 def test_a_design_that_is_not_one_print_of_the_size_is_left_to_be_fitted(copies, design):
-    assert cut_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], copies, design, 20) is None
+    assert sheet_layout('w288h432-div3', read_ppd(QW410_GEOMETRY)['w288h432-div3'], copies, design, 20) is None
 
 
 def test_a_size_the_driver_gave_no_geometry_for_is_left_to_be_fitted():
-    assert cut_layout('w288h432-div3', {'label': '2x4*3'}, 3, (600, 1200), 20) is None
+    assert sheet_layout('w288h432-div3', {'label': '2x4*3'}, 3, (600, 1200), 20) is None
+
+
+def test_a_4x3_on_its_own_is_printed_as_it_is():
+    """At the far end of a 4x6 page, 936 px along for 900 of paper: fitted, it lost 4% at every edge."""
+    layout = sheet_layout('w288h216', read_ppd(QW410_GEOMETRY)['w288h216'], 1, (900, 1200), 20)
+
+    assert layout == {'rotate': False, 'along_x': True, 'pad': (33, 33, 20, 16)}
+
+
+def test_a_4x3_drawn_lying_down_is_turned_onto_its_print():
+    layout = sheet_layout('w288h216', read_ppd(QW410_GEOMETRY)['w288h216'], 1, (1200, 900), 20)
+
+    assert layout['rotate'] is True

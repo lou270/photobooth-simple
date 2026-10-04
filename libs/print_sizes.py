@@ -134,16 +134,54 @@ def _pixels(points, dpi=300):
     return int(round(points * dpi / POINTS_PER_INCH))
 
 
-def cut_layout(page_size, page, copies, design_size, cut_offset):
-    """Where the copies of a design go on the driver's page, so the cuts fall between them.
+def page_axes(page_size, page):
+    """How the paper lies on the driver's page for this size, or None if it cannot tell.
 
-    The driver's page is longer than the paper (1836 px at 300 dpi for 6
-    inches, 1800 px), and the cutter measures its prints off from a point
-    inside it, cut_offset pixels from the start. Stretched to that page, as
-    print-scaling=fit does, the copies drift away from the cuts: on a QW410's
-    2x4*3 the joins land at 612 and 1224 while the cutter goes through 620 and
-    1220, enough to eat a 10 px margin. Laid out at the page's own size, the
-    sheet is printed as it is, and each copy starts where its print does.
+    In pixels at 300 dpi: along_x (the paper runs along x), the imageable
+    area's length along the paper and width across it, the paper's own, the
+    number of prints and the length of one. The page drawn is the imageable
+    area, so these are the sizes of the image the booth sends.
+    """
+    size = describe(page_size, (page or {}).get('label', ''))
+    if size is None or 'paper' not in page or 'area' not in page:
+        return None
+    match = _NAME.match(page_size)
+    paper_across = _pixels(float(match.group(1)))
+    paper_along = _pixels(float(match.group(2)))
+    count = size['count']
+    piece = paper_along // count
+    if piece * count != paper_along:
+        return None
+
+    # Along the paper the driver prints a little past each end; across, past
+    # each side of a paper narrower than the head, by more. The QW410's 4x3
+    # sits at the far end of a 4x6 page, so where the area starts says nothing.
+    left, bottom, right, top = page['area']
+    span_x, span_y = _pixels(right - left), _pixels(top - bottom)
+    fits_along_x = 0 <= span_x - paper_along and 0 <= span_y - paper_across
+    fits_along_y = 0 <= span_y - paper_along and 0 <= span_x - paper_across
+    if fits_along_x and fits_along_y:
+        along_x = span_x - paper_along < span_y - paper_along
+    elif fits_along_x or fits_along_y:
+        along_x = fits_along_x
+    else:
+        return None
+    page_along, page_across = (span_x, span_y) if along_x else (span_y, span_x)
+    return {'along_x': along_x, 'page_along': page_along, 'page_across': page_across,
+            'paper_along': paper_along, 'paper_across': paper_across, 'count': count, 'piece': piece}
+
+
+def sheet_layout(page_size, page, copies, design_size, cut_offset):
+    """Where the copies of a design go on the driver's page, printed as they are.
+
+    The driver's page is larger than the paper: 1836 px at 300 dpi along a
+    6-inch print (1800 px), 1266 across a 4-inch one (1200), the excess
+    printed past the edges. Stretched to that page, as print-scaling=fit does,
+    a design loses about 4% of itself at every edge, and on a sheet the
+    printer cuts, the copies drift away from the cuts: on a QW410's 2x4*3 the
+    joins land at 612 and 1224 while the cutter goes through 620 and 1220.
+    Laid out at the page's own size, the sheet is printed as it is, the paper
+    starting cut_offset pixels in along it and centred across it.
 
     Returns None when the design is not exactly one print of this size, or
     the driver did not describe the page: the sheet is then laid out as
@@ -152,25 +190,14 @@ def cut_layout(page_size, page, copies, design_size, cut_offset):
         along_x: copies follow each other along x rather than y,
         pad: (top, bottom, left, right) around the copies, filled by
             prolonging their edges, since all of it is printed past the paper.
+    The page drawn is the driver's imageable area, so fitting it is 1:1.
     """
-    size = describe(page_size, (page or {}).get('label', ''))
-    if size is None or size['count'] != copies or copies < 2 or 'paper' not in page or 'area' not in page:
+    axes = page_axes(page_size, page)
+    if axes is None or axes['count'] != copies:
         return None
-    match = _NAME.match(page_size)
-    paper_across = _pixels(float(match.group(1)))
-    paper_along = _pixels(float(match.group(2)))
-    piece = paper_along // copies
-    if piece * copies != paper_along:
-        return None
-
-    # The side the driver prints edge to edge runs along the paper; the other
-    # has margins, the print head being wider than the paper.
-    (paper_width, paper_height), (left, bottom, right, top) = page['paper'], page['area']
-    along_x = left == 0 and right == paper_width
-    if not along_x and not (bottom == 0 and top == paper_height):
-        return None
-    page_along = _pixels(paper_width if along_x else paper_height)
-    page_across = _pixels(top - bottom if along_x else right - left)
+    along_x, piece = axes['along_x'], axes['piece']
+    paper_along, paper_across = axes['paper_along'], axes['paper_across']
+    page_along, page_across = axes['page_along'], axes['page_across']
 
     # One print, either way round: piece along the paper, its width across.
     wanted = (piece, paper_across) if along_x else (paper_across, piece)
@@ -184,7 +211,7 @@ def cut_layout(page_size, page, copies, design_size, cut_offset):
     lead = cut_offset
     trail = page_along - lead - paper_along
     side = page_across - paper_across
-    if trail < 0 or side < 0:
+    if trail < 0:
         return None
     before, after = side // 2, side - side // 2
     pad = (before, after, lead, trail) if along_x else (lead, trail, before, after)

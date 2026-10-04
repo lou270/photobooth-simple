@@ -218,6 +218,23 @@ def test_on_the_qw410_page_each_copy_starts_where_its_print_does(tmp_path, dpi):
     assert np.array_equal(sheet[:, 0], sheet[:, 33 * scale])
 
 
+def test_a_single_4x3_is_printed_at_its_own_size(tmp_path, photo):
+    """Fitted to the driver's 936x1266 page, a 900x1200 design lost its edges."""
+    collage = template(page={'width': 900, 'height': 1200}, photos=[{'x': 0, 'y': 0, 'width': 900, 'height': 1200}],
+                       print_params={'PageSize': 'w288h216'})
+    collage.set_printer_page({'label': '4x3', 'paper': [440.64, 337.92], 'area': [216.0, 17.04, 440.64, 320.88]},
+                             cut_offset=20)
+    output = tmp_path / 'collage.jpg'
+
+    one = collage.assemble([photo])
+    sheet = collage.assemble([photo], output_path=str(output), for_print=True)
+
+    assert collage.uses_print_version()
+    assert sheet.shape[1::-1] == (936, 1266)
+    assert np.array_equal(sheet[33:1233, 20:920], one)
+    assert (tmp_path / 'collage_print.jpg').exists()
+
+
 def test_without_a_printer_the_sheet_is_fitted_as_before(photo):
     collage = template(page={'width': 600, 'height': 1200}, print_params={'PageSize': 'w288h432-div3'},
                        copies_per_sheet=3)
