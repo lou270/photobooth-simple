@@ -148,16 +148,18 @@ class TemplateCollage:
         """Return the number of photos required."""
         return len(self._photos)
     
-    def get_aspect_ratio(self):
+    def get_aspect_ratio(self, slot_index=0):
         """
-        Return the aspect ratio (width/height) of the first photo slot.
-        Used for camera preview and capture.
+        Return the aspect ratio (width/height) of the photo slot `slot_index`.
+        Used for camera preview and capture, so each shot is framed for the
+        slot it ends up in: framed for the first slot instead, a photo going
+        into a slot of another shape lost, at assembly, part of what the guest
+        saw on screen.
         Returns 1.0 for square, >1.0 for landscape, <1.0 for portrait.
         """
         if len(self._photos) > 0:
-            width = self._photos[0]['width']
-            height = self._photos[0]['height']
-            return width / height
+            slot = self._photos[min(slot_index, len(self._photos) - 1)]
+            return slot['width'] / slot['height']
         return 1.0
     
     def get_print_params(self):

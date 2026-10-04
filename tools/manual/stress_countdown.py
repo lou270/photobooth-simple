@@ -40,7 +40,7 @@ screens_module.SHOT_TIMEOUT_SECONDS = 0.5
 
 
 class DummyFormat:
-    def get_aspect_ratio(self):
+    def get_aspect_ratio(self, slot_index=0):
         return 1.0
 
     def get_photos_required(self):
@@ -114,11 +114,11 @@ class FakeApp:
     def get_shots_to_take(self, format=0):
         return self.print_formats[format].get_photos_required()
 
-    def get_format_aspect_ratio(self, format_idx):
-        return self.print_formats[format_idx].get_aspect_ratio()
+    def get_format_aspect_ratio(self, format_idx, shot_idx=0):
+        return self.print_formats[format_idx].get_aspect_ratio(shot_idx)
 
     def trigger_shot(self, shot_idx, format_idx):
-        aspect_ratio = self.get_format_aspect_ratio(format_idx)
+        aspect_ratio = self.get_format_aspect_ratio(format_idx, shot_idx)
         self._process_token += 1
         process_token = self._process_token
         self._process_state = {

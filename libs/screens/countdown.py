@@ -123,7 +123,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         self._timer_active = False
         self._current_shot = kwargs.get('shot') if 'shot' in kwargs else 0
         self._current_format = kwargs.get('format') if 'format' in kwargs else 0
-        aspect_ratio = self.app.get_format_aspect_ratio(self._current_format)
+        aspect_ratio = self.app.get_format_aspect_ratio(self._current_format, self._current_shot)
         self.camera.start(aspect_ratio)
         
         # Reset button icon and color (access child button from parent layout)

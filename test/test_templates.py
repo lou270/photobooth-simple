@@ -122,3 +122,19 @@ def test_built_in_template_exposes_its_print_parameters():
 
     assert template.get_print_params()['PageSize'] == 'w288h432'
     assert template.get_aspect_ratio() == 1620 / 1080
+
+
+def test_each_shot_is_framed_for_its_own_slot():
+    definition = {
+        'name': 'Mixed', 'page': {'width': 1800, 'height': 1200},
+        'photos': [
+            {'x': 0, 'y': 0, 'width': 900, 'height': 600},
+            {'x': 900, 'y': 0, 'width': 600, 'height': 600},
+        ],
+    }
+    template = TemplateCollage(template=definition)
+
+    assert template.get_aspect_ratio(0) == 1.5
+    assert template.get_aspect_ratio(1) == 1.0
+    # Past the last slot, the last slot: never an IndexError mid-session.
+    assert template.get_aspect_ratio(5) == 1.0

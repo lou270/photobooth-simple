@@ -459,9 +459,9 @@ class PhotoboothApp(App):
         """Photos out of the printer for one sheet of this format."""
         return self.print_formats[format_idx].get_copies_per_sheet()
 
-    def get_format_aspect_ratio(self, format_idx):
-        """Get the aspect ratio (width/height) for the given format."""
-        return self.print_formats[format_idx].get_aspect_ratio()
+    def get_format_aspect_ratio(self, format_idx, shot_idx=0):
+        """The aspect ratio (width/height) of the slot shot `shot_idx` goes into."""
+        return self.print_formats[format_idx].get_aspect_ratio(shot_idx)
 
     def get_single_photo_format_index(self):
         """The format that prints one photo on its own.
@@ -689,7 +689,7 @@ class PhotoboothApp(App):
         Logger.info('PhotoboothApp: trigger_shot().')
         if not self.ensure_disk_space_or_maintenance():
             raise RuntimeError('Photo storage is almost full')
-        aspect_ratio = self.get_format_aspect_ratio(format_idx)
+        aspect_ratio = self.get_format_aspect_ratio(format_idx, shot_idx)
         Logger.info('PhotoboothApp: shot request idx=%s format=%s aspect_ratio=%.4f', shot_idx, format_idx, aspect_ratio)
         self.storage.log_disk_usage('before_shot')
         flash_callback = self.ringled.flash if self.ringled else None
