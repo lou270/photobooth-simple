@@ -44,7 +44,7 @@ from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
-from libs import event, i18n
+from libs import event, i18n, touch_source
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import LoadingScreen, ScreenMgr
 from libs.screens.theme import ICON_ERROR_TRIGGER
@@ -161,6 +161,7 @@ class PhotoboothApp(App):
         watched a black window. Only the settings are read before this point.
         """
         Logger.info('PhotoboothApp: build().')
+        self._touch_source = touch_source.install(Window, Clock.get_boottime)
         if self.FULLSCREEN:
             Window.fullscreen = True
             # Guests use the touchscreen: a pointer parked in the middle of the
