@@ -391,3 +391,64 @@ def test_a_successful_login_clears_earlier_failures(client):
 
     client.get('/admin/logout')
     assert login(client, password='wrong').status_code == 403
+
+
+# --- staying logged in -------------------------------------------------------
+
+def is_logged_in(client):
+    return client.get('/admin').status_code == 200
+
+
+def test_the_admin_cookie_outlives_the_browser_session(client):
+    """Without an expiry the browser forgets the login as soon as it closes."""
+    cookie = login(client).headers['Set-Cookie']
+
+    assert 'Expires=' in cookie
+
+
+def test_the_admin_stays_logged_in_across_a_restart_of_the_booth(tmp_path):
+    key_path = tmp_path / 'session_key'
+    before = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD, secret_key_path=str(key_path))
+    browser = before.app.test_client()
+    login(browser)
+
+    after = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD, secret_key_path=str(key_path))
+    browser_after = after.app.test_client()
+    browser_after.set_cookie('session', browser.get_cookie('session').value)
+
+    assert is_logged_in(browser_after)
+
+
+def test_without_a_key_file_a_restart_logs_the_admin_out(tmp_path):
+    before = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD)
+    browser = before.app.test_client()
+    login(browser)
+
+    after = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD)
+    browser_after = after.app.test_client()
+    browser_after.set_cookie('session', browser.get_cookie('session').value)
+
+    assert not is_logged_in(browser_after)
+
+
+def test_an_unreadable_key_file_falls_back_to_a_key_for_this_run(tmp_path):
+    """A key path that is a directory must not keep the web server from starting."""
+    server = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD, secret_key_path=str(tmp_path))
+    browser = server.app.test_client()
+    login(browser)
+
+    assert is_logged_in(browser)
+
+
+def test_changing_the_password_logs_other_browsers_out(server, client, editable_config):
+    from libs.webserver.config_form import field_name
+
+    other_browser = server.app.test_client()
+    login(other_browser)
+    login(client)
+    form = submitted_form(editable_config, **{field_name('Global', 'ADMIN_PASSWORD'): 'un tout nouveau mot de passe'})
+
+    client.post('/admin/config', data=form)
+
+    assert is_logged_in(client)
+    assert not is_logged_in(other_browser)

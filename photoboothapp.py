@@ -333,6 +333,7 @@ class PhotoboothApp(App):
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,
             booth_language=self.LANGUAGE,
+            secret_key_path=str(PROJECT_ROOT / '.web_session_key'),
         )
         if self.web_server.start():
             Logger.info(

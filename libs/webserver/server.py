@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import os
@@ -5,7 +6,7 @@ import re
 import shutil
 import threading
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 
 from flask import Flask, g, jsonify, request, render_template, redirect, session
@@ -34,6 +35,10 @@ class WebServer:
     EXPECTED_SESSION_SECONDS = 10 * 60
     MAX_EXPECTED_SESSIONS = 64
 
+    # An operator logs in once for the whole event, not once per browser
+    # restart: the cookie outlives both the tab and a reboot of the booth.
+    ADMIN_SESSION_LIFETIME = timedelta(days=30)
+
     MIN_ADMIN_PASSWORD_LENGTH = 10
     FORBIDDEN_ADMIN_PASSWORDS = frozenset({
         'admin', 'password', 'photobooth', 'motdepasse', 'changeme', '0000',
@@ -42,7 +47,7 @@ class WebServer:
 
     def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
                  restart_callback=None, templates_changed_callback=None, page_sizes_provider=None, remote_store=None, remote_enabled=False, share_enabled=False,
-                 booth_language=i18n.DEFAULT_LANGUAGE):
+                 booth_language=i18n.DEFAULT_LANGUAGE, secret_key_path=None):
         self.save_directory = save_directory
         self.host = host
         self.port = port
@@ -82,10 +87,14 @@ class WebServer:
             static_folder=self.web_assets_directory,
             static_url_path='/web-assets',
         )
-        self.app.secret_key = os.urandom(32)
+        # The key signing the session cookie. Kept on disk so the admin stays
+        # logged in across a restart of the booth; without a path (tests) it
+        # only lives as long as this process.
+        self.app.secret_key = self._load_secret_key(secret_key_path)
         self.app.config.update(
             SESSION_COOKIE_HTTPONLY=True,
             SESSION_COOKIE_SAMESITE='Lax',
+            PERMANENT_SESSION_LIFETIME=self.ADMIN_SESSION_LIFETIME,
             # Templates carry embedded images, so uploads are legitimately large;
             # the cap keeps a single request from exhausting memory on a Pi.
             MAX_CONTENT_LENGTH=32 * 1024 * 1024,
@@ -427,6 +436,55 @@ class WebServer:
             Logger.error(f'WebServer: Error saving config file: {e}')
             raise
 
+    @staticmethod
+    def _load_secret_key(path):
+        """Return the cookie signing key stored at path, creating it if needed.
+
+        Any failure falls back to a key for this run only: the admin then logs
+        in again after a restart, which is the old behaviour, not an outage.
+        """
+        if not path:
+            return os.urandom(32)
+
+        try:
+            with open(path, 'rb') as handle:
+                key = handle.read()
+            if len(key) >= 32:
+                return key
+        except FileNotFoundError:
+            pass
+        except OSError as e:
+            Logger.warning(f'WebServer: cannot read session key {path}: {e}')
+            return os.urandom(32)
+
+        key = os.urandom(32)
+        try:
+            # Created owner-only: whoever reads it can forge an admin cookie.
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            with os.fdopen(fd, 'wb') as handle:
+                handle.write(key)
+        except OSError as e:
+            Logger.warning(f'WebServer: cannot save session key {path}, admin logins will not survive a restart: {e}')
+        return key
+
+    def _admin_password_fingerprint(self):
+        """Tie an admin cookie to the password it was earned with.
+
+        The cookie now lasts weeks, so changing the password has to be what
+        logs every other browser out. Derived with the signing key so the
+        cookie, which the browser can read, says nothing about the password.
+        """
+        if self.admin_password is None:
+            return None
+        return hmac.new(self.app.secret_key, self.admin_password.encode('utf-8'), hashlib.sha256).hexdigest()
+
+    def _start_admin_session(self):
+        """Mark the current browser as logged in for ADMIN_SESSION_LIFETIME."""
+        session.clear()
+        session.permanent = True
+        session['is_admin_authenticated'] = True
+        session['admin_password_fingerprint'] = self._admin_password_fingerprint()
+
     @classmethod
     def _accept_admin_password(cls, admin_password):
         """Return the password to use, or None to keep admin access disabled.
@@ -471,7 +529,14 @@ class WebServer:
 
     def _is_admin_authenticated(self):
         """Return True when current session is authenticated."""
-        return bool(session.get('is_admin_authenticated'))
+        if not session.get('is_admin_authenticated'):
+            return False
+
+        fingerprint = self._admin_password_fingerprint()
+        stored = session.get('admin_password_fingerprint')
+        if fingerprint is None or not isinstance(stored, str):
+            return False
+        return hmac.compare_digest(stored, fingerprint)
 
     def _require_admin_auth(self):
         """Redirect unauthenticated users to admin login page."""
