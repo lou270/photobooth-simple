@@ -283,6 +283,18 @@ def create_blueprint(server):
 
         return server._render_admin_page()
 
+    # A form's answer is shown at the form's address. Reloading it once the
+    # booth has restarted, or coming back to it from the history, asks for that
+    # address with GET, which only ever answered "405 Method Not Allowed" and
+    # looked like the admin area was gone. Typing /admin/ did the same with 404.
+    @blueprint.route('/admin/')
+    @blueprint.route('/admin/config')
+    @blueprint.route('/admin/restart')
+    @blueprint.route('/admin/delete-all')
+    @blueprint.route('/admin/event/background/delete')
+    def back_to_admin_page():
+        return redirect('/admin')
+
     @blueprint.route('/admin/login')
     def admin_login_page():
         """Admin login page."""
