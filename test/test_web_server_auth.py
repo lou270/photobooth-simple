@@ -67,6 +67,19 @@ def test_admin_pages_redirect_anonymous_visitors_to_the_login(client, path):
     assert '/admin/login' in response.headers['Location']
 
 
+@pytest.mark.parametrize('path', ['/admin/', '/admin/config', '/admin/restart', '/admin/delete-all',
+                                  '/admin/event/background/delete'])
+def test_reloading_a_form_answer_goes_back_to_the_admin_page(client, path):
+    """Reloading after "save and restart" used to end on 405, which looked like a dead admin."""
+    login(client)
+
+    response = client.get(path)
+
+    assert response.status_code == 302
+    assert response.headers['Location'] == '/admin'
+    assert client.get('/admin').status_code == 200
+
+
 def test_an_anonymous_caller_cannot_create_a_template(client, server):
     client.post('/api/templates', json={'template': valid_template()})
     assert not Path(server.templates_directory).exists()
