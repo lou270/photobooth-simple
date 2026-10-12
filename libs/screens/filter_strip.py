@@ -48,10 +48,19 @@ def build_thumbnails(image, size=None):
 
 class FilterStrip(AnchorLayout):
     """
-    +--------------------------------+
-    |  [thumb] [thumb] [thumb] ...   |
-    +--------------------------------+
+    +-----------------------------+     +---------+
+    |  [thumb] [thumb] [thumb]... |  or | [thumb] |
+    +-----------------------------+     | [thumb] |
+                                        |   ...   |
+                                        +---------+
+    A row under the collage on a screen turned upright, a column beside it on
+    one lying flat, where the sides are empty and the height is scarce.
     """
+
+    # As fractions of the short side. The column has the home button above it,
+    # so its cards are a little smaller to fit underneath.
+    ROW_CARD_SIZE = 0.18
+    COLUMN_CARD_SIZE = 0.16
 
     def __init__(self, on_select, **kwargs):
         kwargs.setdefault('anchor_x', 'center')
@@ -61,16 +70,16 @@ class FilterStrip(AnchorLayout):
         self._on_select = on_select
         self._enabled = True
         self.selected = DEFAULT_FILTER
+        self.vertical = False
 
         # Few enough filters to fit across the screen: no scrolling, since
         # guests never scroll a strip and the hidden looks went unseen.
         self.container = BoxLayout(
             orientation='horizontal',
             spacing=short_side(0.017),
-            padding=(short_side(0.022), short_side(0.011), short_side(0.022), short_side(0.011)),
             size_hint=(None, 1),
         )
-        self.container.bind(minimum_width=self.container.setter('width'))
+        self.container.bind(minimum_width=self._fit_container, minimum_height=self._fit_container)
         self.add_widget(self.container)
 
         self.cards = []
@@ -79,16 +88,40 @@ class FilterStrip(AnchorLayout):
             self.container.add_widget(card)
             self.cards.append(card)
 
+        self.set_vertical(False)
         self.set_selected(DEFAULT_FILTER)
 
     # --- layout -----------------------------------------------------------
 
+    def set_vertical(self, vertical):
+        """Lay the cards out as a column rather than a row."""
+        self.vertical = bool(vertical)
+        long_pad, short_pad = short_side(0.022), short_side(0.011)
+        if self.vertical:
+            self.container.orientation = 'vertical'
+            self.container.size_hint = (None, None)
+            self.container.padding = (short_pad, long_pad, short_pad, long_pad)
+        else:
+            self.container.orientation = 'horizontal'
+            self.container.size_hint = (None, 1)
+            self.container.padding = (long_pad, short_pad, long_pad, short_pad)
+
+        card_size = short_side(self.COLUMN_CARD_SIZE if self.vertical else self.ROW_CARD_SIZE)
+        thumbnail_size = card_size - short_side(0.011)
+        for card in self.cards:
+            card.size = (card_size, card_size)
+            card.thumbnail.size = (thumbnail_size, thumbnail_size)
+        self._fit_container()
+
+    def _fit_container(self, *args):
+        self.container.width = self.container.minimum_width
+        if self.vertical:
+            self.container.height = self.container.minimum_height
+
     def _create_card(self, filter_def):
-        card_size = short_side(0.18)
         card = ClickableCard(
             orientation='vertical',
             size_hint=(None, None),
-            size=(card_size, card_size),
             padding=short_side(0.009),
         )
 
@@ -106,11 +139,7 @@ class FilterStrip(AnchorLayout):
         card.bind(pos=update_card_bg, size=update_card_bg)
 
         preview_container = AnchorLayout(size_hint=(1, 1), anchor_x='center', anchor_y='center')
-        card.thumbnail = Image(
-            size_hint=(None, None),
-            size=(card_size - short_side(0.011), card_size - short_side(0.011)),
-            fit_mode='contain',
-        )
+        card.thumbnail = Image(size_hint=(None, None), fit_mode='contain')
         preview_container.add_widget(card.thumbnail)
         card.add_widget(preview_container)
 

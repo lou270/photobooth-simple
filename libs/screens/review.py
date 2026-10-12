@@ -37,6 +37,10 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     |   [filter][filter]        |
     +---------------------------+
 
+    On a screen lying flat the filters stand in a column down the left edge
+    instead, under the home button, and the collage moves over to their right:
+    the sides are where a landscape screen has room to spare.
+
     Everything a guest can still decide lives here rather than earlier in the
     flow: the look, because it applies to the whole collage and they can see
     what they are choosing; the number of copies, because it is the last thing
@@ -52,6 +56,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
     PRINT_BUTTON_SIZE = 0.17
     SHARE_BUTTON_SIZE = 0.14
     COPIES_BUTTON_SIZE = 0.12
+    HOME_POS_HINT = {'x': 0.05, 'top': 0.95}
 
     def __init__(self, app, **kwargs):
         Logger.info('ReviewScreen: __init__().')
@@ -84,7 +89,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
         self.btn_home = make_icon_button(
             ICON_HOME,
             size=0.14,
-            pos_hint={'x': 0.05, 'top': 0.95},
+            pos_hint=dict(self.HOME_POS_HINT),
             font=ICON_TTF,
             font_size_fraction=0.07,
             bgcolor=HOME_COLOR,
@@ -97,12 +102,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
         self.filters = None
         if self.app.FILTERS_ENABLED:
-            self.filters = FilterStrip(
-                self.on_filter_selected,
-                size_hint=(1, None),
-                height=short_side(self.FILTER_BAND_FRACTION),
-                pos_hint={'x': 0, 'y': 0},
-            )
+            self.filters = FilterStrip(self.on_filter_selected)
             self.overlay_layout.add_widget(self.filters)
 
         # Round icon buttons like every other button in the booth. They were an
@@ -194,7 +194,7 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
 
         margin = short_side(0.03)
         gap = short_side(0.02)
-        band = self.filters.height if self.filters is not None else 0
+        band = self._layout_filters(margin)
         right = self.overlay_layout.width - margin
 
         y = band + margin
@@ -220,6 +220,41 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             self.print_status.y = band + margin
             self.print_status.width = max(short_side(0.35), available)
             self.print_status.height = short_side(0.16)
+
+    def _layout_filters(self, margin):
+        """Place the filters and the collage; returns the height kept free below.
+
+        A row along the bottom when the screen stands upright, a column on the
+        left under the home button when it lies flat.
+        """
+        width, height = self.overlay_layout.size
+        if self.filters is None:
+            self.preview.pos_hint = {'x': 0, 'y': 0}
+            self.preview.size_hint = (1, 1)
+            return 0
+
+        band = short_side(self.FILTER_BAND_FRACTION)
+        vertical = width > height
+        self.filters.set_vertical(vertical)
+        self.filters.pos_hint = {'x': 0, 'y': 0}
+        if vertical:
+            # The home button heads the column, so the two read as one edge.
+            # Its bottom comes from its hint rather than its y, which the
+            # float layout has not placed yet when the size changes.
+            self.btn_home.pos_hint = {'center_x': band / 2 / width, 'top': self.HOME_POS_HINT['top']}
+            home_bottom = height * self.HOME_POS_HINT['top'] - self.btn_home.height
+            self.filters.size_hint = (None, None)
+            self.filters.size = (band, max(0, home_bottom - margin))
+            self.preview.pos_hint = {'x': band / width, 'y': 0}
+            self.preview.size_hint = (1 - band / width, 1)
+            return 0
+
+        self.btn_home.pos_hint = dict(self.HOME_POS_HINT)
+        self.filters.size_hint = (1, None)
+        self.filters.height = band
+        self.preview.pos_hint = {'x': 0, 'y': 0}
+        self.preview.size_hint = (1, 1)
+        return band
 
     # --- printer state ----------------------------------------------------
 
