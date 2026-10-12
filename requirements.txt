@@ -15,7 +15,8 @@ qrcode[pil]>=7.4,<9
 # Optional, platform specific: install only where the hardware exists.
 #   pycups      CUPS printing               (Linux, macOS)
 #   spidev      WS2812 ring light over SPI  (Raspberry Pi)
+#   gpiozero    LED chevrons over PWM       (Raspberry Pi, preinstalled)
 #   picamera2   Raspberry Pi Camera Module  (Raspberry Pi)
 # DSLR support needs the libgphoto2 shared library, not a Python package.
 # Without any of these the application still runs: set CAMERA = fake in
-# config.ini, and printing and the ring light degrade to no-ops.
+# config.ini, and printing and the lights degrade to no-ops.

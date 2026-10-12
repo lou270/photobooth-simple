@@ -151,6 +151,8 @@ CONFIG_FORM_SECTIONS = (
                          ('180', 'web.config.choices.rotation.180'), ('270', 'web.config.choices.rotation.270')]},
             {'section': 'Global', 'option': 'RINGLED', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
             {'section': 'Global', 'option': 'RINGLED_PIXELS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 256, 'step': 1, 'unit': 'leds', 'default': '12'},
+            {'section': 'Global', 'option': 'CHEVRONS', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
+            {'section': 'Global', 'option': 'CHEVRONS_IDLE_PERCENT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 5, 'unit': 'percent', 'default': '30'},
         ),
     },
     {

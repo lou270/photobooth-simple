@@ -37,6 +37,19 @@ RINGLED = True
 # Number of LEDs on the ring, so the animations go all the way round it
 RINGLED_PIXELS = 12
 
+# If set to True, drives the three rows of LED chevrons either side of the lens,
+# each through its own MOSFET on a PWM pin (requires gpiozero, preinstalled on
+# Raspberry Pi OS). They sit at CHEVRONS_IDLE_PERCENT between photos, pulse
+# towards the lens every second of the countdown, and light at full power for
+# the shot.
+CHEVRONS = False
+
+# GPIO numbers (not header pins) of the inner, middle and outer rows
+CHEVRONS_PINS = 17, 27, 22
+
+# Power of the chevrons between photos, in percent: 0 keeps them off
+CHEVRONS_IDLE_PERCENT = 30
+
 # Password protecting the admin pages: config editor, template editor, log viewer
 # and deletion of every saved session. Use None to keep admin access disabled.
 # Must be at least 10 characters and not a well-known value, otherwise admin

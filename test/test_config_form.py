@@ -397,6 +397,8 @@ GETTERS = {
     ('Global', 'SHARE'): 'get_share',
     ('Global', 'RINGLED'): 'get_ringled',
     ('Global', 'RINGLED_PIXELS'): 'get_ringled_pixels',
+    ('Global', 'CHEVRONS'): 'get_chevrons',
+    ('Global', 'CHEVRONS_IDLE_PERCENT'): 'get_chevrons_idle_percent',
     **{('Timing', option): 'get_timings' for option, _minimum in config_module.TIMING_OPTIONS.values()},
     ('Event', 'WELCOME_TITLE'): 'get_welcome_title',
     ('Event', 'WELCOME_SUBTITLE'): 'get_welcome_subtitle',

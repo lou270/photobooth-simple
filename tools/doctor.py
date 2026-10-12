@@ -232,6 +232,19 @@ def check_led(report, config):
     report.add(OK, 'LED ring', f'spidev present ({devices[0].name})')
 
 
+def check_chevrons(report, config):
+    if not config.get_chevrons():
+        report.add(SKIP, 'LED chevrons', 'CHEVRONS = False')
+        return
+
+    if try_import('gpiozero') is None:
+        report.add(FAIL, 'LED chevrons', 'CHEVRONS = True but gpiozero is not installed')
+        return
+
+    pins = ', '.join(str(pin) for pin in config.get_chevrons_pins())
+    report.add(OK, 'LED chevrons', f'gpiozero present, rows on GPIO {pins}')
+
+
 def check_storage(report, config):
     directory = Path(config.get_dcim_directory())
     parent = directory if directory.exists() else directory.parent
@@ -273,6 +286,7 @@ def main():
         check_cameras(report, config)
         check_printer(report, config)
         check_led(report, config)
+        check_chevrons(report, config)
         check_storage(report, config)
         check_web(report, config)
 

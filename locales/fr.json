@@ -535,6 +535,14 @@
           "RINGLED_PIXELS": {
             "label": "Nombre de LED de l'anneau",
             "help": "Le nombre de LED de l'anneau lumineux, pour que les animations en fassent tout le tour. 12 pour l'anneau prévu avec la borne."
+          },
+          "CHEVRONS": {
+            "label": "Chevrons LED",
+            "help": "Pilote les trois rangs de chevrons LED de part et d'autre de l'objectif, sur les GPIO 17, 27 et 22 (rang intérieur d'abord ; modifiable par CHEVRONS_PINS dans config.ini). Sans ce matériel, laisser décoché."
+          },
+          "CHEVRONS_IDLE_PERCENT": {
+            "label": "Chevrons entre deux photos",
+            "help": "La puissance des chevrons quand personne n'est photographié. Pendant le décompte, une vague part vers l'objectif chaque seconde, puis tout s'allume à 100 % pour la photo. 0 les laisse éteints entre deux photos."
           }
         },
         "Remote": {

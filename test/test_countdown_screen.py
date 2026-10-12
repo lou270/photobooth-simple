@@ -21,6 +21,7 @@ from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.floatlayout import FloatLayout
 from kivy.uix.widget import Widget
 
+from libs.hardware.chevrons import NullChevrons
 from libs.screens import ScreenMgr
 from libs.screens.countdown import CountdownScreen
 
@@ -80,6 +81,7 @@ class Countdown:
 
         self.app = SimpleNamespace(
             trigger_shot=trigger_shot,
+            chevrons=NullChevrons(),
             transition_to=lambda screen, **kw: self.transitions.append(screen),
         )
 

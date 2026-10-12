@@ -244,6 +244,22 @@ moving branch and run it as root unattended.
 | DIN | 19 (GPIO 10, MOSI) |
 | VCC | 2 or 4 (5V) |
 
+### LED chevrons wiring
+
+Each row of chevrons (the left and right one of the same rank, in parallel)
+switches its negative side through its own logic-level N-channel MOSFET, so the
+booth dims the three rows independently. The strips' 12 V supply needs its own
+fuse, and its ground must be tied to a ground pin of the Pi.
+
+| Row | GPIO | Raspberry Pi pin |
+| --- | --- | --- |
+| Inner, next to the lens | 17 | 11 |
+| Middle | 27 | 13 |
+| Outer | 22 | 15 |
+| MOSFET sources, 12 V ground | - | 9 (GND) |
+
+Other pins can be set with `CHEVRONS_PINS` in `config.ini`, inner row first.
+
 ## Checking a booth
 
 ```bash
@@ -253,7 +269,7 @@ moving branch and run it as root unattended.
 
 It reports on the Python environment and imports, `config.ini` and the admin
 password, which camera backends are actually available, whether CUPS knows the
-printer named in the configuration, the SPI device, free disk space, the systemd
+printer named in the configuration, the SPI device, gpiozero for the chevrons, free disk space, the systemd
 units (and any left from the old access point), whether the web server answers,
 and the address the QR codes will carry. Exit code is 1 if anything required is
 missing.

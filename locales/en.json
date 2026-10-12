@@ -535,6 +535,14 @@
           "RINGLED_PIXELS": {
             "label": "LEDs on the ring",
             "help": "How many LEDs the ring light has, so the animations go all the way round. 12 for the ring the booth is built with."
+          },
+          "CHEVRONS": {
+            "label": "LED chevrons",
+            "help": "Drives the three rows of LED chevrons either side of the lens, on GPIO 17, 27 and 22 (inner row first; changed with CHEVRONS_PINS in config.ini). Leave unticked without that hardware."
+          },
+          "CHEVRONS_IDLE_PERCENT": {
+            "label": "Chevrons between photos",
+            "help": "Power of the chevrons while nobody is being photographed. They pulse towards the lens during the countdown and light at full power for the shot. 0 keeps them off in between."
           }
         },
         "Remote": {

@@ -27,6 +27,7 @@ from libs.config import Config  # noqa: E402
 KEYS = {
     'ADMIN_PASSWORD': 'get_admin_password',
     'CAMERA': 'get_camera_backend',
+    'CHEVRONS': 'get_chevrons',
     'DCIM_DIRECTORY': 'get_dcim_directory',
     'PRINTER': 'get_printer',
     'RINGLED': 'get_ringled',

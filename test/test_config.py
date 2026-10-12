@@ -369,3 +369,27 @@ def test_the_ring_size_stays_one_a_ring_can_have(tmp_path, monkeypatch, raw, exp
         RINGLED_PIXELS = {raw}
     """)
     assert config.get_ringled_pixels() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [
+    ('5, 6, 13', (5, 6, 13)),
+    ('17,27', (17, 27, 22)),
+    ('17, 17, 22', (17, 27, 22)),
+    ('17, 27, 40', (17, 27, 22)),
+    ('none', (17, 27, 22)),
+])
+def test_the_chevrons_take_three_distinct_gpio(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        CHEVRONS_PINS = {raw}
+    """)
+    assert config.get_chevrons_pins() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [('45', 45), ('-5', 0), ('150', 100), ('bright', 30)])
+def test_the_chevrons_ambient_level_is_a_percentage(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        CHEVRONS_IDLE_PERCENT = {raw}
+    """)
+    assert config.get_chevrons_idle_percent() == expected

@@ -61,6 +61,11 @@ TIMING_OPTIONS = {
 DEFAULT_RINGLED_PIXELS = 12
 MAX_RINGLED_PIXELS = 256
 
+# The LED chevrons either side of the lens: GPIO of the inner, middle and outer
+# rows, and their power between photos.
+DEFAULT_CHEVRONS_PINS = (17, 27, 22)
+DEFAULT_CHEVRONS_IDLE_PERCENT = 30
+
 class Config:
     def __init__(self):
         self.config = configparser.ConfigParser()
@@ -169,6 +174,28 @@ class Config:
         """How many LEDs the ring has: the animations go round that many."""
         pixels = self._get_int(('Global',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
         return min(MAX_RINGLED_PIXELS, max(1, pixels))
+
+    def get_chevrons(self):
+        return self._get_boolean(('Global',), 'CHEVRONS', fallback=False)
+
+    def get_chevrons_pins(self):
+        """GPIO numbers of the three rows of chevrons, inner (next to the lens) first."""
+        raw_value = self._get_string(('Global',), 'CHEVRONS_PINS', fallback='')
+        try:
+            pins = tuple(int(part) for part in raw_value.split(','))
+        except ValueError:
+            pins = ()
+        if len(pins) != 3 or any(not 0 <= pin <= 27 for pin in pins) or len(set(pins)) != 3:
+            if raw_value.strip():
+                Logger.warning('Config: CHEVRONS_PINS must be three distinct GPIO numbers, got %r, using %s',
+                               raw_value, DEFAULT_CHEVRONS_PINS)
+            return DEFAULT_CHEVRONS_PINS
+        return pins
+
+    def get_chevrons_idle_percent(self):
+        """Power of the chevrons between photos, from 0 (off) to 100."""
+        percent = self._get_int(('Global',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
+        return min(100, max(0, percent))
 
     def get_timings(self):
         """Every tunable delay, in seconds, keyed as libs/timings.py names them."""
