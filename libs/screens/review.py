@@ -221,12 +221,6 @@ class ReviewScreen(HomeTimeoutMixin, ColorScreen):
             self.print_status.width = max(short_side(0.35), available)
             self.print_status.height = short_side(0.16)
 
-        if self.filters is not None:
-            # The buttons stack above the band, not beside it, so the strip has
-            # the whole width. Reserving room for them squeezed it to a single
-            # visible filter on a screen turned upright.
-            self.filters.set_max_width(self.overlay_layout.width * 0.94)
-
     # --- printer state ----------------------------------------------------
 
     def _sync_print_button(self):

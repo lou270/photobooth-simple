@@ -442,7 +442,7 @@
           },
           "FILTERS": {
             "label": "Filtres photo",
-            "help": "Propose aux invités un choix de filtres (noir et blanc, sépia, vintage…) sur l'écran de revue, avant d'imprimer."
+            "help": "Propose aux invités un choix de filtres (noir et blanc, sépia, glam) sur l'écran de revue, avant d'imprimer."
           },
           "CAMERA": {
             "label": "Appareil photo",

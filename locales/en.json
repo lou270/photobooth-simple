@@ -442,7 +442,7 @@
           },
           "FILTERS": {
             "label": "Photo filters",
-            "help": "Offers guests a choice of filters (black and white, sepia, vintage...) on the review screen, before printing."
+            "help": "Offers guests a choice of filters (black and white, sepia, glam) on the review screen, before printing."
           },
           "CAMERA": {
             "label": "Camera",

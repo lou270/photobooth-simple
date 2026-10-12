@@ -7,14 +7,12 @@ decision to make and because the guest can see what they are deciding on.
 
 import cv2
 
-from kivy.core.window import Window
 from kivy.graphics import Color, RoundedRectangle
 from kivy.graphics.texture import Texture
 from kivy.logger import Logger
 from kivy.uix.anchorlayout import AnchorLayout
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.image import Image
-from kivy.uix.scrollview import ScrollView
 
 from libs.imaging import DEFAULT_FILTER, FILTERS, apply_filter
 from libs.kivywidgets import FeedbackButtonBehavior, hex_to_rgba, short_side
@@ -28,8 +26,7 @@ class ClickableCard(FeedbackButtonBehavior, BoxLayout):
 def build_thumbnails(image, size=None):
     """Every filter applied to a small copy of `image`, in FILTERS order.
 
-    Off the UI thread, please: this is a handful of OpenCV passes, and one of
-    the filters runs a bilateral blur.
+    Off the UI thread, please: this is a handful of OpenCV passes.
     """
     if image is None:
         return []
@@ -64,9 +61,9 @@ class FilterStrip(AnchorLayout):
         self._on_select = on_select
         self._enabled = True
         self.selected = DEFAULT_FILTER
-        self.max_width = Window.width * 0.7
 
-        self.scroll = ScrollView(size_hint=(None, 1), do_scroll_x=True, do_scroll_y=False)
+        # Few enough filters to fit across the screen: no scrolling, since
+        # guests never scroll a strip and the hidden looks went unseen.
         self.container = BoxLayout(
             orientation='horizontal',
             spacing=short_side(0.017),
@@ -74,9 +71,7 @@ class FilterStrip(AnchorLayout):
             size_hint=(None, 1),
         )
         self.container.bind(minimum_width=self.container.setter('width'))
-        self.container.bind(minimum_width=self._fit_scroll)
-        self.scroll.add_widget(self.container)
-        self.add_widget(self.scroll)
+        self.add_widget(self.container)
 
         self.cards = []
         for filter_def in FILTERS:
@@ -87,14 +82,6 @@ class FilterStrip(AnchorLayout):
         self.set_selected(DEFAULT_FILTER)
 
     # --- layout -----------------------------------------------------------
-
-    def set_max_width(self, width):
-        """Keep the strip clear of whatever else the screen puts beside it."""
-        self.max_width = max(Window.width * 0.2, width)
-        self._fit_scroll(self.container, self.container.minimum_width)
-
-    def _fit_scroll(self, instance, value):
-        self.scroll.width = min(self.max_width, value)
 
     def _create_card(self, filter_def):
         card_size = short_side(0.18)
