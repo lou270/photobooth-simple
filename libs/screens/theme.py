@@ -3,6 +3,7 @@
 from kivy.core.window import Window
 from kivy.metrics import dp
 
+from libs.event import DEFAULT_BACKGROUND_COLOR
 from libs.kivywidgets import hex_to_rgba, window_size_registry
 from libs.timings import TIMINGS, Timing  # noqa: F401 - re-exported for the screens
 
@@ -55,7 +56,18 @@ def darken_rgba(color, amount=0.25):
     )
 
 # Colors
-BACKGROUND_COLOR = hex_to_rgba('#26495c')
+# The background is the one colour an operator sets, from config.ini. Screens
+# are built after the application reads it, so they ask for it as they build
+# rather than importing a value fixed at import, the way TIMINGS works.
+_background_color = hex_to_rgba(DEFAULT_BACKGROUND_COLOR)
+
+def set_background_color(hex_color):
+    global _background_color
+    _background_color = hex_to_rgba(hex_color)
+
+def background_color():
+    return _background_color
+
 BORDER_COLOR = hex_to_rgba('#c4a35a')
 # 0 draws no frame at all; short_side(0.011) is the one it used to draw.
 BORDER_THINKNESS = dp(0)

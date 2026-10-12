@@ -17,7 +17,7 @@ and a submitted form, and returns either rendered fields or new config text.
 import configparser
 import re
 
-from libs import i18n, timings
+from libs import event, i18n, timings
 from libs.config import TIMING_OPTIONS
 
 # A choice is (value, translation key). A key of None shows the value itself,
@@ -68,6 +68,7 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Event', 'option': 'WELCOME_FONT', 'control': 'select', 'default': 'elegant',
              'choices': [('elegant', 'web.config.choices.welcome_font.elegant'), ('script', 'web.config.choices.welcome_font.script'),
                          ('modern', 'web.config.choices.welcome_font.modern'), ('playful', 'web.config.choices.welcome_font.playful')]},
+            {'section': 'Event', 'option': 'BACKGROUND_COLOR', 'control': 'color', 'default': event.DEFAULT_BACKGROUND_COLOR},
             {'section': 'Event', 'option': 'EVENT_NAME', 'control': 'text', 'placeholder': 'Lou & Max', 'default': ''},
             {'section': 'Event', 'option': 'DATE_FORMAT', 'advanced': True, 'control': 'text', 'placeholder': '%d/%m/%Y', 'default': '%d/%m/%Y'},
         ),
@@ -228,6 +229,11 @@ def normalize_value(field_spec, raw_value):
         # Never send the current password back to the browser.
         return ''
 
+    if control == 'color':
+        # A colour picker shows black for anything but '#rrggbb'; show the
+        # colour the booth actually falls back to instead.
+        return event.parse_background_color(value) or field_spec['default']
+
     if field_spec.get('number_type') == 'optional_int' and value.upper() == 'NONE':
         return ''
 
@@ -361,6 +367,12 @@ def coerce_value(field_spec, submitted_value, current_value, lang=i18n.DEFAULT_L
 
     if option == 'CALIBRATION':
         return value or 'None'
+
+    if field_spec['control'] == 'color':
+        color = event.parse_background_color(value)
+        if color is None:
+            raise ValueError(i18n.translate(lang, 'web.config.errors.not_a_color', label=field_label(field_spec, lang)))
+        return color
 
     if number_type in ('int', 'float'):
         if value == '':

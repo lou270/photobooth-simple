@@ -165,10 +165,25 @@ def test_an_emptied_calibration_becomes_none():
     assert coerce_value(spec('Capture', 'CALIBRATION'), '  ', '(1.4, 0, 0)') == 'None'
 
 
+def test_a_background_colour_is_written_as_the_picker_sends_it():
+    assert coerce_value(spec('Event', 'BACKGROUND_COLOR'), '#A0B1C2', '#26495c') == '#a0b1c2'
+
+
+def test_a_background_colour_that_is_not_one_is_refused():
+    with pytest.raises(ValueError, match='#rrggbb'):
+        coerce_value(spec('Event', 'BACKGROUND_COLOR'), 'blue', '#26495c')
+
+
 # --- what the form shows ---------------------------------------------------
 
 def test_the_admin_password_is_never_sent_back_to_the_browser():
     assert normalize_value(spec('Global', 'ADMIN_PASSWORD'), 'un secret') == ''
+
+
+def test_a_background_colour_the_booth_ignores_shows_as_the_one_it_uses():
+    """A colour picker would show black, where the booth falls back to its own."""
+    assert normalize_value(spec('Event', 'BACKGROUND_COLOR'), 'blue') == '#26495c'
+    assert normalize_value(spec('Event', 'BACKGROUND_COLOR'), 'A0B1C2') == '#a0b1c2'
 
 
 def test_none_reads_as_empty_in_an_optional_field():
@@ -292,7 +307,7 @@ def test_the_form_covers_every_option_only_once():
 
 
 def test_every_field_declares_a_control_the_form_can_render():
-    known = {'checkbox', 'text', 'password', 'number', 'select'}
+    known = {'checkbox', 'text', 'password', 'number', 'select', 'color'}
     for section_spec in CONFIG_FORM_SECTIONS:
         for field_spec in section_spec['fields']:
             assert field_spec['control'] in known
@@ -405,6 +420,7 @@ GETTERS = {
     ('Remote', 'REMOTE_MAX_PER_SENDER'): 'get_remote_max_per_sender',
     ('Remote', 'REMOTE_MAX_PENDING'): 'get_remote_max_pending',
     ('Remote', 'REMOTE_MIN_UPLOAD_INTERVAL'): 'get_remote_min_upload_interval',
+    ('Event', 'BACKGROUND_COLOR'): 'get_background_color',
     ('Capture', 'CAMERA'): 'get_camera_backend',
     ('Capture', 'COUNTDOWN'): 'get_countdown',
     ('Capture', 'CALIBRATION'): 'get_calibration',

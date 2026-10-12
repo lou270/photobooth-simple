@@ -12,7 +12,7 @@ from kivy.uix.label import Label
 
 from libs.i18n import t
 from libs.kivywidgets import BlurredImage, short_side
-from libs.screens.theme import BACKGROUND_COLOR
+from libs.screens.theme import background_color
 
 
 class Slideshow(FloatLayout):
@@ -39,7 +39,7 @@ class Slideshow(FloatLayout):
         self._running = False
 
         with self.canvas.before:
-            Color(*BACKGROUND_COLOR[:3], 1)
+            Color(*background_color()[:3], 1)
             self._ground = Rectangle(pos=self.pos, size=self.size)
         self.bind(pos=self._redraw, size=self._redraw)
 

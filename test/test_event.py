@@ -102,7 +102,26 @@ def test_nothing_set_means_the_booth_s_own_welcome_and_no_slideshow(tmp_path, mo
     assert config.get_welcome_subtitle() == ''
     assert config.get_date_format() == event.DEFAULT_DATE_FORMAT
     assert config.get_welcome_font() == event.DEFAULT_WELCOME_FONT
+    assert config.get_background_color() == event.DEFAULT_BACKGROUND_COLOR
     assert config.get_slideshow() is False
+
+
+def test_a_background_colour_is_read_with_or_without_its_hash(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Event]
+        BACKGROUND_COLOR = A0B1C2
+    """)
+
+    assert config.get_background_color() == '#a0b1c2'
+
+
+def test_a_background_colour_that_is_not_one_falls_back_to_the_booth_s_own(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Event]
+        BACKGROUND_COLOR = navy
+    """)
+
+    assert config.get_background_color() == event.DEFAULT_BACKGROUND_COLOR
 
 
 def test_an_unknown_lettering_falls_back_to_the_booth_s_own(tmp_path, monkeypatch):

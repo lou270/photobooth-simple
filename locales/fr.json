@@ -312,7 +312,8 @@
         "required": "« {label} » doit être renseigné.",
         "not_a_number": "« {label} » doit être un nombre.",
         "at_least": "« {label} » doit valoir au moins {min}.",
-        "at_most": "« {label} » doit valoir au plus {max}."
+        "at_most": "« {label} » doit valoir au plus {max}.",
+        "not_a_color": "« {label} » doit être une couleur écrite #rrggbb."
       },
       "choices": {
         "camera": {
@@ -406,6 +407,10 @@
           "WELCOME_FONT": {
             "label": "Police de l'écran d'accueil",
             "help": "Le style d'écriture du titre et du sous-titre. La manuscrite se lit mieux en minuscules qu'en capitales."
+          },
+          "BACKGROUND_COLOR": {
+            "label": "Couleur de fond des écrans",
+            "help": "La couleur unie derrière tous les écrans sauf l'accueil, qui a sa photo : compte à rebours, aperçu, impression, erreurs, et autour des photos du diaporama. Choisir une couleur sur laquelle le texte blanc reste lisible."
           },
           "EVENT_NAME": {
             "label": "Nom de l'événement",

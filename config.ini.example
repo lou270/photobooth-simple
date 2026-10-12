@@ -58,6 +58,10 @@ WELCOME_SUBTITLE =
 # The lettering of the title and subtitle: elegant, script, modern or playful.
 WELCOME_FONT = elegant
 
+# The plain colour behind every screen but the welcome one, as #rrggbb.
+# Keep it dark enough for the white lettering to stay readable.
+BACKGROUND_COLOR = #26495c
+
 # Printed wherever a template text says {event}
 EVENT_NAME =
 

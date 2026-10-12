@@ -47,7 +47,7 @@ from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
 from libs import event, i18n, touch_source
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import LoadingScreen, ScreenMgr
-from libs.screens.theme import ICON_ERROR_TRIGGER
+from libs.screens.theme import ICON_ERROR_TRIGGER, set_background_color
 from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
 from libs.stats_store import StatsStore
@@ -85,6 +85,7 @@ class PhotoboothApp(App):
         # Same constraint for the delays: screens read them as they run, but
         # nothing should run before the operator's values are in.
         TIMINGS.update(config.get_timings())
+        set_background_color(config.get_background_color())
         self.FULLSCREEN = config.get_fullscreen()
         self.SHARE = config.get_share()
         self.WEB_PORT = config.get_web_port()

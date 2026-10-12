@@ -26,6 +26,18 @@ DEFAULT_WELCOME_BACKGROUND = PROJECT_ROOT / 'assets' / 'backgrounds' / 'bg_waiti
 
 DEFAULT_DATE_FORMAT = '%d/%m/%Y'
 
+# The plain colour behind every screen but the welcome one, which has its photo:
+# countdown, review, printing, errors, and the slideshow's margins. Written the
+# way a browser's colour picker sends it, '#rrggbb'.
+DEFAULT_BACKGROUND_COLOR = '#26495c'
+BACKGROUND_COLOR_PATTERN = re.compile(r'^#?([0-9a-fA-F]{6})$')
+
+
+def parse_background_color(value):
+    """'#rrggbb' in lower case, or None for anything that is not six hex digits."""
+    match = BACKGROUND_COLOR_PATTERN.match((value or '').strip())
+    return f'#{match.group(1).lower()}' if match else None
+
 # The welcome screen's lettering, one look per kind of evening. Each pairs a
 # title face with a plainer one for the subtitle: a script or a display serif
 # reads beautifully in large words and poorly in a line of names and a date.

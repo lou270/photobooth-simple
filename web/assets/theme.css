@@ -619,6 +619,11 @@ body.theme-guest .chip.rejected {
     padding: 9px 12px;
 }
 
+.field-input[type="color"] {
+    padding: 4px;
+    cursor: pointer;
+}
+
 .field-input:focus,
 .field-select:focus,
 .field-textarea:focus {

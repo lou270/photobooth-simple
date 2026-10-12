@@ -6,7 +6,7 @@ from kivy.logger import Logger
 from kivy.uix.screenmanager import Screen
 
 from libs.screens.names import ScreenNames
-from libs.screens.theme import BACKGROUND_COLOR, BORDER_COLOR, BORDER_THINKNESS
+from libs.screens.theme import BORDER_COLOR, BORDER_THINKNESS, background_color
 
 
 class HomeTimeoutMixin:
@@ -123,7 +123,7 @@ class ColorScreen(Screen):
                 self.border_rect = None
 
             # Background
-            Color(*BACKGROUND_COLOR)
+            Color(*background_color())
             self.background_rect = Rectangle(pos=(self.x + BORDER_THINKNESS, self.y + BORDER_THINKNESS), size=(self.width - BORDER_THINKNESS*2, self.height - BORDER_THINKNESS*2))
 
     def on_pos(self, *args):

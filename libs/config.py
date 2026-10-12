@@ -220,6 +220,17 @@ class Config:
             return event.DEFAULT_WELCOME_FONT
         return style
 
+    def get_background_color(self):
+        """The colour behind the screens without a photo, as '#rrggbb'."""
+        raw_value = self._get_raw_string('Event', 'BACKGROUND_COLOR')
+        if not raw_value:
+            return event.DEFAULT_BACKGROUND_COLOR
+        color = event.parse_background_color(raw_value)
+        if color is None:
+            Logger.warning('Config: invalid BACKGROUND_COLOR=%r, using %r', raw_value, event.DEFAULT_BACKGROUND_COLOR)
+            return event.DEFAULT_BACKGROUND_COLOR
+        return color
+
     def get_slideshow(self):
         """Whether the welcome screen shows the evening's photos while nobody is there."""
         return self._get_boolean(('Slideshow',), 'SLIDESHOW', fallback=False)

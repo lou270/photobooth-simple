@@ -312,7 +312,8 @@
         "required": "{label} is required.",
         "not_a_number": "{label} must be a number.",
         "at_least": "{label} must be at least {min}.",
-        "at_most": "{label} must be at most {max}."
+        "at_most": "{label} must be at most {max}.",
+        "not_a_color": "{label} must be a colour written as #rrggbb."
       },
       "choices": {
         "camera": {
@@ -406,6 +407,10 @@
           "WELCOME_FONT": {
             "label": "Welcome lettering",
             "help": "The typeface of the title and subtitle. The handwritten one reads better in lower case than in capitals."
+          },
+          "BACKGROUND_COLOR": {
+            "label": "Screen background colour",
+            "help": "The plain colour behind every screen except the welcome one, which shows its photo: countdown, review, printing, errors, and around the slideshow's photos. Pick one the white lettering stays readable on."
           },
           "EVENT_NAME": {
             "label": "Event name",
