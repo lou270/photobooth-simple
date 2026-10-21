@@ -253,7 +253,8 @@ def check_chevrons(report, config):
     report.add(OK, 'LED chevrons', f'gpiozero present, rows on GPIO {pins}')
 
     if try_import('pigpio') is None:
-        report.add(WARN, 'Chevrons PWM', 'pigpio not installed: software PWM, the chevrons may waver')
+        # Not packaged on recent Raspberry Pi OS: the normal case, not a fault.
+        report.add(OK, 'Chevrons PWM', "gpiozero's default driver (pigpio not installed)")
     elif not service_active('pigpiod'):
         report.add(WARN, 'Chevrons PWM', 'pigpiod not running: software PWM, the chevrons may waver')
     else:

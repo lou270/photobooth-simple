@@ -52,9 +52,9 @@ CHEVRONS_PINS = 17, 27, 22
 CHEVRONS_IDLE_PERCENT = 30
 
 # PWM frequency, in Hz. Lower it if the chevrons look brighter than set or
-# waver; raise it if the live preview shows bands. The PWM is steadiest with
-# the pigpio daemon running (sudo systemctl enable --now pigpiod), which the
-# booth uses whenever it finds it.
+# waver; raise it if the live preview shows bands. The pins are pulsed by
+# gpiozero's default driver; a pigpio daemon, where one runs, is used instead.
+# Recent Raspberry Pi OS releases no longer package pigpio.
 CHEVRONS_PWM_FREQUENCY = 200
 
 # Password protecting the admin pages: config editor, template editor, log viewer
