@@ -65,6 +65,7 @@ MAX_RINGLED_PIXELS = 256
 # rows, and their power between photos.
 DEFAULT_CHEVRONS_PINS = (17, 27, 22)
 DEFAULT_CHEVRONS_IDLE_PERCENT = 30
+DEFAULT_CHEVRONS_PWM_FREQUENCY = 200
 
 class Config:
     def __init__(self):
@@ -196,6 +197,11 @@ class Config:
         """Power of the chevrons between photos, from 0 (off) to 100."""
         percent = self._get_int(('Global',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
         return min(100, max(0, percent))
+
+    def get_chevrons_pwm_frequency(self):
+        """PWM frequency of the chevrons, in Hz: under 50 the eye sees them flicker."""
+        frequency = self._get_int(('Global',), 'CHEVRONS_PWM_FREQUENCY', fallback=DEFAULT_CHEVRONS_PWM_FREQUENCY)
+        return min(2000, max(50, frequency))
 
     def get_timings(self):
         """Every tunable delay, in seconds, keyed as libs/timings.py names them."""

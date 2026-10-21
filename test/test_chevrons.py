@@ -8,11 +8,11 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import libs.hardware.chevrons as chevrons_module
-from libs.hardware.chevrons import NullChevrons, PwmChevrons, create_chevrons, pulse_levels
+from libs.hardware.chevrons import GAMMA, NullChevrons, PwmChevrons, create_chevrons, pulse_levels
 
 
 class FakeRow:
-    def __init__(self, pin=None, frequency=None):
+    def __init__(self, pin=None, frequency=None, pin_factory=None):
         self.value = 0.0
         self.history = []
         self.closed = False
@@ -43,7 +43,7 @@ def test_missing_gpiozero_degrades_to_null_chevrons(monkeypatch):
 def test_a_pin_that_cannot_be_claimed_releases_the_others(monkeypatch):
     claimed = []
 
-    def pwmled(pin, frequency):
+    def pwmled(pin, frequency, pin_factory=None):
         if pin == 22:
             raise RuntimeError('pin busy')
         row = FakeRow()
@@ -61,7 +61,7 @@ def test_working_chevrons_start_at_the_ambient_level(monkeypatch):
 
     chevrons = create_chevrons(enabled=True, idle_percent=40)
 
-    assert [row.value for row in chevrons._rows] == [0.4, 0.4, 0.4]
+    assert [row.value for row in chevrons._rows] == pytest.approx([0.4 ** GAMMA] * 3)
 
 
 def test_null_chevrons_accept_every_effect():
@@ -77,7 +77,7 @@ def test_idle_flash_and_off_hold_every_row():
     chevrons, rows = make_chevrons(idle_percent=25)
 
     chevrons.idle()
-    assert [row.value for row in rows] == [0.25, 0.25, 0.25]
+    assert [row.value for row in rows] == pytest.approx([0.25 ** GAMMA] * 3)
     chevrons.flash()
     assert [row.value for row in rows] == [1.0, 1.0, 1.0]
     chevrons.off()
@@ -113,8 +113,8 @@ def test_a_countdown_ends_at_the_ambient_level():
     chevrons.start_countdown(0.6)
     chevrons._proc.join(timeout=2)
 
-    assert [row.value for row in rows] == [0.3, 0.3, 0.3]
-    assert max(rows[0].history) > 0.3
+    assert [row.value for row in rows] == pytest.approx([0.3 ** GAMMA] * 3)
+    assert max(rows[0].history) > 0.3 ** GAMMA
 
 
 def test_the_flash_stops_the_countdown_and_stays_at_full_power():
@@ -133,3 +133,48 @@ def test_an_ambient_level_out_of_range_is_clamped():
     chevrons, rows = make_chevrons(idle_percent=150)
     chevrons.idle()
     assert [row.value for row in rows] == [1.0, 1.0, 1.0]
+
+
+def test_the_ambient_level_is_brightness_as_seen_not_duty_cycle():
+    """At a 30 % duty cycle the chevrons already looked nearly full."""
+    chevrons, rows = make_chevrons(idle_percent=30)
+    chevrons.idle()
+    assert rows[0].value < 0.1
+
+
+def test_the_pigpio_daemon_is_used_when_it_runs(monkeypatch):
+    factories = []
+
+    class Factory:
+        def __init__(self):
+            factories.append(self)
+
+    def pwmled(pin, frequency, pin_factory=None):
+        row = FakeRow()
+        row.factory = pin_factory
+        return row
+
+    monkeypatch.setattr(chevrons_module, 'PiGPIOFactory', Factory)
+    monkeypatch.setattr(chevrons_module, 'PWMLED', pwmled)
+
+    chevrons = create_chevrons(enabled=True)
+
+    assert len(factories) == 1
+    assert all(row.factory is factories[0] for row in chevrons._rows)
+
+
+def test_without_pigpiod_the_default_pins_are_used(monkeypatch):
+    def unreachable():
+        raise OSError('failed to connect to localhost:8888')
+
+    seen = []
+
+    def pwmled(pin, frequency, pin_factory=None):
+        seen.append(pin_factory)
+        return FakeRow()
+
+    monkeypatch.setattr(chevrons_module, 'PiGPIOFactory', unreachable)
+    monkeypatch.setattr(chevrons_module, 'PWMLED', pwmled)
+
+    assert isinstance(create_chevrons(enabled=True), PwmChevrons)
+    assert seen == [None, None, None]

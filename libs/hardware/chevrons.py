@@ -16,16 +16,28 @@ try:
 except ImportError:
     PWMLED = None
 
+try:
+    from gpiozero.pins.pigpio import PiGPIOFactory
+except ImportError:
+    PiGPIOFactory = None
+
 Logger = logging.getLogger('kivy.photobooth')
 
 # Inner (next to the lens), middle, outer: the wiring the chevrons were built with.
 DEFAULT_PINS = (17, 27, 22)
 DEFAULT_IDLE_PERCENT = 30
 
-# Fast enough to look steady, slow enough for the Pi's software PWM to stay
-# regular. Only ever seen at the ambient level: the shot is taken at 100 %, a
+# Fast enough for the eye, slow enough for the Pi's software PWM to stay
+# regular: at 1 kHz its jitter showed as a visible shimmer, and MOSFET modules
+# built around an optocoupler stretched every pulse until 30 % looked like full
+# power. Only ever seen at the ambient level: the shot is taken at 100 %, a
 # steady current the camera cannot catch as banding.
-PWM_FREQUENCY = 1000
+DEFAULT_PWM_FREQUENCY = 200
+
+# Levels are brightness as the eye sees it, which grows much faster than the
+# duty cycle: a 30 % duty cycle already looks nearly full. Raising to this power
+# turns a perceived level into the duty cycle that produces it.
+GAMMA = 2.2
 
 # The pulse that runs towards the lens: when each row peaks within the second,
 # outer row first, and how long it takes to rise from the ambient level.
@@ -86,7 +98,7 @@ class PwmChevrons(Chevrons):
 
     def _set(self, levels):
         for row, level in zip(self._rows, levels):
-            row.value = level
+            row.value = level ** GAMMA
 
     def _stop_worker(self):
         if self._proc and self._proc.is_alive():
@@ -137,7 +149,23 @@ class PwmChevrons(Chevrons):
         self._set([self._idle] * len(self._rows))
 
 
-def create_chevrons(enabled=True, pins=DEFAULT_PINS, idle_percent=DEFAULT_IDLE_PERCENT):
+def _pin_factory():
+    """The pigpio daemon when it runs, else gpiozero's own choice.
+
+    pigpio times the pulses by DMA, so they stay regular whatever the CPU is
+    doing; the default factory toggles the pins from a thread, and assembling a
+    collage is enough to make the chevrons waver.
+    """
+    if PiGPIOFactory is None:
+        return None, 'default (pigpio not installed)'
+    try:
+        return PiGPIOFactory(), 'pigpio'
+    except Exception as exc:
+        return None, f'default (pigpiod unreachable: {exc})'
+
+
+def create_chevrons(enabled=True, pins=DEFAULT_PINS, idle_percent=DEFAULT_IDLE_PERCENT,
+                    frequency=DEFAULT_PWM_FREQUENCY):
     """Return usable chevrons, never raising.
 
     A missing gpiozero or a machine that is not a Pi must degrade to a booth
@@ -151,8 +179,9 @@ def create_chevrons(enabled=True, pins=DEFAULT_PINS, idle_percent=DEFAULT_IDLE_P
     try:
         if PWMLED is None:
             raise RuntimeError('gpiozero is not installed')
+        factory, factory_name = _pin_factory()
         for pin in pins:
-            rows.append(PWMLED(pin, frequency=PWM_FREQUENCY))
+            rows.append(PWMLED(pin, frequency=frequency, pin_factory=factory))
     except Exception as exc:
         Logger.warning('Chevrons: unavailable (%s), continuing without them', exc)
         # Release the pins already claimed, so a retry or another tool can have them.
@@ -160,7 +189,10 @@ def create_chevrons(enabled=True, pins=DEFAULT_PINS, idle_percent=DEFAULT_IDLE_P
             row.close()
         return NullChevrons()
 
-    Logger.info('Chevrons: enabled on GPIO %s, ambient %s%%', ', '.join(str(pin) for pin in pins), idle_percent)
+    Logger.info(
+        'Chevrons: enabled on GPIO %s, ambient %s%%, %s Hz, pin factory %s',
+        ', '.join(str(pin) for pin in pins), idle_percent, frequency, factory_name,
+    )
     chevrons = PwmChevrons(rows, idle_percent=idle_percent)
     chevrons.idle()
     return chevrons

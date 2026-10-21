@@ -393,3 +393,12 @@ def test_the_chevrons_ambient_level_is_a_percentage(tmp_path, monkeypatch, raw, 
         CHEVRONS_IDLE_PERCENT = {raw}
     """)
     assert config.get_chevrons_idle_percent() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [('400', 400), ('10', 50), ('99999', 2000), ('fast', 200)])
+def test_the_chevrons_pwm_frequency_stays_flicker_free(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        CHEVRONS_PWM_FREQUENCY = {raw}
+    """)
+    assert config.get_chevrons_pwm_frequency() == expected

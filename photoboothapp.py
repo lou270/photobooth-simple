@@ -136,6 +136,7 @@ class PhotoboothApp(App):
             enabled=config.get_chevrons(),
             pins=config.get_chevrons_pins(),
             idle_percent=config.get_chevrons_idle_percent(),
+            frequency=config.get_chevrons_pwm_frequency(),
         )
 
         # Assign local variables

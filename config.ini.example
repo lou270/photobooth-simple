@@ -47,8 +47,15 @@ CHEVRONS = False
 # GPIO numbers (not header pins) of the inner, middle and outer rows
 CHEVRONS_PINS = 17, 27, 22
 
-# Power of the chevrons between photos, in percent: 0 keeps them off
+# Brightness of the chevrons between photos, in percent as the eye sees it
+# (30 % is a duty cycle of about 7 %): 0 keeps them off
 CHEVRONS_IDLE_PERCENT = 30
+
+# PWM frequency, in Hz. Lower it if the chevrons look brighter than set or
+# waver; raise it if the live preview shows bands. The PWM is steadiest with
+# the pigpio daemon running (sudo systemctl enable --now pigpiod), which the
+# booth uses whenever it finds it.
+CHEVRONS_PWM_FREQUENCY = 200
 
 # Password protecting the admin pages: config editor, template editor, log viewer
 # and deletion of every saved session. Use None to keep admin access disabled.

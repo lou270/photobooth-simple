@@ -20,6 +20,7 @@ import argparse
 import importlib
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -232,6 +233,13 @@ def check_led(report, config):
     report.add(OK, 'LED ring', f'spidev present ({devices[0].name})')
 
 
+def service_active(name):
+    try:
+        return subprocess.run(['systemctl', 'is-active', '--quiet', name]).returncode == 0
+    except OSError:
+        return False
+
+
 def check_chevrons(report, config):
     if not config.get_chevrons():
         report.add(SKIP, 'LED chevrons', 'CHEVRONS = False')
@@ -243,6 +251,13 @@ def check_chevrons(report, config):
 
     pins = ', '.join(str(pin) for pin in config.get_chevrons_pins())
     report.add(OK, 'LED chevrons', f'gpiozero present, rows on GPIO {pins}')
+
+    if try_import('pigpio') is None:
+        report.add(WARN, 'Chevrons PWM', 'pigpio not installed: software PWM, the chevrons may waver')
+    elif not service_active('pigpiod'):
+        report.add(WARN, 'Chevrons PWM', 'pigpiod not running: software PWM, the chevrons may waver')
+    else:
+        report.add(OK, 'Chevrons PWM', 'pigpiod running: DMA-timed PWM')
 
 
 def check_storage(report, config):
