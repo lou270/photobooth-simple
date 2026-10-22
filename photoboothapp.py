@@ -134,9 +134,11 @@ class PhotoboothApp(App):
         RINGLED = create_led(enabled=config.get_ringled(), num_pixels=config.get_ringled_pixels())
         CHEVRONS = create_chevrons(
             enabled=config.get_chevrons(),
+            driver=config.get_chevrons_driver(),
             pins=config.get_chevrons_pins(),
             idle_percent=config.get_chevrons_idle_percent(),
             frequency=config.get_chevrons_pwm_frequency(),
+            serial_port=config.get_chevrons_serial_port(),
         )
 
         # Assign local variables
@@ -391,7 +393,7 @@ class PhotoboothApp(App):
         if self.ringled:
             self.ringled.clear()
         if self.chevrons:
-            self.chevrons.off()
+            self.chevrons.close()
         if getattr(self, 'web_server', None):
             self.web_server.stop()
         if getattr(self, 'usb_transfer', None):

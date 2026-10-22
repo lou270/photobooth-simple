@@ -402,3 +402,20 @@ def test_the_chevrons_pwm_frequency_stays_flicker_free(tmp_path, monkeypatch, ra
         CHEVRONS_PWM_FREQUENCY = {raw}
     """)
     assert config.get_chevrons_pwm_frequency() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [('serial', 'serial'), ('Serial', 'serial'), ('gpio', 'gpio'), ('usb', 'gpio')])
+def test_the_chevrons_driver_is_one_the_booth_knows(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Global]
+        CHEVRONS_DRIVER = {raw}
+    """)
+    assert config.get_chevrons_driver() == expected
+
+
+def test_the_chevrons_serial_port_defaults_to_the_pi_uart(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        CHEVRONS_SERIAL_PORT =
+    """)
+    assert config.get_chevrons_serial_port() == '/dev/serial0'

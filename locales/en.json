@@ -538,7 +538,7 @@
           },
           "CHEVRONS": {
             "label": "LED chevrons",
-            "help": "Drives the three rows of LED chevrons either side of the lens, on GPIO 17, 27 and 22 (inner row first; changed with CHEVRONS_PINS in config.ini). Leave unticked without that hardware."
+            "help": "Drives the three rows of LED chevrons either side of the lens, on GPIO 17, 27 and 22, or through an RP2040 on the serial port (CHEVRONS_DRIVER and CHEVRONS_PINS in config.ini). Leave unticked without that hardware."
           },
           "CHEVRONS_IDLE_PERCENT": {
             "label": "Chevrons between photos",

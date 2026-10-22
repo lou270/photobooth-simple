@@ -538,7 +538,7 @@
           },
           "CHEVRONS": {
             "label": "Chevrons LED",
-            "help": "Pilote les trois rangs de chevrons LED de part et d'autre de l'objectif, sur les GPIO 17, 27 et 22 (rang intérieur d'abord ; modifiable par CHEVRONS_PINS dans config.ini). Sans ce matériel, laisser décoché."
+            "help": "Pilote les trois rangs de chevrons LED de part et d'autre de l'objectif, sur les GPIO 17, 27 et 22, ou par un RP2040 sur le port série (CHEVRONS_DRIVER et CHEVRONS_PINS dans config.ini). Sans ce matériel, laisser décoché."
           },
           "CHEVRONS_IDLE_PERCENT": {
             "label": "Chevrons entre deux photos",

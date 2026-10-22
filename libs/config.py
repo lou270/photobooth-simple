@@ -66,6 +66,9 @@ MAX_RINGLED_PIXELS = 256
 DEFAULT_CHEVRONS_PINS = (17, 27, 22)
 DEFAULT_CHEVRONS_IDLE_PERCENT = 30
 DEFAULT_CHEVRONS_PWM_FREQUENCY = 200
+# Where the PWM comes from: the Pi's own pins, or an RP2040 on its serial port.
+CHEVRONS_DRIVERS = ('gpio', 'serial')
+DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/serial0'
 
 class Config:
     def __init__(self):
@@ -178,6 +181,17 @@ class Config:
 
     def get_chevrons(self):
         return self._get_boolean(('Global',), 'CHEVRONS', fallback=False)
+
+    def get_chevrons_driver(self):
+        driver = self._get_string(('Global',), 'CHEVRONS_DRIVER', fallback='gpio').strip().lower()
+        if driver not in CHEVRONS_DRIVERS:
+            Logger.warning('Config: CHEVRONS_DRIVER must be one of %s, got %r, using gpio',
+                           ', '.join(CHEVRONS_DRIVERS), driver)
+            return 'gpio'
+        return driver
+
+    def get_chevrons_serial_port(self):
+        return self._get_string(('Global',), 'CHEVRONS_SERIAL_PORT', fallback='').strip() or DEFAULT_CHEVRONS_SERIAL_PORT
 
     def get_chevrons_pins(self):
         """GPIO numbers of the three rows of chevrons, inner (next to the lens) first."""

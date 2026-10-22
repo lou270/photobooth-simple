@@ -44,17 +44,27 @@ RINGLED_PIXELS = 12
 # the shot.
 CHEVRONS = False
 
-# GPIO numbers (not header pins) of the inner, middle and outer rows
+# Where the PWM comes from. gpio: the Pi's own pins, in software, which can
+# shimmer at low levels. serial: an RP2040 wired to the Pi's serial port and
+# running firmware/chevrons_rp2040/main.py, in hardware, which does not.
+CHEVRONS_DRIVER = gpio
+
+# With CHEVRONS_DRIVER = gpio: GPIO numbers (not header pins) of the inner,
+# middle and outer rows
 CHEVRONS_PINS = 17, 27, 22
+
+# With CHEVRONS_DRIVER = serial: the port the RP2040 is wired to
+CHEVRONS_SERIAL_PORT = /dev/serial0
 
 # Brightness of the chevrons between photos, in percent as the eye sees it
 # (30 % is a duty cycle of about 7 %): 0 keeps them off
 CHEVRONS_IDLE_PERCENT = 30
 
-# PWM frequency, in Hz. Lower it if the chevrons look brighter than set or
-# waver; raise it if the live preview shows bands. The pins are pulsed by
-# gpiozero's default driver; a pigpio daemon, where one runs, is used instead.
-# Recent Raspberry Pi OS releases no longer package pigpio.
+# PWM frequency, in Hz. Raise it if the live preview shows bands. With the gpio
+# driver, lower it if the chevrons look brighter than set or waver: the pins
+# are pulsed by gpiozero's default driver, or by a pigpio daemon where one
+# runs (recent Raspberry Pi OS releases no longer package pigpio). The RP2040
+# holds 1000 Hz and more without trouble.
 CHEVRONS_PWM_FREQUENCY = 200
 
 # Password protecting the admin pages: config editor, template editor, log viewer

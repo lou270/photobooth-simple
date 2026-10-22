@@ -260,6 +260,33 @@ fuse, and its ground must be tied to a ground pin of the Pi.
 
 Other pins can be set with `CHEVRONS_PINS` in `config.ini`, inner row first.
 
+The Pi can only make PWM in software, and its jitter shows as a shimmer at low
+levels (at 100 % there is no PWM, so the shot itself is unaffected). For a
+steady ambient level, the gates can instead be driven by an RP2040 (a Waveshare
+RP2040-Zero, say) wired to the Pi's serial port, which makes the PWM in
+hardware:
+
+| Raspberry Pi pin | RP2040-Zero | |
+| --- | --- | --- |
+| 8 (GPIO 14, TX) | GP1 (RX) | levels from the booth |
+| 6 (GND) | GND | also the 12 V ground |
+| 2 or 4 (5V) | 5V | powers the RP2040 |
+| - | GP2 | gate of the inner row |
+| - | GP3 | gate of the middle row |
+| - | GP4 | gate of the outer row |
+
+1. Flash MicroPython onto the RP2040 (the Raspberry Pi Pico build works on the
+   RP2040-Zero), then copy the firmware to it as `main.py`, with Thonny or
+   `mpremote cp firmware/chevrons_rp2040/main.py :main.py`.
+2. On the Pi, `sudo raspi-config` → Interface Options → Serial Port: no login
+   shell over serial, serial port hardware enabled. Reboot.
+3. In `config.ini`: `CHEVRONS_DRIVER = serial`. The booth's user must be in the
+   `dialout` group, as the Pi's default user is.
+
+The RP2040 keeps every row dark until the booth first speaks. If the booth goes
+quiet, it returns to the ambient level after three seconds, and switches the
+chevrons off after a minute.
+
 ## Checking a booth
 
 ```bash
