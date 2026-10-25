@@ -31,7 +31,16 @@ ROTATION = 0
 # server they cannot use.
 SHARE = False
 
-# If set to True, RingLed will be enabled (requires spidev hardware)
+# Password protecting the admin pages: config editor, template editor, log viewer
+# and deletion of every saved session. Use None to keep admin access disabled.
+# Must be at least 10 characters and not a well-known value, otherwise admin
+# access stays disabled and a message is written to the log.
+ADMIN_PASSWORD = None
+
+[Lights]
+# The LED ring around the lens and the LED chevrons either side of it
+
+# If set to True, the WS2812 LED ring is driven over SPI (requires spidev)
 RINGLED = True
 
 # Number of LEDs on the ring, so the animations go all the way round it
@@ -69,12 +78,6 @@ CHEVRONS_IDLE_PERCENT = 30
 # runs (recent Raspberry Pi OS releases no longer package pigpio). The RP2040
 # holds 1000 Hz and more without trouble.
 CHEVRONS_PWM_FREQUENCY = 200
-
-# Password protecting the admin pages: config editor, template editor, log viewer
-# and deletion of every saved session. Use None to keep admin access disabled.
-# Must be at least 10 characters and not a well-known value, otherwise admin
-# access stays disabled and a message is written to the log.
-ADMIN_PASSWORD = None
 
 [Event]
 # What makes the booth this evening's booth. All of it can be set from the admin

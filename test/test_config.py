@@ -365,7 +365,7 @@ def test_every_delay_the_booth_has_can_be_set():
 @pytest.mark.parametrize('raw,expected', [('24', 24), ('0', 1), ('9999', 256), ('lots', 12)])
 def test_the_ring_size_stays_one_a_ring_can_have(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""
-        [Global]
+        [Lights]
         RINGLED_PIXELS = {raw}
     """)
     assert config.get_ringled_pixels() == expected
@@ -380,7 +380,7 @@ def test_the_ring_size_stays_one_a_ring_can_have(tmp_path, monkeypatch, raw, exp
 ])
 def test_the_chevrons_take_three_distinct_gpio(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""
-        [Global]
+        [Lights]
         CHEVRONS_PINS = {raw}
     """)
     assert config.get_chevrons_pins() == expected
@@ -389,7 +389,7 @@ def test_the_chevrons_take_three_distinct_gpio(tmp_path, monkeypatch, raw, expec
 @pytest.mark.parametrize('raw,expected', [('45', 45), ('-5', 0), ('150', 100), ('bright', 30)])
 def test_the_chevrons_ambient_level_is_a_percentage(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""
-        [Global]
+        [Lights]
         CHEVRONS_IDLE_PERCENT = {raw}
     """)
     assert config.get_chevrons_idle_percent() == expected
@@ -398,7 +398,7 @@ def test_the_chevrons_ambient_level_is_a_percentage(tmp_path, monkeypatch, raw, 
 @pytest.mark.parametrize('raw,expected', [('400', 400), ('10', 50), ('99999', 2000), ('fast', 200)])
 def test_the_chevrons_pwm_frequency_stays_flicker_free(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""
-        [Global]
+        [Lights]
         CHEVRONS_PWM_FREQUENCY = {raw}
     """)
     assert config.get_chevrons_pwm_frequency() == expected
@@ -407,7 +407,7 @@ def test_the_chevrons_pwm_frequency_stays_flicker_free(tmp_path, monkeypatch, ra
 @pytest.mark.parametrize('raw,expected', [('serial', 'serial'), ('Serial', 'serial'), ('gpio', 'gpio'), ('usb', 'gpio')])
 def test_the_chevrons_driver_is_one_the_booth_knows(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""
-        [Global]
+        [Lights]
         CHEVRONS_DRIVER = {raw}
     """)
     assert config.get_chevrons_driver() == expected
@@ -415,7 +415,7 @@ def test_the_chevrons_driver_is_one_the_booth_knows(tmp_path, monkeypatch, raw, 
 
 def test_the_chevrons_serial_port_defaults_to_uart3(tmp_path, monkeypatch):
     config = write_config(tmp_path, monkeypatch, """
-        [Global]
+        [Lights]
         CHEVRONS_SERIAL_PORT =
     """)
     assert config.get_chevrons_serial_port() == '/dev/ttyAMA3'

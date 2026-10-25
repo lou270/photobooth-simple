@@ -374,8 +374,12 @@
           "description": "What the QR codes on the booth carry, so a phone reaches it without anyone typing. The booth does not create this WiFi network: it only describes it."
         },
         "screen": {
-          "title": "Screen and hardware",
-          "description": "Language, size and orientation of the screen, and the ring light."
+          "title": "Screen",
+          "description": "Language, size and orientation of the screen."
+        },
+        "lights": {
+          "title": "Lights",
+          "description": "The LED ring around the lens and the LED chevrons either side of it."
         },
         "storage": {
           "title": "Storage and USB drive",
@@ -524,13 +528,15 @@
             "label": "Screen rotation",
             "help": "For a screen mounted on its side: the booth turns its display and touch input itself. Keep width and height at the native resolution. On Windows, leave at \"None\": the display is clipped there."
           },
-          "RINGLED": {
-            "label": "LED ring light",
-            "help": "Drives the WS2812 LED ring wired to the Raspberry Pi SPI port. Leave unticked without that hardware."
-          },
           "ADMIN_PASSWORD": {
             "label": "Admin password",
             "help": "Protects these pages. At least 10 characters and not a common password (admin, 1234...), otherwise the admin area stays closed. Leaving it blank keeps the current one; typing None closes the admin area."
+          }
+        },
+        "Lights": {
+          "RINGLED": {
+            "label": "LED ring light",
+            "help": "Drives the WS2812 LED ring wired to the Raspberry Pi SPI port. Leave unticked without that hardware."
           },
           "RINGLED_PIXELS": {
             "label": "LEDs on the ring",

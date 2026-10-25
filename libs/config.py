@@ -173,18 +173,18 @@ class Config:
         return self._get_boolean(('Global',), 'SHARE', fallback=True)
 
     def get_ringled(self):
-        return self._get_boolean(('Global',), 'RINGLED', fallback=False)
+        return self._get_boolean(('Lights',), 'RINGLED', fallback=False)
 
     def get_ringled_pixels(self):
         """How many LEDs the ring has: the animations go round that many."""
-        pixels = self._get_int(('Global',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
+        pixels = self._get_int(('Lights',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
         return min(MAX_RINGLED_PIXELS, max(1, pixels))
 
     def get_chevrons(self):
-        return self._get_boolean(('Global',), 'CHEVRONS', fallback=False)
+        return self._get_boolean(('Lights',), 'CHEVRONS', fallback=False)
 
     def get_chevrons_driver(self):
-        driver = self._get_string(('Global',), 'CHEVRONS_DRIVER', fallback='gpio').strip().lower()
+        driver = self._get_string(('Lights',), 'CHEVRONS_DRIVER', fallback='gpio').strip().lower()
         if driver not in CHEVRONS_DRIVERS:
             Logger.warning('Config: CHEVRONS_DRIVER must be one of %s, got %r, using gpio',
                            ', '.join(CHEVRONS_DRIVERS), driver)
@@ -192,11 +192,11 @@ class Config:
         return driver
 
     def get_chevrons_serial_port(self):
-        return self._get_string(('Global',), 'CHEVRONS_SERIAL_PORT', fallback='').strip() or DEFAULT_CHEVRONS_SERIAL_PORT
+        return self._get_string(('Lights',), 'CHEVRONS_SERIAL_PORT', fallback='').strip() or DEFAULT_CHEVRONS_SERIAL_PORT
 
     def get_chevrons_pins(self):
         """GPIO numbers of the three rows of chevrons, inner (next to the lens) first."""
-        raw_value = self._get_string(('Global',), 'CHEVRONS_PINS', fallback='')
+        raw_value = self._get_string(('Lights',), 'CHEVRONS_PINS', fallback='')
         try:
             pins = tuple(int(part) for part in raw_value.split(','))
         except ValueError:
@@ -210,12 +210,12 @@ class Config:
 
     def get_chevrons_idle_percent(self):
         """Power of the chevrons between photos, from 0 (off) to 100."""
-        percent = self._get_int(('Global',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
+        percent = self._get_int(('Lights',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
         return min(100, max(0, percent))
 
     def get_chevrons_pwm_frequency(self):
         """PWM frequency of the chevrons, in Hz: under 50 the eye sees them flicker."""
-        frequency = self._get_int(('Global',), 'CHEVRONS_PWM_FREQUENCY', fallback=DEFAULT_CHEVRONS_PWM_FREQUENCY)
+        frequency = self._get_int(('Lights',), 'CHEVRONS_PWM_FREQUENCY', fallback=DEFAULT_CHEVRONS_PWM_FREQUENCY)
         return min(2000, max(50, frequency))
 
     def get_timings(self):
