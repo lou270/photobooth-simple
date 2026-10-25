@@ -21,7 +21,7 @@ import time
 from machine import PWM, UART, Pin
 
 # Inner (next to the lens), middle, outer: each to the gate of its MOSFET.
-ROW_PINS = (2, 3, 4)
+ROW_PINS = (12, 13, 14)
 RX_PIN = 1
 BAUDRATE = 115200
 SILENCE_MS = 3000
