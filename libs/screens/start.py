@@ -619,6 +619,7 @@ class StartScreen(BackgroundScreen):
             Animation(opacity=0, duration=1.5, t='in_quad').start(self._version_label)
             self._version_label = None  # only the first time, at power-up
         self.app.ringled.start_rainbow()
+        self.app.chevrons.wave()
         self.touch_hint.start()
         self._purge_when_idle()
 
@@ -647,6 +648,7 @@ class StartScreen(BackgroundScreen):
         self._disarm_slideshow()
         self.touch_hint.stop()
         self.app.ringled.clear()
+        self.app.chevrons.idle()
 
     # --- photos waiting from phones --------------------------------------
 

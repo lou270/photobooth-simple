@@ -244,6 +244,56 @@ moving branch and run it as root unattended.
 | DIN | 19 (GPIO 10, MOSI) |
 | VCC | 2 or 4 (5V) |
 
+### LED chevrons wiring
+
+Each row of chevrons (the left and right one of the same rank, in parallel)
+switches its negative side through its own logic-level N-channel MOSFET, so the
+booth dims the three rows independently. The strips' 12 V supply needs its own
+fuse, and its ground must be tied to a ground pin of the Pi.
+
+| Row | GPIO | Raspberry Pi pin |
+| --- | --- | --- |
+| Inner, next to the lens | 17 | 11 |
+| Middle | 27 | 13 |
+| Outer | 22 | 15 |
+| MOSFET sources, 12 V ground | - | 9 (GND) |
+
+Other pins can be set with `CHEVRONS_PINS` in `config.ini`, inner row first.
+
+The Pi can only make PWM in software, and its jitter shows as a shimmer at low
+levels (at 100 % there is no PWM, so the shot itself is unaffected). For a
+steady ambient level, the gates can instead be driven by an RP2040 (a Waveshare
+RP2040-Zero, say) wired to the Pi's UART3, which makes the PWM in hardware.
+UART3 leaves the console port (pins 8 and 10) and Bluetooth alone, and its
+pins clash with neither the LED ring's SPI bus nor the chevrons' own GPIO:
+
+| Raspberry Pi pin | RP2040-Zero | |
+| --- | --- | --- |
+| 7 (GPIO 4, UART3 TX) | GP1 (RX) | levels from the booth |
+| 1 (3V3) | 3V3 | powers the RP2040 |
+| 9 (GND) | GND | also the 12 V ground |
+| - | GP12 | gate of the inner row |
+| - | GP13 | gate of the middle row |
+| - | GP14 | gate of the outer row |
+
+Other outputs can be set with `ROW_PINS` at the top of the firmware, inner row first.
+
+Unplug the 3V3 wire while the RP2040 is on USB, so the Pi's regulator and the
+board's own do not both drive the same rail.
+
+1. Flash MicroPython onto the RP2040 (the Raspberry Pi Pico build works on the
+   RP2040-Zero), then copy the firmware to it as `main.py`, with Thonny or
+   `mpremote cp firmware/chevrons_rp2040/main.py :main.py`.
+2. On the Pi, add `dtoverlay=uart3` to `/boot/firmware/config.txt` and reboot.
+   `ls /dev/ttyAMA*` shows the port it got, normally `/dev/ttyAMA3`.
+3. In `config.ini`: `CHEVRONS_DRIVER = serial`, and `CHEVRONS_SERIAL_PORT` if
+   the port has another name. The booth's user must be in the `dialout` group,
+   as the Pi's default user is.
+
+The RP2040 keeps every row dark until the booth first speaks. If the booth goes
+quiet, it returns to the ambient level after three seconds, and switches the
+chevrons off after a minute.
+
 ## Checking a booth
 
 ```bash
@@ -253,7 +303,7 @@ moving branch and run it as root unattended.
 
 It reports on the Python environment and imports, `config.ini` and the admin
 password, which camera backends are actually available, whether CUPS knows the
-printer named in the configuration, the SPI device, free disk space, the systemd
+printer named in the configuration, the SPI device, gpiozero for the chevrons, free disk space, the systemd
 units (and any left from the old access point), whether the web server answers,
 and the address the QR codes will carry. Exit code is 1 if anything required is
 missing.

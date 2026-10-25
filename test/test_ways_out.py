@@ -25,6 +25,7 @@ from kivy.core.window import Window
 from kivy.uix.widget import Widget
 
 from libs import event, i18n
+from libs.hardware.chevrons import NullChevrons
 from libs.i18n import t
 from libs.screens import review
 from libs.screens import ReviewScreen, ScreenMgr, StartScreen
@@ -452,6 +453,7 @@ class WelcomeApp:
         self.pending = pending
         self.transitions = []
         self.ringled = SimpleNamespace(start_rainbow=lambda: None, clear=lambda: None)
+        self.chevrons = NullChevrons()
 
     def has_remote_capture(self):
         return True

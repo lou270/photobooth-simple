@@ -34,6 +34,7 @@ from kivy.clock import Clock
 
 from libs.file_utils import FileUtils
 import libs.screens as screens_module
+from libs.hardware.chevrons import NullChevrons
 from libs.screens import ConfirmCaptureScreen, CountdownScreen, ScreenMgr
 
 screens_module.SHOT_TIMEOUT_SECONDS = 0.5
@@ -95,6 +96,7 @@ class FakeApp:
     FILTERS = False
     COUNTDOWN = 1
     ringled = None
+    chevrons = NullChevrons()
 
     def __init__(self, tmp_dir, devices):
         self.tmp_directory = tmp_dir

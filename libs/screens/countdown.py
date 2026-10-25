@@ -155,6 +155,8 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             Clock.unschedule(self._clock_trigger)
         self._stop_home_timeout()
         self.app.ringled.clear()
+        # Back to the ambient level once the shot is taken, or the guest left.
+        self.app.chevrons.idle()
         # Belt and braces with the error path in timer_event: whatever happened,
         # this screen never leaves the flash behind for the next entry.
         self._hide_flash()
@@ -190,6 +192,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         # reaching the shot.
         if self.time_remaining > 0:
             self.circular_counter.set_text(str(self.time_remaining))
+            self.app.chevrons.show_countdown(self.time_remaining)
             self._clock = Clock.schedule_once(self.timer_event, 1)
         else:
             # Stop progressive update
@@ -200,6 +203,9 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
             
             # Trigger shot
             try:
+                # Full power for the shot: dimmed, the PWM could show as
+                # banding on the photo. Held until the screen is left.
+                self.app.chevrons.flash()
                 # Make screen blink
                 self._show_flash()
                 self.app.trigger_shot(self._current_shot, self._current_format)
@@ -309,6 +315,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         if self.time_remaining > 0:
             self._clock_progress = Clock.schedule_interval(self.timer_progress, 1/30.0)
             self.app.ringled.start_countdown(self.time_remaining)
+            self.app.chevrons.show_countdown(self.time_remaining)
 
     def cancel_countdown(self):
         Logger.info('CountdownScreen: cancel_countdown().')
@@ -336,3 +343,4 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         
         # Clear LED
         self.app.ringled.clear()
+        self.app.chevrons.idle()

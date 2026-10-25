@@ -20,6 +20,7 @@ import argparse
 import importlib
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -232,6 +233,44 @@ def check_led(report, config):
     report.add(OK, 'LED ring', f'spidev present ({devices[0].name})')
 
 
+def service_active(name):
+    try:
+        return subprocess.run(['systemctl', 'is-active', '--quiet', name]).returncode == 0
+    except OSError:
+        return False
+
+
+def check_chevrons(report, config):
+    if not config.get_chevrons():
+        report.add(SKIP, 'LED chevrons', 'CHEVRONS = False')
+        return
+
+    if config.get_chevrons_driver() == 'serial':
+        port = config.get_chevrons_serial_port()
+        if try_import('serial') is None:
+            report.add(FAIL, 'LED chevrons', 'CHEVRONS_DRIVER = serial but pyserial is not installed (python3-serial)')
+        elif not Path(port).exists():
+            report.add(FAIL, 'LED chevrons', f'no {port}; add dtoverlay=uart3 to /boot/firmware/config.txt and reboot')
+        else:
+            report.add(OK, 'LED chevrons', f'RP2040 expected on {port}')
+        return
+
+    if try_import('gpiozero') is None:
+        report.add(FAIL, 'LED chevrons', 'CHEVRONS = True but gpiozero is not installed')
+        return
+
+    pins = ', '.join(str(pin) for pin in config.get_chevrons_pins())
+    report.add(OK, 'LED chevrons', f'gpiozero present, rows on GPIO {pins}')
+
+    if try_import('pigpio') is None:
+        # Not packaged on recent Raspberry Pi OS: the normal case, not a fault.
+        report.add(OK, 'Chevrons PWM', "gpiozero's default driver (pigpio not installed)")
+    elif not service_active('pigpiod'):
+        report.add(WARN, 'Chevrons PWM', 'pigpiod not running: software PWM, the chevrons may waver')
+    else:
+        report.add(OK, 'Chevrons PWM', 'pigpiod running: DMA-timed PWM')
+
+
 def check_storage(report, config):
     directory = Path(config.get_dcim_directory())
     parent = directory if directory.exists() else directory.parent
@@ -273,6 +312,7 @@ def main():
         check_cameras(report, config)
         check_printer(report, config)
         check_led(report, config)
+        check_chevrons(report, config)
         check_storage(report, config)
         check_web(report, config)
 

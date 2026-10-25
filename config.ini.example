@@ -31,17 +31,53 @@ ROTATION = 0
 # server they cannot use.
 SHARE = False
 
-# If set to True, RingLed will be enabled (requires spidev hardware)
-RINGLED = True
-
-# Number of LEDs on the ring, so the animations go all the way round it
-RINGLED_PIXELS = 12
-
 # Password protecting the admin pages: config editor, template editor, log viewer
 # and deletion of every saved session. Use None to keep admin access disabled.
 # Must be at least 10 characters and not a well-known value, otherwise admin
 # access stays disabled and a message is written to the log.
 ADMIN_PASSWORD = None
+
+[Lights]
+# The LED ring around the lens and the LED chevrons either side of it
+
+# If set to True, the WS2812 LED ring is driven over SPI (requires spidev)
+RINGLED = True
+
+# Number of LEDs on the ring, so the animations go all the way round it
+RINGLED_PIXELS = 12
+
+# If set to True, drives the three rows of LED chevrons either side of the lens,
+# each through its own MOSFET on a PWM pin (requires gpiozero, preinstalled on
+# Raspberry Pi OS). They sit at CHEVRONS_IDLE_PERCENT between photos, with a
+# slightly brighter wave rolling towards the lens on the welcome screen. The
+# countdown lights them from the outside in (outer row at 3, middle at 2, all
+# three at 1), and the shot is taken at full power.
+CHEVRONS = False
+
+# Where the PWM comes from. gpio: the Pi's own pins, in software, which can
+# shimmer at low levels. serial: an RP2040 wired to the Pi's UART3 and
+# running firmware/chevrons_rp2040/main.py, in hardware, which does not.
+CHEVRONS_DRIVER = gpio
+
+# With CHEVRONS_DRIVER = gpio: GPIO numbers (not header pins) of the inner,
+# middle and outer rows
+CHEVRONS_PINS = 17, 27, 22
+
+# With CHEVRONS_DRIVER = serial: the port the RP2040 is wired to. UART3, enabled
+# with dtoverlay=uart3 in /boot/firmware/config.txt, sends on GPIO 4 (pin 7);
+# check the name it got with ls /dev/ttyAMA*
+CHEVRONS_SERIAL_PORT = /dev/ttyAMA3
+
+# Brightness of the chevrons between photos, in percent as the eye sees it
+# (30 % is a duty cycle of about 7 %): 0 keeps them off
+CHEVRONS_IDLE_PERCENT = 30
+
+# PWM frequency, in Hz. Raise it if the live preview shows bands. With the gpio
+# driver, lower it if the chevrons look brighter than set or waver: the pins
+# are pulsed by gpiozero's default driver, or by a pigpio daemon where one
+# runs (recent Raspberry Pi OS releases no longer package pigpio). The RP2040
+# holds 1000 Hz and more without trouble.
+CHEVRONS_PWM_FREQUENCY = 200
 
 [Event]
 # What makes the booth this evening's booth. All of it can be set from the admin

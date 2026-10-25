@@ -48,6 +48,7 @@ from libs import event, i18n, touch_source
 from libs.net_utils import build_url, build_wifi_payload
 from libs.screens import LoadingScreen, ScreenMgr
 from libs.screens.theme import ICON_ERROR_TRIGGER, set_background_color
+from libs.hardware.chevrons import create_chevrons
 from libs.hardware.led import create_led
 from libs.remote_store import RemoteStore
 from libs.stats_store import StatsStore
@@ -131,6 +132,14 @@ class PhotoboothApp(App):
         # Always a usable object: a ring light that cannot be driven degrades to
         # a no-op instead of stopping the booth from starting.
         RINGLED = create_led(enabled=config.get_ringled(), num_pixels=config.get_ringled_pixels())
+        CHEVRONS = create_chevrons(
+            enabled=config.get_chevrons(),
+            driver=config.get_chevrons_driver(),
+            pins=config.get_chevrons_pins(),
+            idle_percent=config.get_chevrons_idle_percent(),
+            frequency=config.get_chevrons_pwm_frequency(),
+            serial_port=config.get_chevrons_serial_port(),
+        )
 
         # Assign local variables
         self.sm = None
@@ -150,6 +159,7 @@ class PhotoboothApp(App):
         self.web_server = None
         self.devices = None
         self.ringled = RINGLED
+        self.chevrons = CHEVRONS
 
     # --- getting ready ------------------------------------------------------
 
@@ -382,6 +392,8 @@ class PhotoboothApp(App):
         self._log_runtime_snapshot('shutdown')
         if self.ringled:
             self.ringled.clear()
+        if self.chevrons:
+            self.chevrons.close()
         if getattr(self, 'web_server', None):
             self.web_server.stop()
         if getattr(self, 'usb_transfer', None):

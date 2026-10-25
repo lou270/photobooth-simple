@@ -61,6 +61,16 @@ TIMING_OPTIONS = {
 DEFAULT_RINGLED_PIXELS = 12
 MAX_RINGLED_PIXELS = 256
 
+# The LED chevrons either side of the lens: GPIO of the inner, middle and outer
+# rows, and their power between photos.
+DEFAULT_CHEVRONS_PINS = (17, 27, 22)
+DEFAULT_CHEVRONS_IDLE_PERCENT = 30
+DEFAULT_CHEVRONS_PWM_FREQUENCY = 200
+# Where the PWM comes from: the Pi's own pins, or an RP2040 on its serial port.
+CHEVRONS_DRIVERS = ('gpio', 'serial')
+# UART3 (dtoverlay=uart3), TX on GPIO 4: leaves the console port and Bluetooth alone.
+DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/ttyAMA3'
+
 class Config:
     def __init__(self):
         self.config = configparser.ConfigParser()
@@ -163,12 +173,50 @@ class Config:
         return self._get_boolean(('Global',), 'SHARE', fallback=True)
 
     def get_ringled(self):
-        return self._get_boolean(('Global',), 'RINGLED', fallback=False)
+        return self._get_boolean(('Lights',), 'RINGLED', fallback=False)
 
     def get_ringled_pixels(self):
         """How many LEDs the ring has: the animations go round that many."""
-        pixels = self._get_int(('Global',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
+        pixels = self._get_int(('Lights',), 'RINGLED_PIXELS', fallback=DEFAULT_RINGLED_PIXELS)
         return min(MAX_RINGLED_PIXELS, max(1, pixels))
+
+    def get_chevrons(self):
+        return self._get_boolean(('Lights',), 'CHEVRONS', fallback=False)
+
+    def get_chevrons_driver(self):
+        driver = self._get_string(('Lights',), 'CHEVRONS_DRIVER', fallback='gpio').strip().lower()
+        if driver not in CHEVRONS_DRIVERS:
+            Logger.warning('Config: CHEVRONS_DRIVER must be one of %s, got %r, using gpio',
+                           ', '.join(CHEVRONS_DRIVERS), driver)
+            return 'gpio'
+        return driver
+
+    def get_chevrons_serial_port(self):
+        return self._get_string(('Lights',), 'CHEVRONS_SERIAL_PORT', fallback='').strip() or DEFAULT_CHEVRONS_SERIAL_PORT
+
+    def get_chevrons_pins(self):
+        """GPIO numbers of the three rows of chevrons, inner (next to the lens) first."""
+        raw_value = self._get_string(('Lights',), 'CHEVRONS_PINS', fallback='')
+        try:
+            pins = tuple(int(part) for part in raw_value.split(','))
+        except ValueError:
+            pins = ()
+        if len(pins) != 3 or any(not 0 <= pin <= 27 for pin in pins) or len(set(pins)) != 3:
+            if raw_value.strip():
+                Logger.warning('Config: CHEVRONS_PINS must be three distinct GPIO numbers, got %r, using %s',
+                               raw_value, DEFAULT_CHEVRONS_PINS)
+            return DEFAULT_CHEVRONS_PINS
+        return pins
+
+    def get_chevrons_idle_percent(self):
+        """Power of the chevrons between photos, from 0 (off) to 100."""
+        percent = self._get_int(('Lights',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
+        return min(100, max(0, percent))
+
+    def get_chevrons_pwm_frequency(self):
+        """PWM frequency of the chevrons, in Hz: under 50 the eye sees them flicker."""
+        frequency = self._get_int(('Lights',), 'CHEVRONS_PWM_FREQUENCY', fallback=DEFAULT_CHEVRONS_PWM_FREQUENCY)
+        return min(2000, max(50, frequency))
 
     def get_timings(self):
         """Every tunable delay, in seconds, keyed as libs/timings.py names them."""

@@ -306,7 +306,8 @@
         "photos": "photos",
         "days": "jours",
         "files": "fichiers",
-        "leds": "LED"
+        "leds": "LED",
+        "hertz": "Hz"
       },
       "errors": {
         "required": "« {label} » doit être renseigné.",
@@ -342,6 +343,10 @@
         "collage_dpi": {
           "300": "300 dpi (résolution d'impression)",
           "600": "600 dpi (plus net à l'écran)"
+        },
+        "chevrons_driver": {
+          "gpio": "Broches du Raspberry Pi (PWM logiciel)",
+          "serial": "RP2040 sur le port série (PWM matériel)"
         }
       },
       "sections": {
@@ -374,8 +379,12 @@
           "description": "Ce que contiennent les QR codes affichés par la borne, pour qu'un téléphone la rejoigne sans rien taper. La borne ne crée pas ce réseau WiFi : elle le décrit seulement."
         },
         "screen": {
-          "title": "Écran et matériel",
-          "description": "Langue, taille et orientation de l'écran, et anneau lumineux."
+          "title": "Écran",
+          "description": "Langue, taille et orientation de l'écran."
+        },
+        "lights": {
+          "title": "Lumières",
+          "description": "L'anneau de LED autour de l'objectif et les chevrons LED de part et d'autre."
         },
         "storage": {
           "title": "Stockage et clé USB",
@@ -524,17 +533,43 @@
             "label": "Rotation de l'écran",
             "help": "Pour un écran monté sur le côté : la borne tourne elle-même l'affichage et le tactile. Garder largeur et hauteur à la définition native. Sous Windows, laisser sur « Aucune » : l'affichage y est rogné."
           },
+          "ADMIN_PASSWORD": {
+            "label": "Mot de passe administrateur",
+            "help": "Protège ces pages. Au moins 10 caractères, et pas un mot de passe courant (admin, 1234…), sinon l'administration reste fermée. Laisser vide garde le mot de passe actuel ; écrire None ferme l'administration."
+          }
+        },
+        "Lights": {
           "RINGLED": {
             "label": "Anneau lumineux LED",
             "help": "Active l'anneau de LED WS2812 branché sur le port SPI du Raspberry Pi. Sans ce matériel, laisser décoché."
           },
-          "ADMIN_PASSWORD": {
-            "label": "Mot de passe administrateur",
-            "help": "Protège ces pages. Au moins 10 caractères, et pas un mot de passe courant (admin, 1234…), sinon l'administration reste fermée. Laisser vide garde le mot de passe actuel ; écrire None ferme l'administration."
-          },
           "RINGLED_PIXELS": {
             "label": "Nombre de LED de l'anneau",
             "help": "Le nombre de LED de l'anneau lumineux, pour que les animations en fassent tout le tour. 12 pour l'anneau prévu avec la borne."
+          },
+          "CHEVRONS": {
+            "label": "Chevrons LED",
+            "help": "Pilote les trois rangs de chevrons LED de part et d'autre de l'objectif. Sans ce matériel, laisser décoché."
+          },
+          "CHEVRONS_IDLE_PERCENT": {
+            "label": "Chevrons entre deux photos",
+            "help": "La puissance des chevrons quand personne n'est photographié. Sur l'écran d'accueil, une vague un peu plus lumineuse avance vers l'objectif ; le décompte les allume de l'extérieur vers l'intérieur, et la photo est prise à 100 %. 0 les laisse éteints entre deux photos."
+          },
+          "CHEVRONS_PWM_FREQUENCY": {
+            "label": "Fréquence PWM des chevrons",
+            "help": "À augmenter si l'aperçu montre des bandes. Avec les broches du Raspberry Pi, à baisser si les chevrons scintillent ou paraissent plus lumineux que réglé. Le RP2040 tient 1000 Hz et plus. La photo elle-même est prise à 100 %, sans PWM."
+          },
+          "CHEVRONS_DRIVER": {
+            "label": "Pilotage des chevrons",
+            "help": "Les broches du Raspberry Pi génèrent le PWM en logiciel, ce qui peut scintiller à faible intensité. Un RP2040 relié à l'UART3 du Pi le génère en matériel, sans scintillement."
+          },
+          "CHEVRONS_SERIAL_PORT": {
+            "label": "Port série du RP2040",
+            "help": "Avec le RP2040 uniquement. L'UART3, activé par dtoverlay=uart3, est en général /dev/ttyAMA3 : ls /dev/ttyAMA* donne le nom qu'il a reçu."
+          },
+          "CHEVRONS_PINS": {
+            "label": "GPIO des chevrons",
+            "help": "Avec les broches du Raspberry Pi uniquement. Les numéros de GPIO (pas de broche) des rangs intérieur, milieu et extérieur, séparés par des virgules."
           }
         },
         "Remote": {
