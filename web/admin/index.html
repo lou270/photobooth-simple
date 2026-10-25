@@ -609,7 +609,9 @@
                         </ol>
                     </nav>
 
-                    <form id="config-form" method="post" action="/admin/config">
+                    {# autocomplete off: a browser otherwise refills the fields from the last
+                       visit on a reload, over what config.ini holds now. #}
+                    <form id="config-form" method="post" action="/admin/config" autocomplete="off">
                         {% for section in config_sections %}
                         <section class="settings-section{% if section.advanced %} is-advanced{% endif %}" id="section-{{ section.id }}">
                             <header class="settings-section-header">
