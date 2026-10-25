@@ -250,7 +250,7 @@ def check_chevrons(report, config):
         if try_import('serial') is None:
             report.add(FAIL, 'LED chevrons', 'CHEVRONS_DRIVER = serial but pyserial is not installed (python3-serial)')
         elif not Path(port).exists():
-            report.add(FAIL, 'LED chevrons', f'no {port}; enable the serial port in raspi-config and reboot')
+            report.add(FAIL, 'LED chevrons', f'no {port}; add dtoverlay=uart3 to /boot/firmware/config.txt and reboot')
         else:
             report.add(OK, 'LED chevrons', f'RP2040 expected on {port}')
         return

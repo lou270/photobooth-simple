@@ -45,7 +45,7 @@ RINGLED_PIXELS = 12
 CHEVRONS = False
 
 # Where the PWM comes from. gpio: the Pi's own pins, in software, which can
-# shimmer at low levels. serial: an RP2040 wired to the Pi's serial port and
+# shimmer at low levels. serial: an RP2040 wired to the Pi's UART3 and
 # running firmware/chevrons_rp2040/main.py, in hardware, which does not.
 CHEVRONS_DRIVER = gpio
 
@@ -53,8 +53,10 @@ CHEVRONS_DRIVER = gpio
 # middle and outer rows
 CHEVRONS_PINS = 17, 27, 22
 
-# With CHEVRONS_DRIVER = serial: the port the RP2040 is wired to
-CHEVRONS_SERIAL_PORT = /dev/serial0
+# With CHEVRONS_DRIVER = serial: the port the RP2040 is wired to. UART3, enabled
+# with dtoverlay=uart3 in /boot/firmware/config.txt, sends on GPIO 4 (pin 7);
+# check the name it got with ls /dev/ttyAMA*
+CHEVRONS_SERIAL_PORT = /dev/ttyAMA3
 
 # Brightness of the chevrons between photos, in percent as the eye sees it
 # (30 % is a duty cycle of about 7 %): 0 keeps them off

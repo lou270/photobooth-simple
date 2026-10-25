@@ -68,7 +68,8 @@ DEFAULT_CHEVRONS_IDLE_PERCENT = 30
 DEFAULT_CHEVRONS_PWM_FREQUENCY = 200
 # Where the PWM comes from: the Pi's own pins, or an RP2040 on its serial port.
 CHEVRONS_DRIVERS = ('gpio', 'serial')
-DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/serial0'
+# UART3 (dtoverlay=uart3), TX on GPIO 4: leaves the console port and Bluetooth alone.
+DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/ttyAMA3'
 
 class Config:
     def __init__(self):

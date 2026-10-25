@@ -38,7 +38,7 @@ DRIVERS = ('gpio', 'serial')
 # Inner (next to the lens), middle, outer: the wiring the chevrons were built with.
 DEFAULT_PINS = (17, 27, 22)
 DEFAULT_IDLE_PERCENT = 30
-DEFAULT_SERIAL_PORT = '/dev/serial0'
+DEFAULT_SERIAL_PORT = '/dev/ttyAMA3'
 SERIAL_BAUDRATE = 115200
 
 # Fast enough for the eye, slow enough for the Pi's software PWM to stay
