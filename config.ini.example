@@ -39,9 +39,10 @@ RINGLED_PIXELS = 12
 
 # If set to True, drives the three rows of LED chevrons either side of the lens,
 # each through its own MOSFET on a PWM pin (requires gpiozero, preinstalled on
-# Raspberry Pi OS). They sit at CHEVRONS_IDLE_PERCENT between photos, pulse
-# towards the lens every second of the countdown, and light at full power for
-# the shot.
+# Raspberry Pi OS). They sit at CHEVRONS_IDLE_PERCENT between photos, with a
+# slightly brighter wave rolling towards the lens on the welcome screen. The
+# countdown lights them from the outside in (outer row at 3, middle at 2, all
+# three at 1), and the shot is taken at full power.
 CHEVRONS = False
 
 # Where the PWM comes from. gpio: the Pi's own pins, in software, which can

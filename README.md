@@ -181,7 +181,7 @@ You can edit `config.ini` to change various parameters such as:
  - **WELCOME_TITLE / WELCOME_SUBTITLE / EVENT_NAME / DATE_FORMAT:** The event's words on the welcome screen and on the prints (see [Dressing the booth for an event](#dressing-the-booth-for-an-event))
  - **SLIDESHOW:** Show the evening's photos on the welcome screen while nobody is using the booth
  - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
- - **CHEVRONS:** Drive the three rows of LED chevrons beside the lens over PWM: an ambient level between photos (`CHEVRONS_IDLE_PERCENT`), a pulse towards the lens each second of the countdown, full power for the shot. `CHEVRONS_DRIVER = serial` moves the PWM onto an RP2040 on the Pi's UART3 (GPIO 4), for a steady ambient level (see INSTALLATION.md)
+ - **CHEVRONS:** Drive the three rows of LED chevrons beside the lens over PWM: an ambient level between photos (`CHEVRONS_IDLE_PERCENT`), a slightly brighter wave towards the lens on the welcome screen, the rows lit from the outside in at 3, 2, 1, full power for the shot. `CHEVRONS_DRIVER = serial` moves the PWM onto an RP2040 on the Pi's UART3 (GPIO 4), for a steady ambient level (see INSTALLATION.md)
  - **COUNTDOWN:** Countdown time before photo capture
  - **DCIM_DIRECTORY:** Directory where photos and collages are stored
  - **PRINTER:** Printer's name in CUPS

@@ -38,6 +38,10 @@ def clamp(value, low, high):
 
 
 def apply(values):
+    # 65535 is a steady high, with no pulse at all: MicroPython caps TOP at
+    # 65534 and turns 65535 into CC = TOP + 1, which the RP2040 datasheet (4.5,
+    # "0% and 100% Duty Cycle") guarantees glitch-free. The shot is taken there,
+    # so the camera never sees the PWM as banding.
     for index, row in enumerate(rows):
         duties[index] = values[index]
         row.duty_u16(values[index])

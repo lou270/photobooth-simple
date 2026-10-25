@@ -542,7 +542,7 @@
           },
           "CHEVRONS_IDLE_PERCENT": {
             "label": "Chevrons entre deux photos",
-            "help": "La puissance des chevrons quand personne n'est photographié. Pendant le décompte, une vague part vers l'objectif chaque seconde, puis tout s'allume à 100 % pour la photo. 0 les laisse éteints entre deux photos."
+            "help": "La puissance des chevrons quand personne n'est photographié. Sur l'écran d'accueil, une vague un peu plus lumineuse avance vers l'objectif ; le décompte les allume de l'extérieur vers l'intérieur, et la photo est prise à 100 %. 0 les laisse éteints entre deux photos."
           }
         },
         "Remote": {

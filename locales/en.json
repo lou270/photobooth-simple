@@ -542,7 +542,7 @@
           },
           "CHEVRONS_IDLE_PERCENT": {
             "label": "Chevrons between photos",
-            "help": "Power of the chevrons while nobody is being photographed. They pulse towards the lens during the countdown and light at full power for the shot. 0 keeps them off in between."
+            "help": "Power of the chevrons while nobody is being photographed. A slightly brighter wave rolls towards the lens on the welcome screen; the countdown lights them from the outside in, and the shot is taken at full power. 0 keeps them off in between."
           }
         },
         "Remote": {

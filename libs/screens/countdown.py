@@ -192,6 +192,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         # reaching the shot.
         if self.time_remaining > 0:
             self.circular_counter.set_text(str(self.time_remaining))
+            self.app.chevrons.show_countdown(self.time_remaining)
             self._clock = Clock.schedule_once(self.timer_event, 1)
         else:
             # Stop progressive update
@@ -314,7 +315,7 @@ class CountdownScreen(HomeTimeoutMixin, ColorScreen):
         if self.time_remaining > 0:
             self._clock_progress = Clock.schedule_interval(self.timer_progress, 1/30.0)
             self.app.ringled.start_countdown(self.time_remaining)
-            self.app.chevrons.start_countdown(self.time_remaining)
+            self.app.chevrons.show_countdown(self.time_remaining)
 
     def cancel_countdown(self):
         Logger.info('CountdownScreen: cancel_countdown().')

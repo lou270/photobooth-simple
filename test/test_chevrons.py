@@ -8,7 +8,9 @@ import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import libs.hardware.chevrons as chevrons_module
-from libs.hardware.chevrons import GAMMA, GpioRows, NullChevrons, PwmChevrons, SerialRows, create_chevrons, pulse_levels
+from libs.hardware.chevrons import (
+    GAMMA, WAVE_BOOST, GpioRows, NullChevrons, PwmChevrons, SerialRows, countdown_levels, create_chevrons, wave_levels,
+)
 
 
 class FakeRow:
@@ -68,7 +70,8 @@ def test_null_chevrons_accept_every_effect():
     chevrons = NullChevrons()
 
     chevrons.idle()
-    chevrons.start_countdown(3)
+    chevrons.wave()
+    chevrons.show_countdown(3)
     chevrons.flash()
     chevrons.off()
     chevrons.close()
@@ -85,49 +88,8 @@ def test_idle_flash_and_off_hold_every_row():
     assert [row.value for row in rows] == [0.0, 0.0, 0.0]
 
 
-def test_the_pulse_reaches_the_outer_row_first_and_the_inner_row_last():
-    idle = 0.3
-    peak_of = {}
-    for step in range(100):
-        moment = step / 100
-        for row, level in enumerate(pulse_levels(moment, idle)):
-            if level > peak_of.get(row, (None, -1))[1]:
-                peak_of[row] = (moment, level)
-
-    outer, middle, inner = peak_of[2][0], peak_of[1][0], peak_of[0][0]
-    assert outer < middle < inner
-    assert all(level == pytest.approx(1.0) for _moment, level in peak_of.values())
 
 
-def test_between_pulses_every_row_rests_at_the_ambient_level():
-    assert pulse_levels(0.95, 0.3) == pytest.approx([0.3, 0.3, 0.3])
-
-
-def test_the_pulse_never_drops_below_the_ambient_level():
-    for step in range(100):
-        assert min(pulse_levels(step / 100, 0.3)) >= 0.3
-
-
-def test_a_countdown_ends_at_the_ambient_level():
-    chevrons, rows = make_chevrons(idle_percent=30)
-
-    chevrons.start_countdown(0.6)
-    chevrons._proc.join(timeout=2)
-
-    assert [row.value for row in rows] == pytest.approx([0.3 ** GAMMA] * 3)
-    assert max(rows[0].history) > 0.3 ** GAMMA
-
-
-def test_the_flash_stops_the_countdown_and_stays_at_full_power():
-    chevrons, rows = make_chevrons()
-
-    chevrons.start_countdown(10)
-    time.sleep(0.1)
-    chevrons.flash()
-    time.sleep(0.1)
-
-    assert [row.value for row in rows] == [1.0, 1.0, 1.0]
-    assert chevrons._proc is None
 
 
 def test_an_ambient_level_out_of_range_is_clamped():
@@ -357,3 +319,75 @@ def test_a_short_silence_changes_nothing(firmware):
 
     assert firmware.fall_back(firmware.SILENCE_MS - 1, 'live') == 'live'
     assert [row.duty for row in firmware.rows] == [1, 2, 3]
+
+
+# --- the countdown and the welcome wave -------------------------------------
+
+@pytest.mark.parametrize('remaining,expected', [
+    (5, [0.3, 0.3, 0.3]),
+    (4, [0.3, 0.3, 0.3]),
+    (3, [0.3, 0.3, 1.0]),
+    (2, [0.3, 1.0, 1.0]),
+    (1, [1.0, 1.0, 1.0]),
+])
+def test_the_countdown_lights_the_rows_from_the_outside_in(remaining, expected):
+    assert countdown_levels(remaining, 0.3) == expected
+
+
+def test_the_countdown_shows_on_the_rows():
+    chevrons, rows = make_chevrons(idle_percent=30)
+
+    chevrons.show_countdown(2)
+
+    assert [row.value for row in rows] == pytest.approx([0.3 ** GAMMA, 1.0, 1.0])
+
+
+def test_the_wave_reaches_the_outer_row_first_and_the_inner_row_last():
+    crest_of = {}
+    for step in range(300):
+        moment = step / 100
+        for row, level in enumerate(wave_levels(moment, 0.3)):
+            if level > crest_of.get(row, (None, -1))[1]:
+                crest_of[row] = (moment, level)
+
+    outer, middle, inner = crest_of[2][0], crest_of[1][0], crest_of[0][0]
+    assert outer < middle < inner
+
+
+def test_the_wave_stays_between_the_ambient_level_and_a_little_above():
+    for step in range(300):
+        for level in wave_levels(step / 100, 0.3):
+            assert 0.3 <= level <= 0.3 + WAVE_BOOST + 1e-9
+
+
+def test_the_wave_never_goes_past_full_power():
+    assert max(max(wave_levels(step / 100, 0.95)) for step in range(300)) <= 1.0
+
+
+def test_the_wave_moves_until_something_else_is_shown():
+    chevrons, rows = make_chevrons(idle_percent=30)
+
+    chevrons.wave()
+    time.sleep(0.3)
+    chevrons.flash()
+    time.sleep(0.1)
+
+    assert len(set(rows[0].history)) > 2
+    assert [row.value for row in rows] == [1.0, 1.0, 1.0]
+    assert chevrons._proc is None
+
+
+def test_full_power_reaches_the_rp2040_as_its_top_value():
+    """65535 is what MicroPython turns into a steady high, with no PWM at all."""
+    port = FakePort()
+    chevrons = make_serial_chevrons(port)
+
+    chevrons.show_countdown(1)
+    assert port.lines[-1] == 'L 65535 65535 65535'
+    chevrons.flash()
+    assert port.lines[-1] == 'L 65535 65535 65535'
+
+
+def test_the_firmware_passes_full_power_through_untouched(firmware):
+    firmware.handle(b'L 65535 65535 65535')
+    assert [row.duty for row in firmware.rows] == [65535, 65535, 65535]

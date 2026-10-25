@@ -1,10 +1,11 @@
 """The three rows of LED chevrons either side of the lens, dimmed over PWM.
 
 Each row (the left and right chevron of the same rank, wired together) hangs
-off its own MOSFET, so the three are driven independently. Between photos they
-sit at a steady ambient level; during the countdown a pulse runs from the
-outer row to the inner one once a second, pointing the guests at the lens; and
-the shot is taken with all three at full power.
+off its own MOSFET, so the three are driven independently. On the welcome
+screen a slow wave, a little brighter than the ambient level, rolls towards
+the lens; elsewhere they hold that ambient level. The countdown lights them
+from the outside in, outer row at 3, middle at 2, inner at 1, and the shot is
+taken with all three at full power.
 
 The PWM comes either from the Pi's own GPIO, or from an RP2040 on the Pi's
 serial port running firmware/chevrons_rp2040/main.py. The Pi can only make
@@ -13,6 +14,7 @@ makes it in hardware.
 """
 
 import logging
+import math
 import threading
 import time
 
@@ -53,25 +55,38 @@ DEFAULT_PWM_FREQUENCY = 200
 # turns a perceived level into the duty cycle that produces it.
 GAMMA = 2.2
 
-# The pulse that runs towards the lens: when each row peaks within the second,
-# outer row first, and how long it takes to rise from the ambient level.
-PULSE_PEAKS = {2: 0.15, 1: 0.35, 0: 0.55}
-PULSE_HALF_WIDTH = 0.2
+# The welcome screen's wave: how much brighter than the ambient level it
+# peaks, as the eye sees it, and how long it takes to roll from the outer row
+# to the inner one and round again.
+WAVE_BOOST = 0.15
+WAVE_PERIOD_SECONDS = 3.0
+# Where each row's crest sits in the period, inner first: the outer row
+# leads, so the wave travels towards the lens.
+WAVE_CRESTS = (2 / 3, 1 / 3, 0.0)
+WAVE_HALF_WIDTH = 0.35
 FRAME_SECONDS = 1 / 50
 
 
-def pulse_levels(seconds_into_tick, idle):
-    """Brightness of each row, inner first, at a point of one countdown second.
-
-    Each row rises from the ambient level to full power and falls back as the
-    pulse passes it; between pulses all three are back at the ambient level.
-    """
+def wave_levels(seconds, idle, boost=WAVE_BOOST):
+    """Brightness of each row, inner first, `seconds` into the welcome wave."""
+    phase = (seconds / WAVE_PERIOD_SECONDS) % 1.0
+    peak = min(1.0, idle + boost)
     levels = []
-    for row in range(3):
-        distance = abs(seconds_into_tick - PULSE_PEAKS[row])
-        boost = max(0.0, 1.0 - distance / PULSE_HALF_WIDTH)
-        levels.append(idle + (1.0 - idle) * boost)
+    for crest in WAVE_CRESTS:
+        distance = abs(phase - crest)
+        distance = min(distance, 1.0 - distance)
+        swell = 0.5 * (1 + math.cos(math.pi * distance / WAVE_HALF_WIDTH)) if distance < WAVE_HALF_WIDTH else 0.0
+        levels.append(idle + (peak - idle) * swell)
     return levels
+
+
+def countdown_levels(remaining, idle):
+    """Brightness of each row, inner first, with `remaining` seconds on the counter.
+
+    The outer row lights at 3, the middle one joins it at 2 and the inner one
+    at 1; a longer countdown holds the ambient level until it reaches 3.
+    """
+    return [1.0 if remaining <= rows_from_lens else idle for rows_from_lens in (1, 2, 3)]
 
 
 def duty_cycle(level):
@@ -176,7 +191,10 @@ class Chevrons:
     def idle(self):
         pass
 
-    def start_countdown(self, time_seconds):
+    def wave(self):
+        pass
+
+    def show_countdown(self, remaining):
         pass
 
     def flash(self):
@@ -213,14 +231,17 @@ class PwmChevrons(Chevrons):
             self._stop.set()
             self._proc.join(timeout=self.WORKER_STOP_TIMEOUT_SECONDS)
             if self._proc.is_alive():
-                Logger.warning('Chevrons: countdown thread did not stop cleanly')
+                Logger.warning('Chevrons: wave thread did not stop cleanly')
         self._proc = None
         self._stop.clear()
 
-    def _hold(self, level):
+    def _show(self, levels):
         with self._lock:
             self._stop_worker()
-            self._set([level] * 3)
+            self._set(levels)
+
+    def _hold(self, level):
+        self._show([level] * 3)
 
     def idle(self):
         Logger.info('Chevrons: idle() at %d%%.', round(self._idle * 100))
@@ -238,27 +259,28 @@ class PwmChevrons(Chevrons):
         self.off()
         self._rows.close()
 
-    def start_countdown(self, time_seconds):
-        Logger.info('Chevrons: start_countdown(%s).', time_seconds)
+    def show_countdown(self, remaining):
+        """Light the rows for the number on screen.
+
+        Driven by the screen at each tick rather than by a timer of its own, so
+        the rows can never drift from the number the guests are reading.
+        """
+        Logger.info('Chevrons: show_countdown(%s).', remaining)
+        self._show(countdown_levels(remaining, self._idle))
+
+    def wave(self):
+        Logger.info('Chevrons: wave().')
         with self._lock:
             self._stop_worker()
-            self._proc = threading.Thread(
-                target=self._countdown, args=(time_seconds,), name='chevrons-countdown', daemon=True,
-            )
+            self._proc = threading.Thread(target=self._wave, name='chevrons-wave', daemon=True)
             self._proc.start()
 
-    def _countdown(self, time_seconds):
+    def _wave(self):
         start = time.monotonic()
         while True:
-            elapsed = time.monotonic() - start
-            if elapsed >= time_seconds:
-                break
-            self._set(pulse_levels(elapsed % 1.0, self._idle))
+            self._set(wave_levels(time.monotonic() - start, self._idle))
             if self._stop.wait(FRAME_SECONDS):
                 return
-        # The screen asks for the flash on its own clock; until it does, the
-        # rows wait at the ambient level rather than wherever the pulse left them.
-        self._set([self._idle] * 3)
 
 
 def _pin_factory():
