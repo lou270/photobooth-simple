@@ -135,7 +135,7 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'WiFi', 'option': 'WIFI_SSID', 'control': 'text', 'placeholder': 'Photobooth', 'default': ''},
             {'section': 'WiFi', 'option': 'WIFI_PASSWORD', 'control': 'text', 'placeholder_key': 'web.config.value.open_network', 'default': ''},
             {'section': 'WiFi', 'option': 'WIFI_HIDDEN', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
-            {'section': 'Remote', 'option': 'REMOTE_URL', 'advanced': True, 'control': 'text', 'placeholder': '192.168.8.20:5000', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.automatic'},
+            {'section': 'Remote', 'option': 'REMOTE_URL', 'advanced': True, 'control': 'text', 'placeholder': '192.168.8.20', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.automatic'},
         ),
     },
     {
@@ -179,7 +179,7 @@ CONFIG_FORM_SECTIONS = (
         'id': 'access',
         'fields': (
             {'section': 'Global', 'option': 'ADMIN_PASSWORD', 'control': 'password', 'placeholder_key': 'web.config.password_placeholder'},
-            {'section': 'Web', 'option': 'WEB_PORT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 65535, 'step': 1, 'default': '5000'},
+            {'section': 'Web', 'option': 'WEB_PORT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 65535, 'step': 1, 'default': '80'},
             {'section': 'Web', 'option': 'WEB_HOST', 'advanced': True, 'control': 'text', 'placeholder': '0.0.0.0', 'default': '0.0.0.0'},
             {'section': 'Log', 'option': 'LOG_RETENTION_DAYS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'days', 'default': '14'},
             {'section': 'Log', 'option': 'LOG_MAX_FILES', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'step': 1, 'unit': 'files', 'default': '40'},

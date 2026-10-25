@@ -45,7 +45,7 @@ class WebServer:
         '1234', '12345678', '123456789', '1234567890', 'azertyuiop', 'qwertyuiop',
     })
 
-    def __init__(self, save_directory, host='0.0.0.0', port=5000, admin_password=None, stats_store=None,
+    def __init__(self, save_directory, host='0.0.0.0', port=80, admin_password=None, stats_store=None,
                  restart_callback=None, templates_changed_callback=None, page_sizes_provider=None, remote_store=None, remote_enabled=False, share_enabled=False,
                  booth_language=i18n.DEFAULT_LANGUAGE, secret_key_path=None):
         self.save_directory = save_directory

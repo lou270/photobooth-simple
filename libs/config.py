@@ -302,7 +302,7 @@ class Config:
         return password if password and password.upper() != 'NONE' else None
 
     def get_web_port(self):
-        return self._get_int(('Web', 'Global'), 'WEB_PORT', fallback=5000)
+        return self._get_int(('Web', 'Global'), 'WEB_PORT', fallback=80)
 
     def get_web_host(self):
         """Address the web server binds to.

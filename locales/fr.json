@@ -599,7 +599,7 @@
           },
           "REMOTE_URL": {
             "label": "Adresse de la borne dans les QR codes",
-            "help": "Laisser vide : la borne trouve elle-même son adresse, ce qui convient quand elle n'a qu'une connexion. À remplir si elle en a plusieurs (câble et WiFi), si elle est derrière une redirection de port ou a un nom fixe. Adresse complète avec le port."
+            "help": "Laisser vide : la borne trouve elle-même son adresse, ce qui convient quand elle n'a qu'une connexion. À remplir si elle en a plusieurs (câble et WiFi), si elle est derrière une redirection de port ou a un nom fixe. Adresse complète, avec le port s'il n'est pas 80."
           }
         },
         "WiFi": {
@@ -643,7 +643,7 @@
         "Web": {
           "WEB_PORT": {
             "label": "Port du serveur web",
-            "help": "Le port de la galerie, de l'administration et de la page d'envoi de photos (http://adresse-de-la-borne:5000). Les QR codes le reprennent automatiquement."
+            "help": "Le port de la galerie, de l'administration et de la page d'envoi de photos (http://adresse-de-la-borne avec 80, http://adresse-de-la-borne:8080 avec 8080). Les QR codes le reprennent automatiquement."
           },
           "WEB_HOST": {
             "label": "Adresse d'écoute du serveur web",

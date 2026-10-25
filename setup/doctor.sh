@@ -120,7 +120,7 @@ echo ""
 echo "Network"
 # ---------------------------------------------------------------------------
 
-WEB_PORT="$(booth_config WEB_PORT 2>/dev/null || echo 5000)"
+WEB_PORT="$(booth_config WEB_PORT 2>/dev/null || echo 80)"
 if command -v curl > /dev/null 2>&1; then
     if curl -fs -m 3 -o /dev/null "http://127.0.0.1:${WEB_PORT}/" 2>/dev/null; then
         ok "Web server" "answering on port $WEB_PORT"

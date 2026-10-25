@@ -599,7 +599,7 @@
           },
           "REMOTE_URL": {
             "label": "Booth address in QR codes",
-            "help": "Leave empty: the booth finds its own address, which is right when it has a single connection. Fill it in when it has several (cable and WiFi), sits behind a port forward, or has a fixed name. Full address, port included."
+            "help": "Leave empty: the booth finds its own address, which is right when it has a single connection. Fill it in when it has several (cable and WiFi), sits behind a port forward, or has a fixed name. Full address, with the port unless it is 80."
           }
         },
         "WiFi": {
@@ -643,7 +643,7 @@
         "Web": {
           "WEB_PORT": {
             "label": "Web server port",
-            "help": "The port of the gallery, the admin and the send-a-photo page (http://booth-address:5000). QR codes follow it automatically."
+            "help": "The port of the gallery, the admin and the send-a-photo page (http://booth-address with 80, http://booth-address:8080 with 8080). QR codes follow it automatically."
           },
           "WEB_HOST": {
             "label": "Web server listen address",

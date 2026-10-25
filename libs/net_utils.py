@@ -94,4 +94,7 @@ def build_url(port, path='/', host=None, override=None):
     if ':' in address and not address.startswith('['):
         address = f'[{address}]'
 
-    return f'http://{address}:{port}{path}'
+    # The default port is left out: a shorter address is a sparser QR code, and
+    # nothing for a guest to mistype.
+    port_part = '' if int(port) == 80 else f':{port}'
+    return f'http://{address}{port_part}{path}'

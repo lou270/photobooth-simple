@@ -209,7 +209,7 @@ def test_a_malformed_web_port_falls_back_too(tmp_path, monkeypatch):
         WEB_PORT = eighty
     """)
 
-    assert config.get_web_port() == 5000
+    assert config.get_web_port() == 80
 
 
 def test_a_malformed_float_falls_back_too(tmp_path, monkeypatch):

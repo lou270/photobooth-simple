@@ -81,3 +81,11 @@ def test_an_override_may_carry_its_own_scheme():
 
 def test_an_ipv6_address_is_bracketed_before_the_port():
     assert build_url(5000, '/remote', host='fd00::1') == 'http://[fd00::1]:5000/remote'
+
+
+def test_the_default_web_port_is_left_out_of_the_address():
+    assert build_url(80, '/remote', host='192.168.4.1') == 'http://192.168.4.1/remote'
+
+
+def test_the_default_port_is_left_out_of_a_bracketed_ipv6_address_too():
+    assert build_url(80, '/remote', host='fd00::1') == 'http://[fd00::1]/remote'

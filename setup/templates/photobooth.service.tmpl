@@ -30,6 +30,10 @@ UtmpIdentifier=tty1
 UtmpMode=user
 Environment=XDG_SESSION_TYPE=wayland
 Environment=PYTHONUNBUFFERED=1
+# Ports below 1024 are root's alone. This one right lets the web server open
+# port 80, so phones need no port in the address, without the booth running as
+# root; it carries through cage to the application.
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 ExecStartPre=-/usr/bin/plymouth quit --retain-splash
 # -s keeps Ctrl+Alt+F2 working, for a maintenance console beside the booth.
 ExecStart=/usr/bin/cage -s -- ${PHOTOBOOTH_PYTHON_ESCAPED} ${PHOTOBOOTH_DIR_ESCAPED}/photoboothapp.py
