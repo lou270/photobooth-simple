@@ -158,6 +158,11 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Lights', 'option': 'RINGLED_PIXELS', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 1, 'max': 256, 'step': 1, 'unit': 'leds', 'default': '12'},
             {'section': 'Lights', 'option': 'CHEVRONS', 'advanced': True, 'control': 'checkbox', 'default': 'False'},
             {'section': 'Lights', 'option': 'CHEVRONS_IDLE_PERCENT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 5, 'unit': 'percent', 'default': '30'},
+            {'section': 'Lights', 'option': 'CHEVRONS_PWM_FREQUENCY', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 50, 'max': 2000, 'step': 10, 'unit': 'hertz', 'default': '200'},
+            {'section': 'Lights', 'option': 'CHEVRONS_DRIVER', 'advanced': True, 'control': 'select', 'default': 'gpio',
+             'choices': [('gpio', 'web.config.choices.chevrons_driver.gpio'), ('serial', 'web.config.choices.chevrons_driver.serial')]},
+            {'section': 'Lights', 'option': 'CHEVRONS_SERIAL_PORT', 'advanced': True, 'control': 'text', 'placeholder': '/dev/ttyAMA3', 'default': '/dev/ttyAMA3'},
+            {'section': 'Lights', 'option': 'CHEVRONS_PINS', 'advanced': True, 'control': 'text', 'placeholder': '17, 27, 22', 'default': '17, 27, 22'},
         ),
     },
     {

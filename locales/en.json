@@ -306,7 +306,8 @@
         "photos": "photos",
         "days": "days",
         "files": "files",
-        "leds": "LEDs"
+        "leds": "LEDs",
+        "hertz": "Hz"
       },
       "errors": {
         "required": "{label} is required.",
@@ -342,6 +343,10 @@
         "collage_dpi": {
           "300": "300 dpi (print resolution)",
           "600": "600 dpi (sharper on screen)"
+        },
+        "chevrons_driver": {
+          "gpio": "Raspberry Pi pins (software PWM)",
+          "serial": "RP2040 on the serial port (hardware PWM)"
         }
       },
       "sections": {
@@ -544,11 +549,27 @@
           },
           "CHEVRONS": {
             "label": "LED chevrons",
-            "help": "Drives the three rows of LED chevrons either side of the lens, on GPIO 17, 27 and 22, or through an RP2040 on the serial port (CHEVRONS_DRIVER and CHEVRONS_PINS in config.ini). Leave unticked without that hardware."
+            "help": "Drives the three rows of LED chevrons either side of the lens. Leave unticked without that hardware."
           },
           "CHEVRONS_IDLE_PERCENT": {
             "label": "Chevrons between photos",
             "help": "Power of the chevrons while nobody is being photographed. A slightly brighter wave rolls towards the lens on the welcome screen; the countdown lights them from the outside in, and the shot is taken at full power. 0 keeps them off in between."
+          },
+          "CHEVRONS_PWM_FREQUENCY": {
+            "label": "Chevrons PWM frequency",
+            "help": "Raise it if the live preview shows bands. On the Raspberry Pi's pins, lower it if the chevrons waver or look brighter than set. The RP2040 holds 1000 Hz and more. The shot itself is taken at 100 %, with no PWM."
+          },
+          "CHEVRONS_DRIVER": {
+            "label": "Chevrons driven by",
+            "help": "The Raspberry Pi's own pins make the PWM in software, which can shimmer at low levels. An RP2040 wired to the Pi's UART3 makes it in hardware, which does not."
+          },
+          "CHEVRONS_SERIAL_PORT": {
+            "label": "RP2040 serial port",
+            "help": "With the RP2040 only. UART3, enabled with dtoverlay=uart3, is normally /dev/ttyAMA3: ls /dev/ttyAMA* shows the name it got."
+          },
+          "CHEVRONS_PINS": {
+            "label": "Chevrons GPIO",
+            "help": "With the Raspberry Pi's pins only. GPIO numbers (not header pins) of the inner, middle and outer rows, separated by commas."
           }
         },
         "Remote": {
