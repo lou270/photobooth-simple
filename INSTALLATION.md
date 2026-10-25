@@ -272,9 +272,11 @@ pins clash with neither the LED ring's SPI bus nor the chevrons' own GPIO:
 | 7 (GPIO 4, UART3 TX) | GP1 (RX) | levels from the booth |
 | 1 (3V3) | 3V3 | powers the RP2040 |
 | 9 (GND) | GND | also the 12 V ground |
-| - | GP2 | gate of the inner row |
-| - | GP3 | gate of the middle row |
-| - | GP4 | gate of the outer row |
+| - | GP12 | gate of the inner row |
+| - | GP13 | gate of the middle row |
+| - | GP14 | gate of the outer row |
+
+Other outputs can be set with `ROW_PINS` at the top of the firmware, inner row first.
 
 Unplug the 3V3 wire while the RP2040 is on USB, so the Pi's regulator and the
 board's own do not both drive the same rail.
