@@ -477,3 +477,30 @@ def test_the_default_shown_is_the_one_the_booth_uses(tmp_path, monkeypatch, fiel
     written = read([f'[{section}]', f'{option} = {field_spec["default"]}'])
 
     assert written == left_out
+
+
+def test_an_option_missing_from_the_file_shows_what_the_booth_uses():
+    """A booth configured before an option existed must not show it blank."""
+    fields = {(field['section'], field['option']): field
+              for section in render_sections(load_parser('[Global]\nLANGUAGE = fr\n')) for field in section['fields']}
+
+    assert fields[('Lights', 'CHEVRONS_PWM_FREQUENCY')]['value'] == '200'
+    assert fields[('Lights', 'CHEVRONS_DRIVER')]['value'] == 'gpio'
+    assert fields[('Global', 'FULLSCREEN')]['checked'] is True
+
+
+def test_a_form_shown_from_an_incomplete_file_can_be_saved_as_is():
+    parser = load_parser('[Global]\nLANGUAGE = fr\nADMIN_PASSWORD = averylongpassword1\n')
+    form = {}
+    for section in render_sections(parser):
+        for field in section['fields']:
+            if field['control'] == 'checkbox':
+                if field['checked']:
+                    form[field['name']] = 'on'
+            else:
+                form[field['name']] = field['value']
+
+    updates, _ = collect_updates(form, parser)
+
+    assert updates[('Lights', 'CHEVRONS_PWM_FREQUENCY')] == '200'
+    assert updates[('Global', 'FULLSCREEN')] == 'True'

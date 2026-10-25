@@ -313,7 +313,11 @@ def render_sections(parser, form_values=None, lang=i18n.DEFAULT_LANGUAGE):
             section, option = field_spec['section'], field_spec['option']
             name = field_name(section, option)
             file_value = parser.get(section, option, fallback='')
-            raw_value = form_values.get(name, file_value)
+            # An option the file does not set is shown at the value the booth
+            # falls back to: shown blank, a number could not be saved, and an
+            # unticked box would have switched off what the booth had on.
+            shown_value = file_value if parser.has_option(section, option) else field_spec.get('default', '')
+            raw_value = form_values.get(name, shown_value)
             normalized_value = normalize_value(field_spec, raw_value)
 
             rendered_field = dict(field_spec)
