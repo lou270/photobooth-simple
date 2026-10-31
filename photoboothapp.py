@@ -361,12 +361,13 @@ class PhotoboothApp(App):
         else:
             # The web server is a maintenance tool, not part of taking photos.
             # It can fail to bind for reasons that have nothing to do with the
-            # booth being usable: the maintenance AP not up yet at boot, or the
-            # port still held by a process left over from a crash. Refusing to
-            # run in front of guests over that is the worst possible trade.
+            # booth being usable: its address not up yet at boot, or the port
+            # still held by a process left over from a crash. Refusing to run
+            # in front of guests over that is the worst possible trade; its
+            # watchdog keeps trying in the background instead.
             Logger.error(
                 'PhotoboothApp: web server could not bind %s:%s, gallery and admin are '
-                'unavailable for this run',
+                'unavailable until a retry succeeds',
                 self.WEB_HOST,
                 self.WEB_PORT,
             )

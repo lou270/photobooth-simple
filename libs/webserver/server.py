@@ -23,9 +23,6 @@ from libs.template_schema import TemplateValidationError, validate_template
 class WebServer:
     """Flask web server for the gallery, the admin area and the phone camera."""
 
-    # The admin password is the only application-level gate on a booth that is
-    # reachable from whatever network it sits on, so refuse the obvious ones
-    # outright rather than trusting the operator to have changed the default.
     # Poll interval, then the delay before each successive restart attempt.
     WATCHDOG_BACKOFF_SECONDS = (5, 5, 15, 60, 300)
 
@@ -39,6 +36,9 @@ class WebServer:
     # restart: the cookie outlives both the tab and a reboot of the booth.
     ADMIN_SESSION_LIFETIME = timedelta(days=30)
 
+    # The admin password is the only application-level gate on a booth that is
+    # reachable from whatever network it sits on, so refuse the obvious ones
+    # outright rather than trusting the operator to have changed the default.
     MIN_ADMIN_PASSWORD_LENGTH = 10
     FORBIDDEN_ADMIN_PASSWORDS = frozenset({
         'admin', 'password', 'photobooth', 'motdepasse', 'changeme', '0000',
@@ -674,6 +674,12 @@ class WebServer:
             self.server_thread.start()
             startup_event.wait(timeout=5)
 
+            # Watched whether this start worked or not. It used to be watched
+            # only once a start had worked, so a first bind that failed - an
+            # address not up yet at boot, a port still held by a leftover
+            # process - left the gallery and the admin down for the evening.
+            self._ensure_watchdog()
+
             if not startup_event.is_set():
                 Logger.error('WebServer: Server startup timed out')
                 return False
@@ -681,7 +687,6 @@ class WebServer:
             if startup_state['error'] is not None:
                 return False
 
-            self._ensure_watchdog()
             Logger.info('WebServer: Server started successfully')
             return True
     
