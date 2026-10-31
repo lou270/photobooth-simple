@@ -38,6 +38,49 @@ photos en pleine soirée.
 | 13 | Info | Pas de fichier `LICENSE` alors que le README annonce MIT | racine |
 | 14 | Info | Choix de conception à connaître (HTTP, galerie publique, CUPS ouvert) | - |
 
+## Suivi des corrections
+
+Chaque correction est dans son propre commit, avec des tests qui échouent sans
+elle. Suite complète après correction : 1037 tests réussis sous Xvfb, plusieurs
+fois de suite. Essai de bout en bout du photobooth avec `CAMERA = fake` : il
+démarre avec un `%` dans le mot de passe admin et dans celui du Wi-Fi, la
+connexion admin fonctionne, une photo de téléphone normale est acceptée et un
+PNG annonçant 11000 × 11000 pixels refusé avec son message, et SIGTERM l'arrête
+en passant par `on_stop`.
+
+| # | Statut | Commit |
+| --- | --- | --- |
+| 1 | Corrigé | `955b919` Read config.ini without interpolation, so a % never stops the booth |
+| 2 | Corrigé | `1617343` Measure an uploaded image before decoding it |
+| 3 | Corrigé | `b4ce0a3` Keep the next session out of DCIM/tmp until the last one has left it |
+| 4 | Corrigé | `1d49fbd` Cancel forgotten print jobs once, at startup, and only old ones |
+| 5 | Corrigé | `ccba7fa` Keep retrying the web server when its first start fails |
+| 6 | Corrigé | `a0ec18f` Replace config.ini and templates in one step |
+| 7 | Corrigé | `f16f58f` Let the webcam preview rest when the webcam is gone |
+| 8 | Corrigé | `6ad76f1` Copy a photo to a USB drive under a temporary name until it is whole |
+| 9 | Corrigé | `2567b2f` Stop cleanly on SIGTERM, not only on Ctrl+C |
+| 10 | Corrigé | `916c38f` Leave the camera and the ring light as they were when a capture fails |
+| 11 | Corrigé | `3efd5c3` Give the codes' timeout test room to run on a busy machine |
+| 12 | Corrigé | `ccba7fa` (commentaire), `446dd28` (`gio`), `577710c` (imports, `on_entry`) |
+| 13 | Non corrigé | Le titulaire des droits est à choisir par le propriétaire du projet |
+| 14 | Documenté | Section *Security notes* du README ; comportement inchangé |
+
+Remarques apparues en corrigeant :
+
+- **Point 4.** L'annulation des travaux d'impression oubliés, qui n'avait jamais
+  fonctionné, fonctionne désormais. Au démarrage du photobooth, les travaux de
+  sa file créés depuis plus de 15 minutes sont annulés.
+- **Point 9.** Kivy exécute `on_stop` deux fois à l'arrêt : `stop()` puis `run()`
+  le déclenchent chacun. C'était déjà le cas pour le redémarrage depuis l'admin,
+  et tout ce que fait `on_stop` peut être répété sans dommage.
+- **Point 9 sous `cage`.** systemd envoie SIGTERM au compositeur et à
+  l'application en même temps. L'application demande son arrêt dans le dixième
+  de seconde, mais la fermeture du compositeur peut la précéder ; Kivy reçoit
+  alors une demande de fermeture de fenêtre, qui passe elle aussi par `on_stop`.
+- **Imports inutilisés.** En plus de ceux du point 12, `pyflakes` en a trouvé
+  deux autres (`FileUtils` dans `hardware/fake.py`, `session` dans
+  `webserver/gallery.py`), retirés dans le même commit.
+
 ## Détail et propositions
 
 ### 1. Un `%` dans le formulaire admin empêche le démarrage
