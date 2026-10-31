@@ -211,7 +211,7 @@ fi
 # unattended would never be told. Generate one and say so, once.
 if ! is_dry_run && [ -f "$PHOTOBOOTH_DIR/config.ini" ]; then
     if [ -z "$(booth_config ADMIN_PASSWORD)" ]; then
-        GENERATED_PASSWORD="$(LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 16)"
+        GENERATED_PASSWORD="$(random_password 16)"
         sed -i "s/^ADMIN_PASSWORD *=.*/ADMIN_PASSWORD = ${GENERATED_PASSWORD}/" "$PHOTOBOOTH_DIR/config.ini"
         print_success "Generated an admin password: ${GENERATED_PASSWORD}"
         print_warning "Write it down now - it is stored only in config.ini."

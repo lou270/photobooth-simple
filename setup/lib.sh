@@ -244,7 +244,10 @@ render() {
 
     rendered="$(envsubst < "$template")"
 
-    printf '%s\n' "$rendered" | write_root_file "$dest" "$mode"
+    # Redirected rather than piped, as in kernel_cmdline_set: piped, the
+    # ROOT_FILE_CHANGED the callers test never left the subshell, and the udev
+    # rules written for the autostart were never reloaded.
+    write_root_file "$dest" "$mode" <<< "$rendered"
 }
 
 # ---------------------------------------------------------------------------
@@ -319,6 +322,16 @@ ask_yes_no_var() {
 }
 
 enabled() { [ "${1:-no}" = "yes" ]; }
+
+# random_password [length] - letters and digits only, so the value goes into
+# sed and config.ini without quoting. Not `tr -dc < /dev/urandom | head`: head
+# closing the pipe kills tr, and under pipefail that stopped the installer on
+# the very line meant to print it.
+random_password() {
+    python3 -c 'import secrets, string, sys
+alphabet = string.ascii_letters + string.digits
+print("".join(secrets.choice(alphabet) for _ in range(int(sys.argv[1]))))' "${1:-16}"
+}
 
 # ---------------------------------------------------------------------------
 # Config reading
