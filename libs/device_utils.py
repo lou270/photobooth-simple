@@ -89,6 +89,11 @@ class Cv2Camera(Camera):
                     with self._preview_lock:
                         self._preview_frame = im
                         self._preview_frame_id += 1
+                else:
+                    # An unplugged webcam answers at once, and with nothing to
+                    # wait on this loop ate a whole core of the Pi, like the
+                    # Pi camera's did before it.
+                    time.sleep(1.0 / self._preview_fps)
             except Exception as e:
                 Logger.debug('Cv2Camera preview thread: %s', e)
                 time.sleep(1.0 / self._preview_fps)

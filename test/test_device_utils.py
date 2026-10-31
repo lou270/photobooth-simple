@@ -696,3 +696,32 @@ def test_forgotten_jobs_are_canceled_when_the_booth_starts_not_when_the_camera_r
     assert app.reset_devices(reason='capture_failure')
 
     assert [devices.cleanups for devices in built] == [1, 0]
+
+
+# --- a webcam that went away ------------------------------------------------------
+
+
+def test_an_unplugged_webcam_does_not_spin_the_preview_thread():
+    """read() fails at once without the device, and the loop never slept."""
+    camera = Cv2Camera.__new__(Cv2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._preview_lock = threading.Lock()
+    camera._preview_frame = None
+    camera._preview_frame_id = 0
+    camera._preview_fps = 30
+    camera._preview_stop = False
+    reads = []
+
+    def unplugged():
+        reads.append(1)
+        return False, None
+
+    camera._read_latest_frame = unplugged
+    thread = threading.Thread(target=camera._preview_loop, daemon=True)
+    thread.start()
+    time.sleep(0.3)
+    camera._preview_stop = True
+    thread.join(1)
+
+    # Thirty frames a second for 0.3 s is nine reads; spinning was tens of thousands.
+    assert len(reads) < 30
