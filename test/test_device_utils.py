@@ -442,7 +442,13 @@ def test_a_session_wakes_the_preview_before_its_first_screen():
         devices=SimpleNamespace(wake_preview=lambda: calls.append('wake')),
         print_formats=[object()],
         transition_to=lambda screen, **kwargs: calls.append(screen),
+        _session_start_clock=None,
+        has_pending_photo_tasks=lambda: False,
+        has_background_processes=lambda: False,
+        purge_tmp=lambda: None,
     )
+    app._is_writing_a_session = lambda: PhotoboothApp._is_writing_a_session(app)
+    app._enter_session = lambda: PhotoboothApp._enter_session(app)
 
     PhotoboothApp.start_session(app)
 

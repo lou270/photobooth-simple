@@ -154,6 +154,7 @@ class PhotoboothApp(App):
         self.pending_photo_tasks = []
         self._pending_photo_error = None
         self._pending_photo_lock = threading.Lock()
+        self._session_start_clock = None
         self.process_runner = ProcessRunner()
         self.usb_transfer = None
         self.web_server = None
@@ -435,6 +436,12 @@ class PhotoboothApp(App):
         A choice between one option is not a choice: with a single template
         installed, the format screen would be one tap asking nothing, so the
         booth goes straight to the camera.
+
+        Not before the previous guest's session is written, though. It is
+        moved out of DCIM/tmp in the background once they leave the review
+        screen, which takes seconds with a filter on a DSLR's photos: a guest
+        quick enough to be through the countdown by then saw their first shot
+        overwrite the last guest's, and end up in the last guest's session.
         """
         # A DSLR idles out of live view between guests and takes a second or
         # two to come back: start it now rather than when the countdown shows.
@@ -442,6 +449,31 @@ class PhotoboothApp(App):
             self.devices.wake_preview()
         except Exception as exc:
             Logger.warning('PhotoboothApp: could not wake the preview: %s', exc)
+        if self._session_start_clock is not None:
+            return  # a second touch while the first one waits
+        if self._is_writing_a_session():
+            Logger.info('PhotoboothApp: previous session still being written, starting once it is')
+            self._session_start_clock = Clock.schedule_interval(self._start_session_once_written, 0.1)
+            return
+        self._enter_session()
+
+    def _is_writing_a_session(self):
+        return self.has_pending_photo_tasks() or self.has_background_processes()
+
+    def _start_session_once_written(self, dt):
+        if self._is_writing_a_session() and self.get_current_screen_name() == ScreenMgr.START:
+            return True
+        self._session_start_clock = None
+        # Whoever touched the screen may have gone elsewhere in the meantime:
+        # the phones' photos, or a USB export that took the screen.
+        if self.get_current_screen_name() == ScreenMgr.START:
+            self._enter_session()
+        return False
+
+    def _enter_session(self):
+        # The welcome screen empties DCIM/tmp once it is idle, and may not
+        # have had the chance: a session starts from an empty one either way.
+        self.purge_tmp()
         if len(self.print_formats) == 1:
             self.transition_to(ScreenMgr.COUNTDOWN, shot=0, format=0)
         else:
@@ -790,7 +822,20 @@ class PhotoboothApp(App):
         return task_ids
 
     def start_photo_task(self, target, *args):
+        """Run `target` off the UI thread, after every photo task started before it.
+
+        They all work in DCIM/tmp. A photo picked from the phones' queue
+        empties it before copying itself in, and did so while the previous
+        guest's session was still being moved out of it, taking their photos
+        with it. One at a time, each finds the directory as the last one left it.
+        """
         def run_target():
+            for earlier_task in earlier_tasks:
+                earlier_task.join()
+            # What went wrong before belongs to an earlier session, whose
+            # screens have already moved on: this one starts with a clean slate.
+            with self._pending_photo_lock:
+                self._pending_photo_error = None
             try:
                 target(*args)
             except Exception:
@@ -802,6 +847,7 @@ class PhotoboothApp(App):
         with self._pending_photo_lock:
             self._pending_photo_error = None
             self.pending_photo_tasks = [task for task in self.pending_photo_tasks if task.is_alive()]
+            earlier_tasks = list(self.pending_photo_tasks)
             self.pending_photo_tasks.append(task)
         task.start()
 

@@ -7,6 +7,8 @@ of that: the throwaway preview, and the files the guest goes home with.
 
 import os
 import sys
+import threading
+import time
 from pathlib import Path
 
 import cv2
@@ -116,3 +118,153 @@ def test_nothing_is_rebuilt_when_the_guest_kept_the_colours(app):
 
     saved = Path(app.storage.last_saved_session_directory)
     assert (saved / 'collage.jpg').read_bytes() == before
+
+
+# --- one session at a time in DCIM/tmp ------------------------------------------
+
+
+def with_photo_tasks(app):
+    app.pending_photo_tasks = []
+    app._pending_photo_error = None
+    app._pending_photo_lock = threading.Lock()
+    return app
+
+
+def wait_for_photo_tasks(app, seconds=5.0):
+    deadline = time.monotonic() + seconds
+    while app.has_pending_photo_tasks() and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert not app.has_pending_photo_tasks()
+
+
+def test_a_photo_picked_from_the_phones_waits_for_the_last_session_to_be_saved(tmp_path):
+    """Picking a phone's photo empties DCIM/tmp before copying it in, and did so
+    while the previous guest's session was still on its way out of it."""
+    app = with_photo_tasks(make_app(tmp_path))
+
+    def slow_finalize():
+        time.sleep(0.3)  # a filter applied to a DSLR's photos, on a Pi
+        app.finalize_session(0, 'bw')
+
+    app.start_photo_task(slow_finalize)
+    app.start_photo_task(app.purge_tmp)  # what stage_remote_photo starts with
+    wait_for_photo_tasks(app)
+
+    saved = Path(app.storage.last_saved_session_directory)
+    assert (saved / 'capture-0.jpg').is_file()
+    assert (saved / 'collage.jpg').is_file()
+    assert app.get_pending_photo_error() is None
+
+
+def test_a_failure_of_the_last_session_is_not_reported_as_the_next_ones(tmp_path):
+    app = with_photo_tasks(make_app(tmp_path))
+
+    def failing_finalize():
+        time.sleep(0.1)
+        raise OSError('disk went away')
+
+    app.start_photo_task(failing_finalize)
+    app.start_photo_task(lambda: None)
+    wait_for_photo_tasks(app)
+
+    assert app.get_pending_photo_error() is None
+
+
+def test_a_photo_task_still_reports_its_own_failure(tmp_path):
+    app = with_photo_tasks(make_app(tmp_path))
+
+    def failing_stage():
+        raise FileNotFoundError('photo withdrawn by its phone')
+
+    app.start_photo_task(failing_stage)
+    wait_for_photo_tasks(app)
+
+    assert 'photo withdrawn by its phone' in app.get_pending_photo_error()
+
+
+class HandoverApp:
+    """The parts of the app start_session reads, with the writing switched by hand."""
+
+    def __init__(self, screen='start'):
+        self.writing = True
+        self.screen = screen
+        self.events = []
+        self._session_start_clock = None
+        self.print_formats = [object()]
+        self.devices = type('Devices', (), {'wake_preview': lambda devices: None})()
+
+    def has_pending_photo_tasks(self):
+        return self.writing
+
+    def has_background_processes(self):
+        return False
+
+    def get_current_screen_name(self):
+        return self.screen
+
+    def purge_tmp(self):
+        self.events.append('purge')
+
+    def transition_to(self, screen, **kwargs):
+        self.events.append(screen)
+
+    start_session = PhotoboothApp.start_session
+    _is_writing_a_session = PhotoboothApp._is_writing_a_session
+    _start_session_once_written = PhotoboothApp._start_session_once_written
+    _enter_session = PhotoboothApp._enter_session
+
+
+def tick_for(seconds):
+    from kivy.clock import Clock
+
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        Clock.tick()
+        time.sleep(0.02)
+
+
+def test_a_session_starts_once_the_last_one_is_written():
+    """A guest through the countdown before the last session left DCIM/tmp
+    overwrote its first photo with their own."""
+    app = HandoverApp()
+
+    app.start_session()
+    tick_for(0.3)
+    assert app.events == []
+
+    app.writing = False
+    tick_for(0.3)
+    assert app.events == ['purge', 'countdown']
+
+
+def test_touching_twice_while_waiting_starts_one_session():
+    app = HandoverApp()
+
+    app.start_session()
+    app.start_session()
+    app.writing = False
+    tick_for(0.3)
+
+    assert app.events == ['purge', 'countdown']
+
+
+def test_a_guest_who_went_elsewhere_meanwhile_is_left_there():
+    app = HandoverApp()
+
+    app.start_session()
+    app.screen = 'remote_gallery'
+    tick_for(0.3)
+    app.writing = False
+    tick_for(0.3)
+
+    assert app.events == []
+    assert app._session_start_clock is None
+
+
+def test_with_nothing_being_written_a_session_starts_at_once():
+    app = HandoverApp()
+    app.writing = False
+
+    app.start_session()
+
+    assert app.events == ['purge', 'countdown']
