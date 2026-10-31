@@ -9,7 +9,9 @@ import numpy as np
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.device_utils import Cv2Camera, DeviceUtils, Gphoto2Camera, Picamera2Camera
+import photoboothapp
+from libs.core import ProcessRunner
+from libs.device_utils import CupsPrinter, Cv2Camera, DeviceUtils, Gphoto2Camera, Picamera2Camera
 from libs.hardware import Camera, FakeCamera
 from libs.kivywidgets import KivyCamera
 from photoboothapp import PhotoboothApp
@@ -622,3 +624,75 @@ def test_a_frame_id_that_never_moves_stops_the_preview():
         widget._update(None)
 
     assert len(reads) == 1
+
+
+# --- print jobs left behind ------------------------------------------------------
+
+
+class FakeCupsJobs:
+    """getJobs() the way CUPS answers it: only the attributes asked for."""
+
+    def __init__(self, jobs):
+        self._jobs = jobs
+        self.canceled = []
+
+    def getJobs(self, which_jobs='not-completed', requested_attributes=None):
+        wanted = set(requested_attributes or ('job-id', 'job-uri'))
+        return {job_id: {key: value for key, value in job.items() if key in wanted}
+                for job_id, job in self._jobs.items()}
+
+    def cancelJob(self, job_id):
+        self.canceled.append(job_id)
+
+
+def printer_with_jobs(jobs):
+    printer = CupsPrinter.__new__(CupsPrinter)
+    printer._name = 'photobooth'
+    printer._instance = FakeCupsJobs(jobs)
+    return printer
+
+
+def test_only_this_queues_forgotten_jobs_are_canceled():
+    now = 1_000_000
+    hour_ago = now - 3600
+    printer = printer_with_jobs({
+        1: {'job-printer-uri': 'ipp://localhost/printers/photobooth', 'time-at-creation': hour_ago, 'job-uri': 'ipp://localhost/jobs/1'},
+        2: {'job-printer-uri': 'ipp://localhost/printers/photobooth', 'time-at-creation': now - 60},
+        3: {'job-printer-uri': 'ipp://localhost/printers/office', 'time-at-creation': hour_ago},
+        4: {'job-printer-uri': 'ipp://localhost/printers/photobooth2', 'time-at-creation': hour_ago},
+        5: {'job-printer-uri': 'ipp://localhost/printers/photobooth'},
+    })
+
+    assert printer.cancel_stale_jobs(now=now) == 1
+    # 2 is a guest's print still on its way, 3 and 4 belong to other queues,
+    # and 5 says nothing about its age: none of them is the booth's to cancel.
+    assert printer._instance.canceled == [1]
+
+
+def test_forgotten_jobs_are_canceled_when_the_booth_starts_not_when_the_camera_resets(monkeypatch):
+    """Rebuilding the devices after a failed shot also rebuilt the printer, which
+    canceled its jobs: a guest's print waiting for paper went with them."""
+    built = []
+
+    class Devices:
+        def __init__(self, **kwargs):
+            self.cleanups = 0
+            built.append(self)
+
+        def cancel_stale_print_jobs(self):
+            self.cleanups += 1
+
+        def close(self):
+            return True
+
+    monkeypatch.setattr(photoboothapp, 'DeviceUtils', Devices)
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.PRINTER, app.CALIBRATION, app.CAMERA_BACKEND, app.SHARE = 'photobooth', None, 'fake', False
+    app._dslr_liveview_params, app._dslr_capture_params, app.DSLR_HOT_PIXEL_FILTER = {}, {}, False
+    app.process_runner = ProcessRunner()
+    app.sm = None
+
+    app._open_devices()
+    assert app.reset_devices(reason='capture_failure')
+
+    assert [devices.cleanups for devices in built] == [1, 0]

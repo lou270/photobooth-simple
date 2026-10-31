@@ -229,6 +229,9 @@ class PhotoboothApp(App):
             dslr_hot_pixel_filter=self.DSLR_HOT_PIXEL_FILTER,
             camera_backend=self.CAMERA_BACKEND,
         )
+        # Here and not in reset_devices(): the devices are rebuilt after every
+        # failed shot, and a print still waiting for paper is not forgotten.
+        self.devices.cancel_stale_print_jobs()
 
     def _load_templates(self):
         # Always at least one format: load_templates() falls back to a built-in

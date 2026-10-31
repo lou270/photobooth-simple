@@ -642,7 +642,6 @@ class CupsPrinter(PrintDevice):
             else:
                 Logger.warning('CupsPrinter: No printer named \'%s\' in CUPS (see http://localhost:631)', name)
         if not self._instance: raise Exception('Cannot find any CUPS printer or cups is not installed.')
-        self.cancel_stale_jobs()
 
     def print(self, file_path, print_params={}):
         if not self.is_available():
@@ -712,19 +711,46 @@ class CupsPrinter(PrintDevice):
 
         return 'pending'
 
-    def cancel_stale_jobs(self):
+    # A job nobody can still be waiting for: far beyond what the printing
+    # screen gives a printer to come back (PRINTER_WAIT_TIMEOUT) plus three
+    # minutes a sheet for the copies a guest may ask for.
+    STALE_JOB_SECONDS = 15 * 60
+
+    def cancel_stale_jobs(self, now=None):
+        """Cancel this queue's forgotten jobs. Meant for the booth's start only.
+
+        A job left over from an earlier run - the printer out of paper all
+        night, the booth restarted - would otherwise come out whenever the
+        printer is next able to, for guests long gone. A recent one is left
+        alone: restarting from the admin page must not cut a print short, and
+        neither must the camera being reset after a failed shot, which is why
+        this is no longer run each time the printer object is built.
+        """
         if self._instance is None or not self._name:
             return 0
+        now = time.time() if now is None else now
         canceled = 0
         try:
-            jobs = self._instance.getJobs(which_jobs='not-completed')
+            # Asked for by name: without requested_attributes CUPS answers
+            # with job-id and job-uri alone, and the job's printer is in
+            # job-printer-uri, not printer-uri. Looking for the latter is what
+            # left this cancelling nothing at all. CUPS counts time-at-creation
+            # in Unix seconds.
+            jobs = self._instance.getJobs(
+                which_jobs='not-completed',
+                requested_attributes=['job-id', 'job-printer-uri', 'time-at-creation'],
+            )
             for job_id, job in jobs.items():
-                if job.get('printer-uri', '').endswith('/' + self._name) or job.get('printer-name') == self._name:
-                    try:
-                        self._instance.cancelJob(job_id)
-                        canceled += 1
-                    except Exception as exc:
-                        Logger.warning('CupsPrinter: could not cancel stale job %s: %s', job_id, exc)
+                if not str(job.get('job-printer-uri') or '').endswith('/' + self._name):
+                    continue
+                created_at = job.get('time-at-creation')
+                if not isinstance(created_at, int) or now - created_at < self.STALE_JOB_SECONDS:
+                    continue
+                try:
+                    self._instance.cancelJob(job_id)
+                    canceled += 1
+                except Exception as exc:
+                    Logger.warning('CupsPrinter: could not cancel stale job %s: %s', job_id, exc)
         except Exception as exc:
             Logger.warning('CupsPrinter: stale job cleanup failed for %s: %s', self._name, exc)
         if canceled:
