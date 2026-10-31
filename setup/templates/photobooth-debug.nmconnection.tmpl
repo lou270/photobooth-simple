@@ -1,0 +1,40 @@
+# Written by install.sh (DEBUG_HOTSPOT in setup/booth.conf): the booth's own
+# WiFi network, for a laptop to reach it over SSH and on its admin pages. The
+# installer rewrites this file from setup/booth.conf; only the psk is carried
+# over from one run to the next.
+[connection]
+id=${DEBUG_HOTSPOT_CONNECTION}
+uuid=87a1b85d-776c-4dee-8542-75204b46ce5e
+type=wifi
+interface-name=${DEBUG_HOTSPOT_INTERFACE}
+autoconnect=true
+# Above any network this interface joined before, so the hotspot is what it
+# starts at boot.
+autoconnect-priority=100
+
+[wifi]
+mode=ap
+ssid=${DEBUG_HOTSPOT_SSID}
+# 2.4 GHz, which every laptop sees, on a channel every country allows.
+band=bg
+channel=6
+
+[wifi-security]
+# WPA2 with CCMP only and no management frame protection: what the Pi's WiFi
+# chip offers as an access point.
+key-mgmt=wpa-psk
+proto=rsn;
+pairwise=ccmp;
+group=ccmp;
+pmf=1
+psk=${DEBUG_HOTSPOT_PSK}
+
+[ipv4]
+# NetworkManager hands the laptop an address, and routes it on to the cable
+# network when there is one. No default route goes through here, so the QR
+# codes keep the address the booth has on the guests' network.
+method=shared
+address1=${DEBUG_HOTSPOT_ADDRESS}/24
+
+[ipv6]
+method=ignore

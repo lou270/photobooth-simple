@@ -12,8 +12,9 @@
 # password and no printer name: those live in config.ini, which the application
 # reads and the admin page rewrites. One value, one place.
 #
-# Nothing here sets up a network either: the booth joins one like any other
-# machine, and guests reach it there. See INSTALLATION.md.
+# Nothing here sets up the guests' network either: the booth joins one like any
+# other machine, and guests reach it there. The one network it can create is
+# the debug hotspot below, for the operator. See INSTALLATION.md.
 
 # --- Screen and kiosk -------------------------------------------------------
 
@@ -81,3 +82,23 @@ AUTOSTART=yes
 # wallpaper. The picture is baked in at install time: re-run the installer after
 # changing the welcome photo.
 BOOT_SPLASH=yes
+
+# --- Debug hotspot ----------------------------------------------------------
+
+# Turn the WiFi into a small network of the booth's own, for a laptop: join it,
+# then `ssh <user>@10.42.0.1`, or open http://10.42.0.1 for the web pages,
+# wherever the booth stands and whatever state the guests' network is in. It is
+# for the operator only: no QR code points at it. The WiFi then belongs to the
+# hotspot, so the booth reaches the guests' network - and the internet, for
+# updates - through its ethernet port, and a laptop on the hotspot reaches them
+# through the booth. Needs NetworkManager (Raspberry Pi OS Bookworm and later).
+# The password is generated on the first run and printed once; NetworkManager
+# keeps it, not this file.
+DEBUG_HOTSPOT=yes
+
+# Network name, in quotes if it has spaces. Empty: this machine's hostname
+# followed by -debug.
+DEBUG_HOTSPOT_SSID=
+
+# Country the WiFi is used in, which decides the channels it may use.
+DEBUG_HOTSPOT_COUNTRY=FR

@@ -14,8 +14,9 @@
 # config to edit, no SPI bus, no systemd - which is why a mini PC gets its
 # printer and its autostart just like a Pi does.
 #
-# The network is not installed here: guests reach the booth over a network it
-# joins, like any other machine. See INSTALLATION.md.
+# The guests' network is not installed here: the booth joins one like any other
+# machine. The only network it creates is the debug hotspot, for the operator's
+# laptop. See INSTALLATION.md.
 
 set -euo pipefail
 
@@ -44,13 +45,16 @@ PRINTER_PPD="doc/DS620.ppd"
 LED_RING=ask
 AUTOSTART=ask
 BOOT_SPLASH=ask
+DEBUG_HOTSPOT=ask
+DEBUG_HOTSPOT_SSID=""
+DEBUG_HOTSPOT_COUNTRY=FR
 
 PROFILE=""
 ASSUME_YES=false
 NEED_REBOOT=false
 
 usage() {
-    sed -n '2,18p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    sed -n '2,19p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
 }
 
 while [ $# -gt 0 ]; do
@@ -93,14 +97,15 @@ elif [ -f "$SETUP_DIR/booth.conf" ]; then
     # Loaded silently, the answers of an earlier run left a plain ./install.sh
     # with no question to ask, and no way to change one short of editing the
     # file. Run interactively, it shows them and offers to answer again; the
-    # values it never asks about (PRINTER_URI, PRINTER_PPD, GPHOTO2_*) are kept.
+    # values it never asks about (PRINTER_URI, PRINTER_PPD, GPHOTO2_*, the
+    # hotspot's name and country) are kept.
     if [ "$ASSUME_YES" != "true" ]; then
         echo ""
-        grep -E '^(KIOSK|SCREEN|CAMERA_PICAMERA|CAMERA_DSLR|PRINTER_SETUP|LED_RING|AUTOSTART|BOOT_SPLASH)=' \
+        grep -E '^(KIOSK|SCREEN|CAMERA_PICAMERA|CAMERA_DSLR|PRINTER_SETUP|LED_RING|AUTOSTART|BOOT_SPLASH|DEBUG_HOTSPOT)=' \
             "$SETUP_DIR/booth.conf" | sed 's/^/    /'
         echo ""
         if ! ask_yes_no "Reuse these answers?"; then
-            for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH; do
+            for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH DEBUG_HOTSPOT; do
                 printf -v "$var" 'ask'
             done
         fi
@@ -115,7 +120,7 @@ is_dry_run && print_warning "Dry run: nothing will be modified."
 
 resolve_unanswered() {
     local var
-    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH; do
+    for var in KIOSK SCREEN CAMERA_PICAMERA CAMERA_DSLR PRINTER_SETUP LED_RING AUTOSTART BOOT_SPLASH DEBUG_HOTSPOT; do
         if [ "${!var}" = "ask" ]; then
             printf -v "$var" 'no'
         fi
@@ -141,12 +146,15 @@ else
     ask_yes_no_var LED_RING "Use a WS2812 LED ring on SPI?"
     ask_yes_no_var AUTOSTART "Start the booth on boot, alone on the screen (the desktop is no longer started)?"
     ask_yes_no_var BOOT_SPLASH "Show the welcome picture instead of boot messages while the booth starts?"
+    ask_yes_no_var DEBUG_HOTSPOT "Turn the WiFi into a debug hotspot for a laptop (the booth then reaches its network by cable only)?"
 fi
 
 # What the profile itself says, before step 7 fills PRINTER_URI with the
 # printer chosen from a list: that one carries this machine's serial number,
 # and saved into the profile it would follow the profile to the next booth.
+# The hotspot's name likewise, before it defaults to this machine's hostname.
 PROFILE_PRINTER_URI="$PRINTER_URI"
+PROFILE_DEBUG_HOTSPOT_SSID="$DEBUG_HOTSPOT_SSID"
 
 # ---------------------------------------------------------------------------
 # Step 1 - base packages
@@ -818,6 +826,106 @@ else
 fi
 
 # ---------------------------------------------------------------------------
+# Debug hotspot
+# ---------------------------------------------------------------------------
+
+print_info "Debug hotspot"
+
+# The WiFi becomes a network of the booth's own, for the operator's laptop to
+# reach it over SSH and on its admin pages whatever state the guests' network
+# is in. It is not that network: guests come in through the ethernet port, and
+# no QR code points here. NetworkManager runs it with its own DHCP and NAT, so
+# no service is installed for it - none of the hostapd and dnsmasq units the
+# old guest access point needed, which doctor.sh still warns about. Last of all
+# the steps, so that a booth losing its WiFi here has everything else in place.
+DEBUG_HOTSPOT_FILE="/etc/NetworkManager/system-connections/${DEBUG_HOTSPOT_CONNECTION}.nmconnection"
+DEBUG_HOTSPOT_READY=false
+
+if enabled "$DEBUG_HOTSPOT"; then
+    DEBUG_HOTSPOT_SSID="${DEBUG_HOTSPOT_SSID:-$(hostname)-debug}"
+    if ! has_networkmanager; then
+        print_warning "NetworkManager is not running here; no debug hotspot."
+    elif ! DEBUG_HOTSPOT_INTERFACE="$(wireless_interface)"; then
+        print_warning "No wireless interface; no debug hotspot."
+    elif [ "${#DEBUG_HOTSPOT_SSID}" -gt 32 ]; then
+        print_warning "DEBUG_HOTSPOT_SSID is ${#DEBUG_HOTSPOT_SSID} characters, WiFi allows 32; no debug hotspot."
+    elif ! [[ "$DEBUG_HOTSPOT_COUNTRY" =~ ^[A-Z]{2}$ ]]; then
+        print_warning "DEBUG_HOTSPOT_COUNTRY must be a two-letter country code such as FR; no debug hotspot."
+    else
+        # The DHCP server NetworkManager starts for a shared connection.
+        apt_ensure dnsmasq-base
+
+        # The country decides which channels the WiFi may use. Raspberry Pi OS
+        # also keeps the WiFi blocked until one is set, which Raspberry Pi
+        # Imager only does along with a network to join: on a booth set up
+        # over its cable, the hotspot would never come up. systemd-rfkill
+        # remembers the unblock across reboots.
+        if has_boot_config; then
+            KERNEL_CMDLINE="$(dirname "$(boot_config_path)")/cmdline.txt"
+            if [ -f "$KERNEL_CMDLINE" ]; then
+                kernel_cmdline_set "$KERNEL_CMDLINE" "cfg80211.ieee80211_regdom=$DEBUG_HOTSPOT_COUNTRY"
+                if [ "$ROOT_FILE_CHANGED" = true ]; then
+                    NEED_REBOOT=true
+                fi
+            fi
+        fi
+        if command -v rfkill > /dev/null 2>&1; then
+            run sudo rfkill unblock wifi
+        fi
+
+        # Made once, then kept: a re-run must not lock out the laptop that
+        # already knows the password, nor undo one changed with nmcli.
+        DEBUG_HOTSPOT_PSK=""
+        if sudo test -f "$DEBUG_HOTSPOT_FILE"; then
+            DEBUG_HOTSPOT_PSK="$(sudo sed -n 's/^psk=//p' "$DEBUG_HOTSPOT_FILE")"
+        fi
+        DEBUG_HOTSPOT_PSK_NEW=false
+        if [ -z "$DEBUG_HOTSPOT_PSK" ]; then
+            DEBUG_HOTSPOT_PSK="$(random_password 16)"
+            DEBUG_HOTSPOT_PSK_NEW=true
+        fi
+
+        export DEBUG_HOTSPOT_CONNECTION DEBUG_HOTSPOT_ADDRESS DEBUG_HOTSPOT_INTERFACE
+        export DEBUG_HOTSPOT_SSID DEBUG_HOTSPOT_PSK
+        # 0600 and root's: NetworkManager ignores a keyfile others can read.
+        render "$TEMPLATES/photobooth-debug.nmconnection.tmpl" "$DEBUG_HOTSPOT_FILE" 0600
+        DEBUG_HOTSPOT_CHANGED="$ROOT_FILE_CHANGED"
+        if [ "$DEBUG_HOTSPOT_CHANGED" = true ]; then
+            run sudo nmcli connection reload
+        fi
+
+        # Started now only on an interface nothing else is using: taking the
+        # WiFi from under the SSH session that runs this installer would cut it
+        # off half-way. Otherwise the hotspot's priority wins at the next boot.
+        DEBUG_HOTSPOT_CURRENT="$(nmcli -g GENERAL.CONNECTION device show "$DEBUG_HOTSPOT_INTERFACE" 2>/dev/null || true)"
+        if [ "$DEBUG_HOTSPOT_CURRENT" = "$DEBUG_HOTSPOT_CONNECTION" ]; then
+            if [ "$DEBUG_HOTSPOT_CHANGED" = true ]; then
+                print_info "The debug hotspot is running; its new settings apply at the next boot."
+                NEED_REBOOT=true
+            else
+                print_skip "Debug hotspot already running"
+            fi
+        elif [ -n "$DEBUG_HOTSPOT_CURRENT" ]; then
+            print_warning "$DEBUG_HOTSPOT_INTERFACE is connected to '$DEBUG_HOTSPOT_CURRENT'. From the next boot it runs the hotspot instead, and the booth reaches its network by cable only."
+            NEED_REBOOT=true
+        elif run sudo nmcli --wait 30 connection up "$DEBUG_HOTSPOT_CONNECTION"; then
+            is_dry_run || print_success "Debug hotspot running"
+        else
+            print_warning "The debug hotspot did not start now; it is tried again at the next boot."
+            NEED_REBOOT=true
+        fi
+
+        DEBUG_HOTSPOT_READY=true
+        if [ "$DEBUG_HOTSPOT_PSK_NEW" = true ] && ! is_dry_run; then
+            print_success "Debug hotspot '$DEBUG_HOTSPOT_SSID', password: $DEBUG_HOTSPOT_PSK"
+            print_warning "Write it down now - it is stored only in NetworkManager."
+        fi
+    fi
+else
+    print_skip "Debug hotspot not requested"
+fi
+
+# ---------------------------------------------------------------------------
 # Save the profile
 # ---------------------------------------------------------------------------
 
@@ -840,6 +948,9 @@ PRINTER_PPD=$PRINTER_PPD
 LED_RING=$LED_RING
 AUTOSTART=$AUTOSTART
 BOOT_SPLASH=$BOOT_SPLASH
+DEBUG_HOTSPOT=$DEBUG_HOTSPOT
+DEBUG_HOTSPOT_SSID=$(printf '%q' "$PROFILE_DEBUG_HOTSPOT_SSID")
+DEBUG_HOTSPOT_COUNTRY=$DEBUG_HOTSPOT_COUNTRY
 PROFILE_OUT
     print_success "Saved your answers to setup/booth.conf"
 fi
@@ -853,9 +964,16 @@ print_success "Installation complete"
 echo ""
 print_info "Check the booth with:  ./setup/doctor.sh"
 
+# Before the reboot, which may be what hands the WiFi over to the hotspot: this
+# is how to find the booth again afterwards.
+if [ "$DEBUG_HOTSPOT_READY" = true ]; then
+    echo ""
+    print_info "Debug hotspot '$DEBUG_HOTSPOT_SSID': from a laptop on it, ssh $(id -un)@$DEBUG_HOTSPOT_ADDRESS, web pages on http://$DEBUG_HOTSPOT_ADDRESS"
+fi
+
 if [ "$NEED_REBOOT" = "true" ]; then
     echo ""
-    print_warning "Firmware settings changed; a reboot is required."
+    print_warning "Some changes take effect at the next boot; a reboot is required."
     if [ "$ASSUME_YES" != "true" ] && ! is_dry_run; then
         if ask_yes_no "Reboot now?"; then
             run sudo reboot

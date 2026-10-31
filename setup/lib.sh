@@ -288,6 +288,28 @@ has_unit() {
 
 has_spi_device() { ls /dev/spidev* > /dev/null 2>&1; }
 
+# Running, not merely installed: a Bullseye image can carry NetworkManager
+# while dhcpcd owns the interfaces.
+has_networkmanager() { has_systemd && systemctl is-active --quiet NetworkManager.service; }
+
+# wireless_interface - the first wireless interface: wlan0 on a Pi, whatever
+# name the adapter has on a mini PC.
+wireless_interface() {
+    local candidate
+    for candidate in /sys/class/net/*; do
+        if [ -d "$candidate/wireless" ]; then
+            basename "$candidate"
+            return 0
+        fi
+    done
+    return 1
+}
+
+# The debug hotspot install.sh creates (DEBUG_HOTSPOT), as NetworkManager names
+# it, and the booth's address on it. doctor.sh reports on the same one.
+DEBUG_HOTSPOT_CONNECTION=photobooth-debug
+DEBUG_HOTSPOT_ADDRESS=10.42.0.1
+
 # ---------------------------------------------------------------------------
 # Interaction
 # ---------------------------------------------------------------------------
@@ -324,9 +346,9 @@ ask_yes_no_var() {
 enabled() { [ "${1:-no}" = "yes" ]; }
 
 # random_password [length] - letters and digits only, so the value goes into
-# sed and config.ini without quoting. Not `tr -dc < /dev/urandom | head`: head
-# closing the pipe kills tr, and under pipefail that stopped the installer on
-# the very line meant to print it.
+# sed, config.ini and a NetworkManager keyfile without quoting. Not
+# `tr -dc < /dev/urandom | head`: head closing the pipe kills tr, and under
+# pipefail that stopped the installer on the very line meant to print it.
 random_password() {
     python3 -c 'import secrets, string, sys
 alphabet = string.ascii_letters + string.digits

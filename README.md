@@ -390,8 +390,11 @@ levels.
 
 Both features that reach a guest's phone - sharing a photo and sending one from a
 phone - work over a network the booth **joins**, like any other machine. The booth
-creates no network: `install.sh` installs no access point, DHCP, DNS or captive
-portal.
+creates no network for guests: `install.sh` installs no access point, DHCP, DNS
+or captive portal for them. The one network it can create is a debug hotspot on
+its WiFi, for the operator's laptop (`DEBUG_HOTSPOT`, see
+[INSTALLATION.md](INSTALLATION.md#the-debug-hotspot)); the booth then joins the
+guests' network by cable.
 
 ### Choosing the network
 
@@ -516,7 +519,8 @@ too little room.
 
 - The booth serves plain HTTP. On a shared or open WiFi, the admin password and
   the admin cookie travel in clear: administer the booth from a network guests are
-  not on, or set `WEB_HOST = 127.0.0.1` to keep the web pages on the booth itself.
+  not on - the debug hotspot is one - or set `WEB_HOST = 127.0.0.1` to keep the
+  web pages on the booth itself.
 - `/gallery` and the collages are open to anyone on the booth's network, whatever
   `SHARE` says: `SHARE` only shows or hides the button on the review screen.
 - `config.ini` holds the admin password and `.web_session_key` signs the admin

@@ -143,6 +143,22 @@ if command -v ip > /dev/null 2>&1; then
     fi
 fi
 
+# The operator's way in (DEBUG_HOTSPOT). A warning at worst: the booth works
+# without it, it is the laptop that cannot reach the booth.
+if command -v nmcli > /dev/null 2>&1 \
+        && nmcli -t -f NAME connection show 2>/dev/null | grep -qx "$DEBUG_HOTSPOT_CONNECTION"; then
+    HOTSPOT_SSID="$(nmcli -g 802-11-wireless.ssid connection show "$DEBUG_HOTSPOT_CONNECTION" 2>/dev/null)"
+    if [ "$(nmcli -g GENERAL.STATE connection show "$DEBUG_HOTSPOT_CONNECTION" 2>/dev/null)" = activated ]; then
+        ok "Debug hotspot" "'$HOTSPOT_SSID', the booth is $DEBUG_HOTSPOT_ADDRESS on it"
+    else
+        warn "Debug hotspot" "'$HOTSPOT_SSID' not running (sudo nmcli connection up $DEBUG_HOTSPOT_CONNECTION)"
+    fi
+elif enabled "${DEBUG_HOTSPOT:-no}"; then
+    warn "Debug hotspot" "requested in setup/booth.conf but not set up; run ./install.sh"
+else
+    skip "Debug hotspot" "not requested"
+fi
+
 # ---------------------------------------------------------------------------
 echo ""
 # ---------------------------------------------------------------------------

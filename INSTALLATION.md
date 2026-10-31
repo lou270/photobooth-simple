@@ -84,6 +84,7 @@ one answer is safe.
 | LED ring | firmware config | Enables SPI, installs `python3-spidev` |
 | Autostart | systemd | `photobooth.service`: the booth alone on the screen from the console, in `cage`; the desktop is no longer started; USB drives mounted for the photo dump |
 | Boot splash | firmware config or GRUB | Plymouth theme from the welcome picture, quiet kernel, same picture as wallpaper |
+| Debug hotspot | NetworkManager, WiFi | The WiFi becomes a password-protected network for the operator's laptop; the booth is `10.42.0.1` on it |
 
 ### The boot splash
 
@@ -167,17 +168,60 @@ value.
 
 ### The guest network
 
-The installer sets up no network. Guests' phones reach the booth over a network
-it joins like any other machine: a travel router beside it (no internet needed)
-or the venue's WiFi, provided that one lets devices talk to each other. Connect
-the booth with the usual system tools, and give it a stable address, ideally a
-DHCP reservation on the router.
+The installer sets up no network for guests. Their phones reach the booth over a
+network it joins like any other machine: a travel router beside it (no internet
+needed) or the venue's WiFi, provided that one lets devices talk to each other.
+Connect the booth with the usual system tools, and give it a stable address,
+ideally a DHCP reservation on the router. With the debug hotspot on, the WiFi is
+taken, so the booth joins that network through its ethernet port: a cable to the
+travel router.
 
 To spare guests from typing the network's credentials, describe it in the
 `[WiFi]` section of `config.ini` (`WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_HIDDEN`):
 the booth then shows a code that joins it before the code that opens the page.
 These values describe the network, they do not configure it. See
 [Guest network and QR codes](README.md#guest-network-and-qr-codes).
+
+### The debug hotspot
+
+With `DEBUG_HOTSPOT=yes` the WiFi becomes a network of the booth's own, for a
+laptop to reach it wherever it stands, with or without the guests' network:
+
+```bash
+ssh <user>@10.42.0.1
+```
+
+and the web pages, admin included, on `http://10.42.0.1`. The booth hands the
+laptop an address, and when its ethernet port is connected the laptop reaches
+that network - the travel router, the guests' phones, the internet if there is
+any - through the booth. No QR code points at the hotspot, and `[WiFi]` in
+`config.ini` keeps describing the guests' network.
+
+- **Name**: `DEBUG_HOTSPOT_SSID` in `setup/booth.conf`, or the hostname followed
+  by `-debug`. `DEBUG_HOTSPOT_COUNTRY` (`FR` by default) is where it is used.
+- **Password**: generated on the first run, printed once, kept by
+  NetworkManager only. A re-run keeps it. To read it, or change it:
+
+  ```bash
+  sudo nmcli -s -g 802-11-wireless-security.psk connection show photobooth-debug
+  sudo nmcli connection modify photobooth-debug wifi-sec.psk '<new password>'
+  ```
+
+- **The WiFi belongs to the hotspot**: the booth no longer joins a WiFi network
+  with it, so updates (`apt`, `git pull`) need the cable. Installed over SSH
+  through the WiFi, the session is not cut: the installer leaves the WiFi
+  alone and the hotspot takes over at the next boot, so come back through it.
+- **Changing it**: edit `setup/booth.conf` and run the installer again. It
+  rewrites `/etc/NetworkManager/system-connections/photobooth-debug.nmconnection`;
+  a hotspot already running picks the change up at the next boot.
+- **Removing it**: `sudo nmcli connection delete photobooth-debug`, and
+  `DEBUG_HOTSPOT=no` so the next run does not bring it back.
+
+NetworkManager runs the hotspot itself: nothing is installed but its DHCP server
+(`dnsmasq-base`), and no `hostapd` or `dnsmasq` service is enabled, so it is
+not one of the old access point's leftovers that `./setup/doctor.sh` warns
+about. It needs Raspberry Pi OS Bookworm or later, or any Debian on
+NetworkManager; elsewhere the step is skipped.
 
 ### Upgrading a booth that ran its own access point
 
@@ -305,8 +349,8 @@ It reports on the Python environment and imports, `config.ini` and the admin
 password, which camera backends are actually available, whether CUPS knows the
 printer named in the configuration, the SPI device, gpiozero for the chevrons, free disk space, the systemd
 units (and any left from the old access point), whether the web server answers,
-and the address the QR codes will carry. Exit code is 1 if anything required is
-missing.
+the address the QR codes will carry, and whether the debug hotspot is up. Exit
+code is 1 if anything required is missing.
 
 What counts as required comes from `config.ini`: a booth with `PRINTER = None`
 is not missing a printer, and one with `RINGLED = False` is not missing an LED
@@ -344,6 +388,11 @@ it. A booth connected twice (ethernet and WiFi) may pick the wrong interface:
 set `REMOTE_URL` to the right address. On a network without internet, Android
 may quietly move the phone back onto mobile data - the capture page tells
 guests how to stay connected.
+
+**The debug hotspot does not show up.** `./setup/doctor.sh` says whether it
+runs. `sudo nmcli connection up photobooth-debug` starts it and says why when it
+cannot; `nmcli device` showing the WiFi `unavailable` means it is blocked:
+`sudo rfkill unblock wifi`.
 
 **Screen resolution wrong.** For the Ingcool panel, confirm
 `video=HDMI-A-1:1024x600M@60D` is on the line in `cmdline.txt` (beside
