@@ -63,12 +63,36 @@ RINGLED = None
 # driver before we stop trying to release the device ourselves.
 DEVICE_RELEASE_TIMEOUT_SECONDS = 5
 
+# Raised by signal_handler, read by the application's clock.
+STOP_REQUESTED = False
+
+# How often the clock looks: well inside systemd's TimeoutStopSec.
+STOP_POLL_SECONDS = 0.1
+
 def signal_handler(sig, frame):
-    print("\nCtrl+C detected. Exiting gracefully...")
-    if RINGLED:
-        RINGLED.clear()
-    sys.exit(0)
+    """Ctrl+C, or systemd stopping the service: stop the way a restart does.
+
+    Stopping the application runs on_stop, which turns the ring light and the
+    chevrons off, releases the camera and stops the web server. Only Ctrl+C
+    used to be caught: the SIGTERM of `systemctl stop` or of a shutdown ended
+    the process where it stood, the lights still on.
+
+    Kivy is not called from here: a signal can interrupt the main thread
+    anywhere, holding any of its locks. The handler only raises a flag the
+    application's clock reads. Asked twice, or before the application runs,
+    it leaves at once, as it always did.
+    """
+    global STOP_REQUESTED
+    if STOP_REQUESTED or App.get_running_app() is None:
+        print("\nExiting now.")
+        if RINGLED:
+            RINGLED.clear()
+        sys.exit(0)
+    print("\nStopping...")
+    STOP_REQUESTED = True
+
 signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 class PhotoboothApp(App):
     def __init__(self, **kwargs):
@@ -173,6 +197,7 @@ class PhotoboothApp(App):
         watched a black window. Only the settings are read before this point.
         """
         Logger.info('PhotoboothApp: build().')
+        Clock.schedule_interval(self._stop_if_requested, STOP_POLL_SECONDS)
         self._touch_source = touch_source.install(Window, Clock.get_boottime)
         if self.FULLSCREEN:
             Window.fullscreen = True
@@ -182,6 +207,13 @@ class PhotoboothApp(App):
         _title_font, text_font = event.welcome_fonts(self.WELCOME_FONT)
         self.loading = LoadingScreen(font_name=text_font)
         return self.loading
+
+    def _stop_if_requested(self, dt):
+        if not STOP_REQUESTED:
+            return True
+        Logger.info('PhotoboothApp: stop requested by a signal')
+        self.stop()
+        return False
 
     def on_start(self):
         self._startup_steps = [

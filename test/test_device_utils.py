@@ -1,3 +1,4 @@
+import signal
 import sys
 import threading
 import time
@@ -725,3 +726,41 @@ def test_an_unplugged_webcam_does_not_spin_the_preview_thread():
 
     # Thirty frames a second for 0.3 s is nine reads; spinning was tens of thousands.
     assert len(reads) < 30
+
+
+# --- stopping ----------------------------------------------------------------------
+
+
+def test_systemd_stopping_the_booth_is_caught_like_ctrl_c():
+    """SIGTERM used to end the process where it stood, the lights still on."""
+    assert signal.getsignal(signal.SIGTERM) is photoboothapp.signal_handler
+    assert signal.getsignal(signal.SIGINT) is photoboothapp.signal_handler
+
+
+def test_a_signal_asks_the_running_booth_to_stop_cleanly(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', False)
+    monkeypatch.setattr(photoboothapp.App, 'get_running_app', staticmethod(lambda: object()))
+    stopped = []
+    app = SimpleNamespace(stop=lambda: stopped.append(True))
+
+    photoboothapp.signal_handler(signal.SIGTERM, None)
+
+    assert photoboothapp.STOP_REQUESTED is True
+    assert PhotoboothApp._stop_if_requested(app, 0.1) is False
+    assert stopped == [True]
+
+
+def test_the_clock_leaves_a_booth_nobody_asked_to_stop_alone(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', False)
+    app = SimpleNamespace(stop=lambda: pytest.fail('stopped without being asked'))
+
+    assert PhotoboothApp._stop_if_requested(app, 0.1) is True
+
+
+def test_a_second_signal_leaves_at_once(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', True)
+    monkeypatch.setattr(photoboothapp, 'RINGLED', None)
+    monkeypatch.setattr(photoboothapp.App, 'get_running_app', staticmethod(lambda: object()))
+
+    with pytest.raises(SystemExit):
+        photoboothapp.signal_handler(signal.SIGINT, None)
