@@ -468,6 +468,8 @@ pick to stay connected.
 Incoming photos are re-encoded before anything else. That bounds what a 12 MP
 phone leaves on the disk, and drops the EXIF block on the way, so the GPS
 coordinates of whoever pressed the shutter never reach the booth or the gallery.
+A file announcing more than 100 megapixels is refused before it is decoded: a
+few kilobytes can ask for gigabytes of memory once decompressed.
 
 A photo picked at the booth becomes an ordinary session: assembled with the first
 single-photo template, then printed, shared and saved like any other. It appears

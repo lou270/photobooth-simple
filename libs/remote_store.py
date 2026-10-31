@@ -24,7 +24,7 @@ from datetime import datetime
 
 import cv2
 
-from libs.file_utils import FileUtils
+from libs.file_utils import MAX_DECODED_PIXELS, FileUtils
 
 # Child of Kivy's logger so records land in the application log when Kivy is
 # running, without importing Kivy: the queue must stay readable headless.
@@ -296,7 +296,17 @@ class RemoteStore:
         only cv2.imread applies the EXIF orientation tag. Decoding the buffer
         directly is what leaves a phone photo lying on its side, which is
         exactly how it would then be printed.
+
+        The size the file announces is checked first: decoding is what costs the
+        memory, and a few kilobytes are enough to ask for gigabytes of it.
         """
+        size = FileUtils.decoded_size(image_bytes)
+        if size is None:
+            raise RemoteSubmissionError('web.remote.error.unreadable')
+        if size[0] * size[1] > MAX_DECODED_PIXELS:
+            Logger.warning('RemoteStore: refused a photo announcing %sx%s pixels', *size)
+            raise RemoteSubmissionError('web.remote.error.too_many_pixels')
+
         handle, temp_path = tempfile.mkstemp(prefix='.upload_', suffix='.img', dir=self.remote_directory)
         try:
             with os.fdopen(handle, 'wb') as temp_file:

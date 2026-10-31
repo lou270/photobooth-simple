@@ -10,7 +10,7 @@ from flask import Blueprint, Response, g, redirect, render_template, request, se
 from kivy.logger import Logger
 
 from libs import event, i18n, template_schema
-from libs.file_utils import FileUtils
+from libs.file_utils import MAX_DECODED_PIXELS, FileUtils
 from libs.webserver import config_form
 from libs.webserver.archive import ArchiveStream
 
@@ -181,7 +181,11 @@ def create_blueprint(server):
 
         uploaded = request.files.get('background')
         data = uploaded.read() if uploaded is not None else b''
-        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if data else None
+        # Measured before it is decoded, which is what costs the memory.
+        size = FileUtils.decoded_size(data) if data else None
+        if size is not None and size[0] * size[1] > MAX_DECODED_PIXELS:
+            return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.welcome_background_too_large')), 400
+        image = cv2.imdecode(np.frombuffer(data, np.uint8), cv2.IMREAD_COLOR) if size is not None else None
         if image is None:
             return server._render_admin_page(error_message=i18n.translate(g.lang, 'web.admin.welcome_background_invalid')), 400
 
