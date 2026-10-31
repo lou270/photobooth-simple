@@ -419,3 +419,25 @@ def test_the_chevrons_serial_port_defaults_to_uart3(tmp_path, monkeypatch):
         CHEVRONS_SERIAL_PORT =
     """)
     assert config.get_chevrons_serial_port() == '/dev/ttyAMA3'
+
+
+def test_a_percent_sign_typed_in_the_admin_form_is_read_as_typed(tmp_path, monkeypatch):
+    """configparser's interpolation turned these into a booth that never started."""
+    config = write_config(tmp_path, monkeypatch, """
+        [Global]
+        ADMIN_PASSWORD = Soirée%2026!x
+        [WiFi]
+        WIFI_SSID = 100% fun
+        WIFI_PASSWORD = 50%off-wifi
+        [Print]
+        PRINTER = dnp%20ds620
+        [Event]
+        EVENT_NAME = 100% Lou & Max
+        DATE_FORMAT = %d/%m/%Y
+    """)
+    assert config.get_admin_password() == 'Soirée%2026!x'
+    assert config.get_wifi_ssid() == '100% fun'
+    assert config.get_wifi_password() == '50%off-wifi'
+    assert config.get_printer() == 'dnp%20ds620'
+    assert config.get_event_name() == '100% Lou & Max'
+    assert config.get_date_format() == '%d/%m/%Y'

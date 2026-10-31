@@ -136,7 +136,8 @@
         "unreadable": "This file is not a photo the booth can read.",
         "booth_full": "The booth already has all the photos it can hold. Try again later.",
         "sender_quota": "You have {max_per_sender} photos waiting. Print some at the booth to send more.",
-        "too_fast": "Sending too fast. Wait a moment and try again."
+        "too_fast": "Sending too fast. Wait a moment and try again.",
+        "too_many_pixels": "This photo is too large for the booth."
       }
     },
     "nav": {
@@ -226,6 +227,7 @@
       "welcome_background_upload": "Upload the photo",
       "welcome_background_remove": "Back to the booth's own photo",
       "welcome_background_invalid": "That file is not a photo the booth can read. Use a JPEG, PNG or WebP image.",
+      "welcome_background_too_large": "That image is too large for the booth. Use one under 100 megapixels.",
       "welcome_background_save_failed": "The welcome photo could not be saved.",
       "welcome_background_saved": "Welcome photo saved. Restart the application to show it.",
       "welcome_background_removed": "Welcome photo removed. Restart the application to show the booth's own.",

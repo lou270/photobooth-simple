@@ -316,6 +316,24 @@ def test_a_file_that_is_not_a_photo_is_refused(server, admin):
     assert not os.path.exists(server.welcome_background_path)
 
 
+@pytest.mark.filterwarnings('ignore::PIL.Image.DecompressionBombWarning')
+def test_a_photo_announcing_too_many_pixels_is_refused_before_it_is_decoded(server, admin, monkeypatch):
+    import struct
+    import zlib
+
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+
+    header = struct.pack('>IIBBBBB', 11000, 11000, 8, 2, 0, 0, 0)
+    png = b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header) + chunk(b'IEND', b'')
+    monkeypatch.setattr(cv2, 'imdecode', lambda *args: pytest.fail('decoded an image it should have refused'))
+
+    response = upload(admin, png)
+
+    assert response.status_code == 400
+    assert not os.path.exists(server.welcome_background_path)
+
+
 def test_the_photo_can_be_taken_back(server, admin):
     upload(admin, image_bytes(800, 600))
 

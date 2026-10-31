@@ -252,3 +252,26 @@ def test_closing_a_half_built_camera_is_safe(fake_gp):
     camera.close()
 
     assert fake_gp.gp_camera_exit.calls == []
+
+
+# --- a camera claimed by the desktop ----------------------------------------------
+
+
+def test_the_desktop_is_asked_to_let_go_with_the_command_it_still_has(monkeypatch):
+    """gvfs-mount is gone from current distributions; gio replaced it."""
+    calls = []
+    monkeypatch.setattr(gphoto2.subprocess, 'run', lambda args, **kwargs: calls.append((args, kwargs)))
+
+    gphoto2.release_from_gvfs()
+
+    assert calls[0][0] == ['gio', 'mount', '-s', 'gphoto2']
+    assert calls[0][1]['timeout'] > 0
+
+
+def test_a_booth_without_gio_carries_on(monkeypatch):
+    def missing(*args, **kwargs):
+        raise FileNotFoundError('gio')
+
+    monkeypatch.setattr(gphoto2.subprocess, 'run', missing)
+
+    gphoto2.release_from_gvfs()  # does not raise

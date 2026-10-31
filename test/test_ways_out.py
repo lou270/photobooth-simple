@@ -110,15 +110,17 @@ def test_the_codes_close_themselves():
 
 def test_a_touch_gives_the_whole_delay_back():
     """Two scans and a phone joining a network outlast any fixed delay."""
-    codes = Codes(0.06)
+    # Each check is 0.2 s away from the deadline: at 20 ms, a busy machine
+    # running the whole suite ticked the clock late enough to fail it.
+    codes = Codes(0.6)
     codes._arm_auto_dismiss()
 
-    settle(0.04)
+    settle(0.4)
     codes._arm_auto_dismiss()
-    settle(0.04)
+    settle(0.4)
 
     assert codes.dismissed == 0
-    settle(0.04)
+    settle(0.4)
     assert codes.dismissed == 1
 
 

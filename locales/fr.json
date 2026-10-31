@@ -136,7 +136,8 @@
         "unreadable": "Ce fichier n'est pas une photo que la borne sait lire.",
         "booth_full": "La borne a déjà toutes les photos qu'elle peut garder. Réessayez plus tard.",
         "sender_quota": "Vous avez {max_per_sender} photos en attente. Imprimez-en à la borne pour en envoyer d'autres.",
-        "too_fast": "Envoi trop rapide. Patientez un instant et réessayez."
+        "too_fast": "Envoi trop rapide. Patientez un instant et réessayez.",
+        "too_many_pixels": "Cette photo est trop grande pour la borne."
       }
     },
     "nav": {
@@ -226,6 +227,7 @@
       "welcome_background_upload": "Envoyer la photo",
       "welcome_background_remove": "Revenir à la photo de la borne",
       "welcome_background_invalid": "Ce fichier n'est pas une photo lisible par la borne. Utilisez une image JPEG, PNG ou WebP.",
+      "welcome_background_too_large": "Cette image est trop grande pour la borne. Utilisez-en une de moins de 100 mégapixels.",
       "welcome_background_save_failed": "La photo d'accueil n'a pas pu être enregistrée.",
       "welcome_background_saved": "Photo d'accueil enregistrée. Redémarrez l'application pour l'afficher.",
       "welcome_background_removed": "Photo d'accueil retirée. Redémarrez l'application pour revenir à celle de la borne.",

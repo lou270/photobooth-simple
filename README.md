@@ -1,252 +1,319 @@
 # Simple PhotoBooth
 
-A simple and intuitive photobooth application designed to be easy to use, even for young children (tested with 3-5 year olds). This project provides a straightforward photo-taking experience without unnecessary complexity.
+A photo booth for events, built to be used without explanation - tested with
+3 to 5 year olds. A guest touches the screen, poses, keeps the shot and walks
+away with a print, a link on their phone, or both. The operator sets the booth
+up for the evening from a web page, without ever opening a terminal.
+
+It runs on a Raspberry Pi 5 with a touchscreen, a camera (Pi Camera, DSLR or
+webcam) and a dye-sub printer, and on any Linux, macOS or Windows workstation
+with no hardware at all for development.
+
+![Waiting Screen](doc/waiting.jpeg)
+
+## Contents
+
+- [Features](#features)
+- [How a session works](#how-a-session-works)
+- [Hardware](#hardware)
+- [Installation](#installation)
+- [Running the booth](#running-the-booth)
+- [Configuration](#configuration)
+- [Web interface](#web-interface)
+- [Dressing the booth for an event](#dressing-the-booth-for-an-event)
+- [Templates and the template editor](#templates-and-the-template-editor)
+- [Guest network and QR codes](#guest-network-and-qr-codes)
+- [Phone as a remote camera](#phone-as-a-remote-camera)
+- [USB photo export](#usb-photo-export)
+- [Security notes](#security-notes)
+- [Development](#development)
+- [Project layout](#project-layout)
+- [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
-- **Multiple Camera Support:** Compatible with Raspberry Pi Camera Module 3, DSLR cameras (via gPhoto2), and USB webcams
-- **Intelligent Camera Selection:** Automatically uses the best available camera (DSLR for capture, Pi Camera for preview)
-- **Direct Printing:** Support for DNP DS620 and other CUPS-compatible printers
-- **LED Ring Effects:** Visual feedback with WS2812 LED ring support
-- **USB Photo Export:** Automatic photo dump to USB drives
-- **Multiple Photo Formats:** Support for different collage layouts
-- **Touch Screen Interface:** Optimized for 7" Ingcool touchscreen and above
-- **Photo Sharing:** A QR code on the review screen opens the guest's own photo on their phone, ready to download
-- **Phone as a Remote Camera:** Guests photograph anywhere at the event from their own phone and print it at the booth
-- **Dressed for Each Event:** Welcome title, subtitle and photo set from the admin page, and the event name and date printed on every sheet
-- **Idle Slideshow (optional):** The evening's photos on the welcome screen while nobody is using the booth
+**For guests**
 
-## Screenshots
+- **One button at a time:** touch to start, press to shoot, keep or retake, print.
+- **Several layouts:** single photo, strips, grids - whatever the templates describe.
+  The format screen is skipped when only one template is installed.
+- **Filters:** colour, black and white, sepia and glam, previewed live on the
+  finished collage (`FILTERS = True`).
+- **Prints and copies:** one tap prints; the copies button counts the photos the
+  guest will hold, not the sheets the printer runs.
+- **Sharing:** a QR code on the review screen opens the guest's own photo on their
+  phone, ready to download (`SHARE = True`).
+- **Phone as a remote camera:** guests photograph anywhere at the event from their
+  own phone and print the photo at the booth (`REMOTE_CAPTURE = True`).
+- **Idle slideshow:** the evening's photos on the welcome screen while nobody is
+  using the booth (`SLIDESHOW = True`).
+- **English and French**, on the booth and on the web pages; a guest's phone gets
+  its own language.
 
-![Waiting Screen](doc/waiting.jpeg)
+**For the operator**
+
+- **Web admin:** every setting in a typed form with its default and its help text,
+  logs, statistics, bulk download, moderation of phone photos, restart.
+- **Template editor:** a browser-based layout designer with levels, images, shapes,
+  photo slots and variable texts, sized from the printer's own driver.
+- **Dressed for each event:** welcome title, subtitle, lettering, background
+  colour and photo, and the event name and date printed on every sheet.
+- **USB export:** plug a drive in and every saved session is copied onto it.
+- **Unattended:** idle timeouts on every screen, a print quota (`MAX_PRINTS`),
+  disk-space guard, camera recovery after a failed capture, log rotation.
+- **Reproducible installs:** one interactive installer whose answers are saved, so
+  the next booth is one command; a doctor script that checks the result.
+
+**Hardware**
+
+- **Cameras:** Raspberry Pi Camera Module 3, DSLRs through libgphoto2 (exposure
+  settings for Canon, Nikon and Sony), USB webcams through OpenCV - or a synthetic
+  camera for development.
+- **Printers:** anything CUPS drives; DNP dye-sub printers (DS620, QW410) through
+  Gutenprint, with their sheet cutting taken into account.
+- **Lights:** a WS2812 ring light over SPI, and three rows of 12 V LED chevrons
+  dimmed over PWM (from the Pi, or from an RP2040 for a steadier ambient level).
+- **Screens:** any size, any orientation (`ROTATION`), touch or a physical button
+  (Enter or Space).
+- **Kiosk boot:** the booth alone on the screen from power-on, behind a boot splash
+  made from the welcome picture.
+
+## How a session works
+
 ![Select Format](doc/select_format.jpeg)
 ![Capture Screen](doc/capture.jpeg)
-![Capture Screen](doc/confirm.jpeg)
+![Confirm Screen](doc/confirm.jpeg)
 ![Review Screen](doc/review.jpeg)
 
-## Screen Flow
-
-The photobooth application follows this screen navigation flow:
-
 ```
-                        ┌─────────────┐
-                        │    Start    │◄────────────────┐
-                        │   Screen    │                 │
-                        └──────┬──────┘                 │
-                               │ Touch                  │
-                               ▼                        │
-                        ┌─────────────┐                 │
-                        │   Select    │ (skipped when   │
-                        │   Format    │  one template)  │
-                        └──────┬──────┘                 │
-                               │ Choose                 │
-                               ▼                        │
-                        ┌─────────────┐                 │
-           ┌───────────►│  Countdown  │◄── auto-starts  │
-           │            │   Screen    │    from shot 2  │
-           │            └──────┬──────┘                 │
-           │ Retake            │ Capture                │
-           │                   ▼                        │
-           │            ┌─────────────┐                 │
-           └────────────┤   Confirm   │ auto-validates  │
-                        │   Capture   │ after a few s   │
-                        └──────┬──────┘                 │
-                               │ Validate               │
-                               ▼                        │
-                        ┌─────────────┐                 │
-                        │ Processing  │                 │
-                        │   Screen    │                 │
-                        └──────┬──────┘                 │
-                               │ Done                   │
-                               ▼                        │
-                        ┌─────────────┐                 │
-                        │   Review    │ look, copies,   │
-                        │   Screen    │ print, share    │
-                        └──┬────┬───┬─┘                 │
-                           │    │   │Share              │
-                      Print│    │   ▼                   │
-                           │    │ ┌──────────┐          │
-                           │    │ │ QR Code  │          │
-                           │    │ │  Popup   │          │
-                           │    │ └────┬─────┘          │
-                           │    │Home  │Close           │
-                           │    └──────┴────────────────┤
-                           ▼                            │
-                    ┌─────────────┐                     │
-                    │  Printing   │─────────────────────┘
-                    │   Screen    │ (or Error)          │
-                    └─────────────┘                     │
-                                                        │
-                                                        │
-           ┌─────────────┐                              │
-           │    Error    │──────────────────────────────┘
-           └─────────────┘
-
-Note: All screens have a "Home" button to return to the Start Screen
-
-Second entry point, when REMOTE_CAPTURE is enabled: from the Start Screen, the
-button counting the photos phones have sent opens the Remote Gallery, and
-picking one there joins the flow at the Processing Screen.
+                 ┌───────────────┐                         ┌────────────────┐
+      ┌─────────►│     Start     │── photos from phones ──►│ Remote gallery │
+      │          └───────┬───────┘   (REMOTE_CAPTURE)      └───────┬────────┘
+      │                  │ touch                                   │ pick one
+      │                  ▼                                         │
+      │          ┌───────────────┐                                 │
+      │          │ Select format │ skipped with a single template  │
+      │          └───────┬───────┘                                 │
+      │                  │ choose                                  │
+      │                  ▼                                         │
+      │          ┌───────────────┐◄─────────┐                      │
+      │          │   Countdown   │          │ retake,              │
+      │          └───────┬───────┘          │ or next shot         │
+      │                  │ press, shot      │                      │
+      │                  ▼                  │                      │
+      │          ┌───────────────┐          │                      │
+      │          │    Confirm    │──────────┘                      │
+      │          └───────┬───────┘                                 │
+      │                  │ keep (on its own after a few seconds)   │
+      │                  ▼                                         │
+      │          ┌───────────────┐                                 │
+      │          │  Processing   │◄────────────────────────────────┘
+      │          └───────┬───────┘
+      │                  ▼
+      │    home  ┌───────────────┐  share  ┌───────────────┐
+      ├──────────│    Review     │────────►│ QR code popup │
+      │          └───────┬───────┘         └───────────────┘
+      │                  │ print
+      │                  ▼
+      │          ┌───────────────┐ failure ┌───────────────┐
+      └──────────│   Printing    │────────►│     Error     │
+                 └───────────────┘         └───────────────┘
 ```
 
-### Screen Descriptions
+Every screen a guest can walk away from has a home button and an idle timeout
+that bring the booth back to the start screen.
 
-- **Start Screen:** Initial screen with "Press to begin" prompt, under the event's own title, subtitle and photo when the operator set them. With `SLIDESHOW = True`, the evening's photos take over the screen after a while without a touch; a touch brings the welcome screen back rather than starting a session
-- **Select Format Screen:** Choose between different photo layouts/formats. Skipped when a single template is installed, since there is nothing to choose
-- **Countdown Screen:** Live camera preview with countdown timer before capture. Every shot waits for the guest to press the button, which then turns into cancel
-- **Confirm Capture Screen:** Keep the shot or take it again — nothing else. Keeping is what happens on its own after a few seconds, shown by the ring around the confirm button and restarted by any touch; retaking is the button press
-- **Processing Screen:** Collage generation in progress
-- **Review Screen:** The finished collage and everything still open: the filter, applied to the whole collage and previewed live; the number of copies, on a button that cycles through them and counts the photos the guest will hold rather than the sheets the printer runs; print, share, or go home. The session is written to disk when the guest prints, shares or leaves, so what is saved is what they chose, and the filter is fixed from then on. Sharing comes before printing, since printing is what ends the session
-- **Printing Screen:** A sheet coming out of a printer for as long as the job takes, then back to the welcome screen on its own — pressing print ends the session, so the booth frees itself for the next guest. A failure goes to the Error screen instead, saying so, with the photo still saved
-- **QR Code Popup:** Shows the sharing QR code without leaving the review screen. It opens this guest's collage, not the whole gallery (see [Guest network and QR codes](#guest-network-and-qr-codes))
-- **Remote Gallery Screen:** Photos guests sent from their phone, waiting to be printed (see [Phone as a remote camera](#phone-as-a-remote-camera))
-- **Error Screen:** Displayed when an error occurs during the process
-- **Maintenance Screen:** Displayed for operator intervention, such as storage, camera, web server, printer, or USB export issues
+| Screen | What happens there |
+| --- | --- |
+| **Loading** | Shown from the end of the boot splash while the camera, templates, storage and web server come up, with the step in progress. |
+| **Start** | "Touch to begin", under the event's title, subtitle and photo. With `SLIDESHOW = True` the evening's photos take over after a while; a touch brings the welcome screen back rather than starting a session. |
+| **Select format** | Choose a layout. Skipped when a single template is installed. |
+| **Countdown** | Live preview framed for the slot the photo goes into. Every shot waits for the guest to press the button, which then turns into cancel; the ring light and the chevrons count down with the screen. |
+| **Confirm** | Keep the shot or take it again - nothing else. Keeping happens on its own after `AUTO_KEEP_SECONDS`, shown by the ring around the button and restarted by any touch. |
+| **Processing** | The collage is assembled. |
+| **Review** | The finished collage with everything still open: the filter, the number of copies, print, share, home. The session is written to disk when the guest prints, shares or leaves, so what is saved is what they chose. |
+| **QR code popup** | The sharing code, over the review screen. It opens this guest's collage, not the whole gallery. |
+| **Printing** | A sheet coming out of a printer for as long as the job takes, then back to the start screen on its own. A failure goes to the error screen, with the photo still saved. |
+| **Remote gallery** | Photos guests sent from their phone, waiting to be printed. |
+| **Copying** | Progress of a USB export. |
+| **Error** | What went wrong, with *continue* when the guest can carry on, or *restart* when the booth needs an operator (full disk, camera that could not be recovered). |
 
-## Camera Support
+## Hardware
 
-The application is compatible with multiple camera types:
+### Cameras
 
-- **Raspberry Pi Camera Module 3** (recommended)
-- **DSLR cameras** via gPhoto2 (e.g., Canon EOS 2000D/Rebel T7)
-- **USB webcams** via OpenCV
+| Backend | `CAMERA =` | Used for |
+| --- | --- | --- |
+| Raspberry Pi Camera Module 3 | `picamera2` | Preview and capture, or preview only next to a DSLR |
+| DSLR through libgphoto2 | `gphoto2` | Capture with its own flash; live view as preview when there is no other camera |
+| USB webcam through OpenCV | `opencv` | Preview and capture, or preview only next to a DSLR |
+| Synthetic camera | `fake` | Development and tests, no hardware at all |
 
-The application automatically selects the best available camera configuration:
-- If a Pi Camera is connected, it's used for live preview
-- If a DSLR is connected, it's used for high-quality photo capture
-- If only one camera type is available, it's used for both preview and capture
+With `CAMERA = auto` (the default) the booth probes every backend and picks the
+best combination: a Pi Camera or a webcam for the live preview and a DSLR for the
+capture when both are present (calibrate the two fields of view with
+`tools/calibrate_zoom.py`, which writes `CALIBRATION`), otherwise whichever camera
+there is for both. Naming a backend skips the probing and starts faster.
 
-## Compatibility
+A DSLR leaves live view after a minute without a guest and wakes up when a session
+starts. Its exposure for live view and for the shot are set in `[DSLR_Liveview]`
+and `[DSLR_Capture]`.
 
-Tested on:
-- macOS Sonoma/Sequoia
-- Raspberry Pi 5 (8GB) with Raspberry Pi Camera Module 3
-- Raspberry Pi OS (Debian-based)
+### Recommended components
 
-## Recommended Hardware Components
-| Product                              | Links                                                                                                             |
-|--------------------------------------|-------------------------------------------------------------------------------------------------------------------|
-| Raspberry Pi 5                       | https://www.raspberrypi.com/products/raspberry-pi-5/                                                              |
-| Pi camera module 3                   | https://www.raspberrypi.com/products/camera-module-3/                                                             |
-| Led Ring 5V - 12 bits                | https://www.az-delivery.de/en/products/rgb-led-ring-ws2812-mit-12-rgb-leds-5v-fuer-arduino?variant=18912609108064 |
-| DNP DS620 printer                    | https://www.dnpphoto.eu/en/product-range/photo-printers/item/120-ds620                                            |
-| Canon EOS 2000D (EU) / Rebel T7 (US) | https://global.canon/en/c-museum/product/dslr873.html                                                             |
-| Ingcool 7" touchscreen               | http://www.ingcool.com/wiki/7DP-CAPLCD                                                                            |
-| Godox Flash MS300V                   | https://store.godox.eu/en/flash-lamps/5732-godox-ms300-v-studio-flash-6952344225646.html                          |
-| Godox BDR-W420 Beauty Dish 42cm      | https://store.godox.eu/en/beauty-dish/101-godox-bdr-w420-beauty-dish-420mm-white-bounce-6952344206126.html        |
-| Pixel TF-321 Hot Shoe                |                                                                                                                   |
+| Product | Links |
+| --- | --- |
+| Raspberry Pi 5 (8 GB) | https://www.raspberrypi.com/products/raspberry-pi-5/ |
+| Pi Camera Module 3 | https://www.raspberrypi.com/products/camera-module-3/ |
+| LED ring 5 V, 12 WS2812 | https://www.az-delivery.de/en/products/rgb-led-ring-ws2812-mit-12-rgb-leds-5v-fuer-arduino?variant=18912609108064 |
+| DNP DS620 printer | https://www.dnpphoto.eu/en/product-range/photo-printers/item/120-ds620 |
+| Canon EOS 2000D (EU) / Rebel T7 (US) | https://global.canon/en/c-museum/product/dslr873.html |
+| Ingcool 7" touchscreen | http://www.ingcool.com/wiki/7DP-CAPLCD |
+| Godox MS300-V studio flash | https://store.godox.eu/en/flash-lamps/5732-godox-ms300-v-studio-flash-6952344225646.html |
+| Godox BDR-W420 beauty dish 42 cm | https://store.godox.eu/en/beauty-dish/101-godox-bdr-w420-beauty-dish-420mm-white-bounce-6952344206126.html |
+| Pixel TF-321 hot shoe | |
+| Waveshare RP2040-Zero (optional, chevrons) | https://www.waveshare.com/wiki/RP2040-Zero |
+
+Wiring of the ring light, the chevrons and the RP2040 is in
+[INSTALLATION.md](INSTALLATION.md#led-ring-wiring).
+
+### Tested on
+
+- Raspberry Pi 5 (8 GB) with a Raspberry Pi Camera Module 3
+- Raspberry Pi OS (Debian based)
+- macOS Sonoma / Sequoia
 
 ## Installation
 
-For detailed installation instructions, please see [INSTALLATION.md](INSTALLATION.md).
-
-### Quick Start
+The full guide - what each step does, kiosk mode, boot splash, printer, DSLR,
+wiring - is in **[INSTALLATION.md](INSTALLATION.md)**. In short, on a Raspberry Pi
+OS or Debian machine connected to the network:
 
 ```bash
-# Clone the repository
-git clone https://github.com/IArchi/py-photobooth-simple.git
-cd py-photobooth-simple
-
-# Build the booth. Asks what hardware it has, then saves the answers.
+git clone https://github.com/lou270/photobooth-simple.git
+cd photobooth-simple
 ./install.sh
-
-# Check it is actually ready
-./setup/doctor.sh
-
-# Run the application
-.venv/bin/python photoboothapp.py
 ```
 
-Building a second booth costs one command, because the first run saved its answers to
-`setup/booth.conf`:
+The installer asks what hardware the booth has, installs accordingly, generates
+an admin password (printed once - write it down) and saves the answers to
+`setup/booth.conf`. Then check the result:
+
+```bash
+./setup/doctor.sh
+```
+
+The next booth needs no questions:
 
 ```bash
 ./install.sh --profile setup/booth.conf --yes
 ```
 
-The installer is safe to re-run: it rewrites delimited blocks and generated files rather than
-appending to them, so a second pass changes nothing. Use `--dry-run` to see what it would do
-first.
+The installer is idempotent - it rewrites delimited blocks and generated files
+rather than appending to them - and `--dry-run` shows everything it would do
+without changing anything.
 
-## Customization
+## Running the booth
 
-### Configuration File
+With `AUTOSTART=yes`, `photobooth.service` starts the booth on boot, alone on the
+screen inside the [cage](https://github.com/cage-kiosk/cage) compositor. The
+service restarts it whenever it exits, which is also how **Restart** in the admin
+page and the error screen work: the application quits and systemd starts it again.
 
-You can edit `config.ini` to change various parameters such as:
- - **FULLSCREEN:** Full screen window mode
- - **WINDOW_WIDTH / WINDOW_HEIGHT:** Size of the booth window in pixels, and the mode fullscreen runs at (1024 x 600 for the Ingcool 7" panel, 1920 x 1080 for a full HD monitor)
- - **ROTATION:** Quarter turn for a panel mounted on its side (0, 90, 180, 270), applied by the booth itself so no desktop or touchscreen configuration is needed
- - **SHARE:** Enable/disable the share button, whose QR code opens the guest's own photo
- - **REMOTE_CAPTURE:** Let guests send photos taken with their own phone (see [Phone as a remote camera](#phone-as-a-remote-camera))
- - **WELCOME_TITLE / WELCOME_SUBTITLE / EVENT_NAME / DATE_FORMAT:** The event's words on the welcome screen and on the prints (see [Dressing the booth for an event](#dressing-the-booth-for-an-event))
- - **SLIDESHOW:** Show the evening's photos on the welcome screen while nobody is using the booth
- - **RINGLED:** Enable/disable RingLed functionality (set to `False` if you don't have RingLed hardware)
- - **CHEVRONS:** Drive the three rows of LED chevrons beside the lens over PWM: an ambient level between photos (`CHEVRONS_IDLE_PERCENT`), a slightly brighter wave towards the lens on the welcome screen, the rows lit from the outside in at 3, 2, 1, full power for the shot. `CHEVRONS_DRIVER = serial` moves the PWM onto an RP2040 on the Pi's UART3 (GPIO 4), for a steady ambient level (see INSTALLATION.md)
- - **COUNTDOWN:** Countdown time before photo capture
- - **DCIM_DIRECTORY:** Directory where photos and collages are stored
- - **PRINTER:** Printer's name in CUPS
- - **CALIBRATION:** Calibration matrix for hybrid mode (DSLR + piCamera or DSLR + webcam) from `tools/calibrate_zoom.py`
+To run it by hand:
 
-### Web server
+```bash
+.venv/bin/python photoboothapp.py
+```
 
-You can edit configuration file and download photos from <localip>:<WEB_PORT>.
+From a console, stop the service first, then run
+`cage -- .venv/bin/python photoboothapp.py`. Run by hand, a restart only quits.
 
-### Template Editor
+| Where | What |
+| --- | --- |
+| `logs/` | Application logs, one file per run, rotated (`LOG_RETENTION_DAYS`, `LOG_MAX_FILES`); also readable from the admin page |
+| `/var/log/photobooth.log` | Standard output and errors of the service |
+| `DCIM/save/<session>/` | Each saved session: the collage, the captures and the gallery thumbnail |
+| `DCIM/remote/` | Photos sent from phones |
+| `event/` | The welcome photo uploaded from the admin page |
 
-The application includes a **visual template editor** - a browser-based design tool for creating and customizing photo layouts without coding.
-The editor is reachable from `<localip>:<WEB_PORT>/admin/editor` after admin authentication.
+## Configuration
 
-- **Levels:** A design is a stack of levels, like layers in a drawing program: named, reordered, hidden (a hidden level is not printed), locked, each with its own opacity. Decoration may sit under the photos, over part of them, or between two of them.
-- **Elements:** PNG, JPEG or WebP images (transparency kept; add them from the toolbar, by dropping them on the page or by pasting), rectangles with rounded corners, ellipses, lines, fixed text in the welcome screen's letterings, photo slots and variable texts. Every element has a position, size, rotation and opacity; photo slots and variable texts are not rotated, since the booth draws those itself.
-- **Canvas:** Zoom (Ctrl + wheel) and pan (wheel, or Ctrl + drag), snapping to the page and to other elements with guides, optional grid, multiple selection, align and distribute, undo and redo, copy, paste and duplicate, arrow keys to nudge.
-- **Print format:** The format list is read from the printer's own driver, so it offers what that printer can actually cut: on a DNP QW410, 2x4*3 is a 4x6 sheet cut into three 2x4 prints. Picking one sizes the page to one print, and the booth lays it on the sheet as many times as the printer cuts it. With no printer connected, the editor offers the QW410's sizes.
-- **Photo slots:** Shown with a sample photo cropped the way the booth crops the real one.
-- **Variable texts:** `{event}`, `{date}` and `{time}` placeholders, in the booth's own font or one of the welcome screen's letterings, previewed with today's values.
-- **Formats:** Any print size the printer offers (see Print format above), or a custom size.
-- **Booth preview:** Shows the booth's own assembly of the template, with the sample photos, next to the editor's drawing.
-- **Import/Export:** A template exports as one JSON file with its images inside, which another booth can import or take as it is.
-- **The booth's templates and drafts:** The list shows the files in `templates/` apart from what is not saved yet; a file the booth refuses is listed with the reason. The ready-made layouts are starting points in the *New template* dialog.
-- **Images:** A photo heavier than 12 MB or larger than 40 megapixels is scaled down in the browser to what the page can show at 600 dpi before it is sent. Images a template names as plain files beside it, as older templates did, are shown and printed like the others.
+Everything is in `config.ini`, created by the installer from
+[`config.ini.example`](config.ini.example), where every option is documented.
+The admin page edits the same file through a form that shows each option's
+default and its name in the file, and keeps the comments of a hand-edited file.
+Settings are read when the booth starts: **Save and restart the booth** at the
+bottom of the form applies them.
 
-When a design is saved, each run of decoration between two photo slots or variable texts is flattened
-by the browser into one image at 600 dpi, cropped to what it covers and stored in `templates/assets/`
-under a name made from its content. The template file keeps the drawing order in `stack` and the
-editable design in `design`, so the booth only stacks images, photos and texts and prints exactly
-what the editor showed. Images no template mentions are removed from `templates/assets/` a day
-after they were last used. Templates written before levels existed, with a `background` and a
-`foreground`, still print as they always did and open in the editor as three levels.
+A missing option takes its default, and an invalid value is logged and replaced
+by its default rather than stopping the booth.
 
-![Template Editor](doc/template_editor.png)
+| Section | Holds |
+| --- | --- |
+| `[Global]` | `LANGUAGE` (`en`, `fr`), `FULLSCREEN`, `WINDOW_WIDTH` / `WINDOW_HEIGHT` (the panel's own mode, 1024 x 600 for the Ingcool 7"), `ROTATION` (0, 90, 180, 270 for a panel on its side), `SHARE`, `ADMIN_PASSWORD` |
+| `[Event]` | `WELCOME_TITLE`, `WELCOME_SUBTITLE`, `WELCOME_FONT`, `BACKGROUND_COLOR`, `EVENT_NAME`, `DATE_FORMAT` - see [Dressing the booth](#dressing-the-booth-for-an-event) |
+| `[Slideshow]` | `SLIDESHOW`, `SLIDESHOW_IDLE_SECONDS`, `SLIDESHOW_PHOTO_SECONDS` |
+| `[Capture]` | `CAMERA`, `COUNTDOWN`, `FILTERS`, `CALIBRATION`, `DSLR_HOT_PIXEL_FILTER`, the blur behind the preview and the photos |
+| `[Print]` | `PRINTER` (CUPS queue, `None` for no printer), `MAX_PRINTS` (quota for the evening), `MAX_COPIES`, `COLLAGE_DPI`, `CUT_OFFSET`, `PRINTER_WAIT_TIMEOUT` |
+| `[Timing]` | Every delay a guest may notice: auto-keep, idle timeouts per screen, capture timeout, print timeouts |
+| `[Lights]` | `RINGLED`, `RINGLED_PIXELS`; `CHEVRONS`, `CHEVRONS_DRIVER` (`gpio` or `serial`), `CHEVRONS_PINS`, `CHEVRONS_SERIAL_PORT`, `CHEVRONS_IDLE_PERCENT`, `CHEVRONS_PWM_FREQUENCY` |
+| `[Web]` | `WEB_PORT` (80), `WEB_HOST` (0.0.0.0; 127.0.0.1 keeps the web pages on the booth) |
+| `[WiFi]` | `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_HIDDEN` - the network the QR codes join, see [Guest network](#guest-network-and-qr-codes) |
+| `[Remote]` | `REMOTE_CAPTURE`, `REMOTE_URL` and the upload limits, see [Phone as a remote camera](#phone-as-a-remote-camera) |
+| `[Storage]` | `DCIM_DIRECTORY`, and the free-space floor below which the booth stops taking sessions (`DISK_MIN_FREE_GB`, `DISK_MAX_USED_PERCENT`) |
+| `[USB]` | `USB_EXPORT`, `USB_MIN_FREE_GB` |
+| `[Log]` | `LOG_RETENTION_DAYS`, `LOG_MAX_FILES` |
+| `[DSLR_Liveview]`, `[DSLR_Capture]` | `SHUTTERSPEED`, `APERTURE`, `FOCUSMODE`, `ISO`, applied to the camera for live view and for the shot (Canon, Nikon and Sony profiles) |
+
+## Web interface
+
+The booth serves its web pages on port 80 of its own address (`WEB_PORT`).
+
+| Page | Who | What |
+| --- | --- | --- |
+| `/` | Guests | The latest collage, or the capture page when `REMOTE_CAPTURE` is on |
+| `/gallery` | Guests | Every collage of the evening, newest first |
+| `/collage/<session>` | Guests | One collage with a download button: where the sharing QR code leads |
+| `/remote` | Guests | Send a photo from a phone (when `REMOTE_CAPTURE` is on) |
+| `/admin` | Operator | Settings, welcome photo, delete all sessions, restart |
+| `/admin/editor` | Operator | Template editor |
+| `/admin/remote` | Operator | Photos sent from phones: reject or delete |
+| `/admin/logs` | Operator | Application logs |
+| `/stats` | Operator | Usage statistics and print quota |
+| `/download/all-photos` | Operator | Every photo of the evening as one ZIP, streamed |
+
+The operator pages need `ADMIN_PASSWORD`: at least 10 characters and not a
+well-known value, or the admin stays disabled while the booth keeps taking
+photos. Five wrong attempts lock a client out for five minutes. A login lasts 30
+days, and changing the password logs every other browser out.
 
 ## Dressing the booth for an event
 
-Everything here is set on site from the admin page, in the *Event* section of the settings, and
-applied on the next start of the booth (**Save and restart the booth** at the bottom of the settings).
-Each setting there says what it does, its default, and its name in `config.ini`.
+Everything here is set on site from the admin page, in the *Event* section of the
+settings, and applied on the next start of the booth.
 
 ### The welcome screen
 
-- **Photo:** the *Welcome screen photo* card takes a JPEG, PNG or WebP. The booth re-encodes it as a
-  JPEG no wider than 3840 pixels and keeps it in `event/welcome_background.jpg`, outside the photo
-  directory, so deleting the evening's sessions leaves it in place. *Back to the booth's own photo*
-  removes it.
-- **Title and subtitle:** `WELCOME_TITLE` replaces "Photo Booth" when set, and can be a whole
-  sentence: it breaks between words onto lines of even length and is drawn as large as the screen
-  allows, in landscape or upright. `WELCOME_SUBTITLE` adds a line under it, below a thin rule. Both
-  carry a soft shadow so they stay readable on any photo.
-- **Lettering:** `WELCOME_FONT` picks the typeface: `elegant` (Playfair Display, the default),
-  `script` (Great Vibes), `modern` (Montserrat) or `playful` (Fredoka). The fonts ship in
-  `assets/fonts/welcome/` under the SIL Open Font License, whose text sits next to each of them;
-  the Montserrat and Fredoka weights there are static instances cut from the variable fonts.
+- **Photo:** the *Welcome screen photo* card takes a JPEG, PNG or WebP. The booth
+  re-encodes it as a JPEG no wider than 3840 pixels and keeps it in
+  `event/welcome_background.jpg`, outside the photo directory, so deleting the
+  evening's sessions leaves it in place. *Back to the booth's own photo* removes it.
+- **Title and subtitle:** `WELCOME_TITLE` replaces "Photo Booth" and can be a whole
+  sentence: it breaks between words onto lines of even length and is drawn as large
+  as the screen allows. `WELCOME_SUBTITLE` adds a line under it, below a thin rule.
+- **Lettering:** `WELCOME_FONT` is `elegant` (Playfair Display, the default),
+  `script` (Great Vibes), `modern` (Montserrat) or `playful` (Fredoka).
+- **Colour:** `BACKGROUND_COLOR` is the colour behind the screens without a photo.
 
 ### Text on the prints
 
-A template can carry variable text boxes, added in the template editor with **Variable**. The text is
-sized to fill its box - a long event name shrinks instead of running off the sheet - and drawn at the
-level the design puts it (over everything in a template without levels). Its font is Roboto, the one
-Kivy already ships, unless the box names one of the welcome screen's letterings in `font`:
-`playfair`, `great-vibes`, `montserrat` or `fredoka`. Playfair Display and Great Vibes ship no bold
-face, so `bold` does nothing with them.
+A template can carry variable text boxes, added in the template editor with
+**Variable**. The text is sized to fill its box - a long event name shrinks instead
+of running off the sheet. Its font is Roboto unless the box names one of the
+welcome screen's letterings in `font`: `playfair`, `great-vibes`, `montserrat` or
+`fredoka` (Playfair Display and Great Vibes have no bold face).
 
 | Placeholder | Prints as |
 | --- | --- |
@@ -254,7 +321,7 @@ face, so `bold` does nothing with them.
 | `{date}` | the day the photo is taken, formatted by `DATE_FORMAT` (`%d/%m/%Y` by default) |
 | `{time}` | the time the photo is taken, as hours:minutes |
 
-Anything else between braces prints as written. In a template file, a box looks like this:
+Anything else between braces prints as written. In a template file:
 
 ```json
 "texts": [
@@ -266,28 +333,76 @@ Anything else between braces prints as written. In a template file, a box looks 
 
 ### The idle slideshow
 
-Off by default. With `SLIDESHOW = True` in the `[Slideshow]` section, the welcome screen shows the
-evening's collages, newest first, once nobody has touched it for `SLIDESHOW_IDLE_SECONDS` (60), each
-for `SLIDESHOW_PHOTO_SECONDS` (6). It waits while the phone codes are open, and does not start before
-the first photo of the evening exists. A touch brings the welcome screen back without starting a
-session; a physical button starts one directly.
+Off by default. With `SLIDESHOW = True`, the welcome screen shows the evening's
+collages, newest first, once nobody has touched it for `SLIDESHOW_IDLE_SECONDS`
+(60), each for `SLIDESHOW_PHOTO_SECONDS` (6). It waits while the phone codes are
+open and does not start before the first photo of the evening. A touch brings the
+welcome screen back without starting a session; a physical button starts one.
+
+## Templates and the template editor
+
+A template is a JSON file in `templates/`: the page size, the photo slots, the
+images and texts drawn around them, and the print options. The booth picks up a
+template saved or deleted from the editor without a restart, once the guest in
+front of it has finished. A file the booth refuses is listed in the editor with
+the reason, and the booth falls back to a built-in layout rather than start with
+none.
+
+The editor is at `/admin/editor`:
+
+![Template Editor](doc/template_editor.png)
+
+- **Levels:** a design is a stack of levels, like layers in a drawing program:
+  named, reordered, hidden (a hidden level is not printed), locked, each with its
+  own opacity. Decoration may sit under the photos, over part of them, or between
+  two of them.
+- **Elements:** PNG, JPEG or WebP images (transparency kept; from the toolbar, by
+  dropping them on the page or by pasting), rectangles with rounded corners,
+  ellipses, lines, fixed text in the welcome screen's letterings, photo slots and
+  variable texts. Every element has a position, size, rotation and opacity; photo
+  slots and variable texts are not rotated, since the booth draws those itself.
+- **Canvas:** zoom (Ctrl + wheel) and pan (wheel, or Ctrl + drag), snapping to the
+  page and to other elements, optional grid, multiple selection, align and
+  distribute, undo and redo, copy, paste, duplicate, arrow keys to nudge.
+- **Print format:** the list comes from the printer's own driver, so it offers
+  what that printer can actually cut: on a DNP QW410, `2x4*3` is a 4x6 sheet cut
+  into three 2x4 prints. Picking one sizes the page to one print, and the booth
+  repeats it on the sheet as many times as the printer cuts it. Without a printer,
+  the editor offers the QW410's sizes; a custom size is always possible.
+- **Booth preview:** the booth's own assembly of the template with sample photos,
+  next to the editor's drawing, to check the two agree before the evening.
+- **Import / export:** a template exports as one JSON file with its images inside,
+  which another booth can import.
+- **Images:** a photo heavier than 12 MB or larger than 40 megapixels is scaled
+  down in the browser to what the page can show at 600 dpi before it is sent.
+
+When a design is saved, each run of decoration between two photo slots or
+variable texts is flattened by the browser into one image at 600 dpi and stored in
+`templates/assets/` under a name made from its content. The template keeps the
+drawing order in `stack` and the editable design in `design`, so the booth only
+stacks images, photos and texts and prints exactly what the editor showed. Images
+no template mentions are removed from `templates/assets/` a day after they were
+last used. Templates written before levels existed, with a `background` and a
+`foreground`, still print as they always did and open in the editor as three
+levels.
 
 ## Guest network and QR codes
 
-Both features that reach a guest's phone - sharing a photo and sending one from a phone - work over a
-network the booth **joins**, like any other machine. The booth does not create that network and
-configures nothing on it: `install.sh` installs no access point, no DHCP or DNS server and no captive
+Both features that reach a guest's phone - sharing a photo and sending one from a
+phone - work over a network the booth **joins**, like any other machine. The booth
+creates no network: `install.sh` installs no access point, DHCP, DNS or captive
 portal.
 
 ### Choosing the network
 
-- **A travel router beside the booth** (recommended). The booth joins it over ethernet or WiFi, guests
-  join its WiFi. It needs no internet: everything the phones open is served by the booth itself.
-- **The venue's WiFi**, when guests are on it anyway. Check that it lets two devices talk to each other:
-  many public networks isolate their clients, and the phones then never reach the booth.
+- **A travel router beside the booth** (recommended). The booth joins it over
+  ethernet or WiFi, guests join its WiFi. It needs no internet: everything the
+  phones open is served by the booth.
+- **The venue's WiFi**, when guests are on it anyway. Check that it lets two
+  devices talk to each other: many public networks isolate their clients.
 
-Either way, give the booth a stable address - a DHCP reservation on the router is the simplest - so the
-codes do not change during the evening.
+Either way, give the booth a stable address - a DHCP reservation on the router is
+the simplest - so the codes do not change during the evening.
 
 ### What the codes carry
 
@@ -296,114 +411,209 @@ codes do not change during the evening.
 | Share | the review screen, when `SHARE = True` | `/collage/<session>`: this guest's collage, with a download button |
 | Send a photo | the welcome screen, when `REMOTE_CAPTURE = True` | `/remote`: the capture page |
 
-When `WIFI_SSID` is set, each popup shows two codes side by side: the first joins that network, the
-second opens the page. It takes two because no phone reads a payload that both joins a network and
-opens a page. When `WIFI_SSID` is empty, only the address code is shown, for guests who are on the
-network already.
+When `WIFI_SSID` is set, each popup shows two codes side by side: the first joins
+that network, the second opens the page (no phone reads a code that does both).
+When it is empty, only the address code is shown.
 
-The address in the codes is derived, each time a code is drawn, from the interface the booth uses to
-reach its network. Set `REMOTE_URL` when that guess is wrong - a booth with both ethernet and WiFi, a
-fixed hostname, a port forward.
+The address is derived, each time a code is drawn, from the interface the booth
+uses to reach its network. Set `REMOTE_URL` when that guess is wrong - a booth
+with both ethernet and WiFi, a fixed hostname, a port forward.
+`./setup/doctor.sh` reports the address the codes will carry.
 
-Pressing share saves the session there and then, with the look the guest picked, so the photo their
-phone opens is the one on screen. A phone quick enough to open the link while the booth is still
-writing gets a page that waits and reloads until the collage is there.
+Pressing share saves the session there and then, with the look the guest picked,
+so the photo their phone opens is the one on screen. A phone quick enough to open
+the link while the booth is still writing gets a page that waits and reloads.
 
 ### Settings
-
-In the `[WiFi]` section of `config.ini`, and in the admin configuration form. They describe the network
-for the QR code; changing them changes nothing on the network itself.
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `WIFI_SSID` | *(empty)* | Network name put in the joining code. Empty shows the address code alone. |
 | `WIFI_PASSWORD` | *(empty)* | Empty for an open network. |
 | `WIFI_HIDDEN` | `False` | Only for a network that does not broadcast its name. |
+| `REMOTE_URL` | `None` | Address both codes carry. Derived from the booth's own interface when empty. |
 
-`REMOTE_URL`, in the `[Remote]` section, sets the address both codes carry (see below).
-
-`./setup/doctor.sh` reports the address the codes will carry, and warns when the booth has none.
+These settings describe the network for the QR codes; changing them changes
+nothing on the network itself.
 
 ## Phone as a remote camera
 
-The booth only sees what stands in front of it. With `REMOTE_CAPTURE = True`, every guest phone
-becomes a second camera: someone photographs the speeches at the far end of the room, sends the
-photo to the booth, walks over and prints it.
+The booth only sees what stands in front of it. With `REMOTE_CAPTURE = True`,
+every guest phone becomes a second camera: someone photographs the speeches at
+the far end of the room, sends the photo to the booth, walks over and prints it.
 
 ### What a guest does
 
 1. Taps the QR button at the bottom right of the welcome screen.
-2. Scans the codes it shows: the network one first, if there is one, then the address one (see
-   [Guest network and QR codes](#guest-network-and-qr-codes)).
-3. Takes a photo, checks it, sends it. The page then lists everything that phone has sent, with what
-   became of it, and lets the guest take a photo back before anyone prints it.
-4. Walks to the booth. The welcome screen shows a button with the number of photos waiting; tapping
-   it opens the wall of photos, and tapping one prints it exactly like a photo taken at the booth.
+2. Scans the codes it shows: the network one first, if there is one, then the
+   address one.
+3. Takes a photo, checks it, sends it. The page then lists everything that phone
+   has sent, with what became of it, and lets the guest take a photo back before
+   anyone prints it.
+4. Walks to the booth. The welcome screen shows a button with the number of photos
+   waiting; tapping one prints it exactly like a photo taken at the booth.
 
-The capture page is also what the booth serves at its root (`/`) while the feature is on; the
+The capture page is what the booth serves at `/` while the feature is on; the
 gallery stays at `/gallery`.
 
-The capture itself is done by the phone's own camera application, through a file input, rather than
-by the browser. That is deliberate: `getUserMedia` is refused outside a secure context, and a booth
-serving plain HTTP has no way to offer one. Where the page *is* served over HTTPS, it additionally
-offers a live viewfinder inside the page.
-
-On a network with no internet, Android warns about it and may move the phone back onto mobile data,
-at which point the booth stops answering. The page tells guests which option to pick in that
-notification to stay connected.
+The photo is taken by the phone's own camera application, through a file input,
+rather than by the browser: `getUserMedia` is refused outside a secure context,
+and a booth serving plain HTTP cannot offer one. Where the page *is* served over
+HTTPS, it also offers a live viewfinder. On a network with no internet, Android
+may move the phone back onto mobile data; the page tells guests which option to
+pick to stay connected.
 
 ### What the booth does with it
 
-Incoming photos are re-encoded before anything else. That bounds what a 12 MP phone leaves on the
-disk, and it drops the EXIF block on the way, so the GPS coordinates of whoever pressed the shutter
-never reach the booth or the gallery.
+Incoming photos are re-encoded before anything else. That bounds what a 12 MP
+phone leaves on the disk, and drops the EXIF block on the way, so the GPS
+coordinates of whoever pressed the shutter never reach the booth or the gallery.
+A file announcing more than 100 megapixels is refused before it is decoded: a
+few kilobytes can ask for gigabytes of memory once decompressed.
 
-A photo picked at the booth is copied into the working directory as an ordinary capture, assembled
-with the first single-photo template, then printed, shared and saved like any other session. It
-appears in the gallery and in the USB export with the rest of the evening.
+A photo picked at the booth becomes an ordinary session: assembled with the first
+single-photo template, then printed, shared and saved like any other. It appears
+in the gallery and in the USB export with the rest of the evening.
 
 ### Moderating
 
-Anything sent by a phone shows up under **Admin → Phone photos** (`/admin/remote`). An unwanted photo
-can be rejected, which takes it out of the booth queue while the guest still sees what happened to
-it, or deleted outright. Deleting all sessions from the admin page also clears this queue.
+Anything sent by a phone shows up under **Admin → Phone photos**
+(`/admin/remote`). An unwanted photo can be rejected, which takes it out of the
+booth queue while the guest still sees what happened to it, or deleted outright.
+Deleting all sessions from the admin page also clears this queue.
 
 ### Settings
-
-All in the `[Remote]` section of `config.ini`, and in the admin configuration form:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | `REMOTE_CAPTURE` | `False` | Turns the whole feature on. While off, the routes answer 404 and no QR code is shown. |
-| `REMOTE_URL` | `None` | Address every QR code carries, the sharing one included. Derived from the booth's own interface when left empty. |
 | `REMOTE_MAX_UPLOAD_MB` | `12` | Largest upload accepted. |
 | `REMOTE_MAX_IMAGE_PIXELS` | `2400` | Longest side kept when the photo is re-encoded. |
 | `REMOTE_MAX_PER_SENDER` | `20` | Photos one phone may leave waiting. |
 | `REMOTE_MAX_PENDING` | `200` | Photos the queue holds, all phones together. |
 | `REMOTE_MIN_UPLOAD_INTERVAL` | `3` | Seconds a phone must wait between two sends. |
 
-The last four exist so that one guest, or one script within WiFi range, cannot fill the booth's disk
-on their own.
+`REMOTE_MAX_PENDING` is what bounds the disk space phones can use; the per-phone
+limits are counted per browser and only keep a single guest from filling the
+queue by accident.
 
-## USB Photo Export
+## USB photo export
 
-A dedicated background thread monitors for USB drives and automatically exports all photos:
+A background thread watches for removable drives mounted under `/media`,
+`/run/media` or `/Volumes`:
 
-- Insert a FAT32-formatted USB drive
-- The application will automatically copy all photos from the `DCIM_DIRECTORY` to the USB drive
-- A progress screen is displayed during the copy process
-- Safely remove thUe USB drive when the process completes
+- Insert a FAT32 or exFAT drive while the booth is on its welcome screen (an
+  insertion during a session waits for it to end).
+- The booth copies every saved session into a `photobooth/` folder on the drive,
+  skipping files already there, and shows its progress on screen.
+- Wait for the booth to return to the welcome screen before removing the drive.
 
-**Important:** USB drives must be formatted as FAT32 for compatibility.
+Without a desktop, the installer adds a udev rule that mounts such drives.
+`USB_EXPORT = False` turns the feature off; `USB_MIN_FREE_GB` refuses a drive with
+too little room.
+
+## Security notes
+
+- The booth serves plain HTTP. On a shared or open WiFi, the admin password and
+  the admin cookie travel in clear: administer the booth from a network guests are
+  not on, or set `WEB_HOST = 127.0.0.1` to keep the web pages on the booth itself.
+- `/gallery` and the collages are open to anyone on the booth's network, whatever
+  `SHARE` says: `SHARE` only shows or hides the button on the review screen.
+- `config.ini` holds the admin password and `.web_session_key` signs the admin
+  cookie: neither is in the repository, and neither should be.
+- The installer opens CUPS's administration to the network
+  (`cupsctl --remote-admin --remote-any`) so the printer can be managed from
+  `https://<booth-ip>:631/admin/`; it is protected by the system account's password.
+
+## Development
+
+The application runs without any hardware: the camera is replaced by a synthetic
+one, and the printer, the ring light and the chevrons degrade to no-ops.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -r requirements-dev.txt
+cp config.ini.example config.ini
+```
+
+In `config.ini`, set `CAMERA = fake` (and keep `FULLSCREEN = False`), then:
+
+```bash
+.venv/bin/python photoboothapp.py
+```
+
+The web pages are then at `http://localhost/` (or set `WEB_PORT = 5000` where
+port 80 needs privileges).
+
+The test suite needs no camera, no printer and no light:
+
+```bash
+.venv/bin/python -m pytest test/
+```
+
+The tests that build Kivy screens need a display; on a headless machine run them
+under Xvfb:
+
+```bash
+xvfb-run -a .venv/bin/python -m pytest test/
+```
+
+`tools/manual/` holds scripts meant to be run by hand on the booth: camera checks
+per backend, the ring light's effects, every template's preview, a sheet that
+shows where a printer cuts (`cut_calibration.py`), and a countdown stress test.
+
+`ROTATION` is verified on the Linux path the booth runs; on Windows, Kivy draws a
+rotated interface into a corner of the window, so leave it at 0 there.
+
+## Project layout
+
+```
+photoboothapp.py        Application entry point: startup steps, session flow
+libs/
+  config.py             config.ini reader, with a fallback for every value
+  core/                 Session storage (DCIM/tmp, DCIM/save) and background jobs
+  screens/              One Kivy screen per step of a session
+  hardware/             Camera contract and fake camera, ring light, chevrons
+  device_utils.py       Camera backends (Picamera2, gPhoto2, OpenCV) and CUPS printer
+  gphoto2.py            ctypes binding to libgphoto2
+  template_collage.py   Assembles a template with the photos, for screen and print
+  template_schema.py    Validates template files
+  print_sizes.py        Page sizes and cutting read from the printer's PPD
+  imaging/              Filters and DSLR hot-pixel removal
+  webserver/            Flask server: gallery, admin, JSON API, remote camera
+  remote_store.py       Queue of photos sent from phones
+  stats_store.py        Usage statistics and print quota
+  usb_transfer.py       USB export
+  event.py, i18n.py,    Event texts and fonts, translations, tunable delays,
+  timings.py, ...       network addresses, shared Kivy widgets
+web/                    HTML pages, the template editor and its assets
+locales/                en.json, fr.json
+templates/              Print templates (JSON) and their images
+assets/                 Backgrounds, fonts, sample photos
+firmware/               MicroPython firmware for the RP2040 driving the chevrons
+setup/                  Installer library, systemd/udev/PAM templates, doctor
+tools/                  Doctor, boot splash builder, zoom calibration, manual checks
+test/                   pytest suite
+doc/                    Screenshots, Photoshop overlays, DS620 PPD
+```
+
+## Troubleshooting
+
+Start with `./setup/doctor.sh`: it checks the Python environment, `config.ini`
+and the admin password, the camera backends, the printer queue, the lights, free
+disk space, the systemd units, the web server and the address the QR codes carry.
+Common problems and their fixes are in
+[INSTALLATION.md](INSTALLATION.md#troubleshooting).
 
 ## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome: open an issue or a pull request. Please run the test
+suite before submitting.
 
 ## License
 
 This project is open source and available under the MIT License.
 
-## Support
-
-For detailed installation instructions, troubleshooting, and configuration options, please refer to [INSTALLATION.md](INSTALLATION.md).
+It ships third-party files under their own licenses: Fabric.js
+(`web/assets/vendor/fabric/`, MIT), and the welcome screen fonts
+(`assets/fonts/welcome/`, SIL Open Font License, whose text sits next to each font).

@@ -1,5 +1,4 @@
 import os
-import subprocess
 import threading
 import time
 import traceback
@@ -7,7 +6,6 @@ import numpy as np
 from kivy.logger import Logger
 
 from libs import print_sizes
-from libs.file_utils import FileUtils
 from libs.hardware import Camera, FakeCamera
 
 try:
@@ -23,14 +21,13 @@ except ImportError:
 
 try:
     import cv2
-    import numpy as np
     from libs.imaging.hot_pixels import remove_hot_pixels
 except ImportError:
     cv2 = None
 
 try:
     import libs.gphoto2 as gp
-except:
+except Exception:
     gp = None
 
 class PrintDevice:
@@ -89,6 +86,11 @@ class Cv2Camera(Camera):
                     with self._preview_lock:
                         self._preview_frame = im
                         self._preview_frame_id += 1
+                else:
+                    # An unplugged webcam answers at once, and with nothing to
+                    # wait on this loop ate a whole core of the Pi, like the
+                    # Pi camera's did before it.
+                    time.sleep(1.0 / self._preview_fps)
             except Exception as e:
                 Logger.debug('Cv2Camera preview thread: %s', e)
                 time.sleep(1.0 / self._preview_fps)
@@ -114,10 +116,15 @@ class Cv2Camera(Camera):
             return self._preview_frame_id
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
+        flash = flash_fn if flash_fn and not self.has_physical_flash() else None
         with self._camera_lock:
-            if flash_fn and not self.has_physical_flash(): flash_fn()
-            ret, im = self._instance.read()
-            if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
+            if flash: flash()
+            try:
+                ret, im = self._instance.read()
+            finally:
+                # Off whatever happened: a read that raised left the ring light
+                # white until the devices were rebuilt.
+                if flash: flash(stop=True)
         if not ret:
             raise IOError('OpenCV camera capture failed')
         #im = cv2.flip(im, 0)
@@ -474,15 +481,19 @@ class Gphoto2Camera(Camera):
                 Logger.debug('Gphoto2Camera: could not apply capture params: %s', e)
 
             # Capture photo
-            if flash_fn and not self.has_physical_flash(): flash_fn()
-            cfile = self._instance.capture_image()
-            if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
-
-            # Set DSLR back to liveview before the preview thread can resume.
+            flash = flash_fn if flash_fn and not self.has_physical_flash() else None
+            if flash: flash()
             try:
-                self._set_parameters(self.dslr_liveview_params)
-            except Exception as e:
-                Logger.debug('Gphoto2Camera: could not apply liveview params: %s', e)
+                cfile = self._instance.capture_image()
+            finally:
+                if flash: flash(stop=True)
+                # Set DSLR back to liveview before the preview thread can
+                # resume, whether the shot worked or not: a capture that raised
+                # left the body on its capture exposure for the preview.
+                try:
+                    self._set_parameters(self.dslr_liveview_params)
+                except Exception as e:
+                    Logger.debug('Gphoto2Camera: could not apply liveview params: %s', e)
 
         # Rotate and crop if necessary
         buf = np.frombuffer(cfile.get_data(), dtype=np.uint8)
@@ -587,18 +598,32 @@ class Picamera2Camera(Camera):
         return im
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
+        flash = flash_fn if flash_fn and not self.has_physical_flash() else None
         self._capturing = True
         try:
             with self._camera_lock:
                 self._instance.switch_mode(self._still_config)
-                if flash_fn and not self.has_physical_flash(): flash_fn()
-                im = self._instance.capture_array()
-                if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
-                #im = cv2.rotate(im, cv2.ROTATE_180)
-                im = self._crop_to_aspect_ratio(im, aspect_ratio)
+                try:
+                    if flash: flash()
+                    try:
+                        im = self._instance.capture_array()
+                    finally:
+                        if flash: flash(stop=True)
+                except Exception:
+                    # Back to the preview before the error goes up: left in the
+                    # still configuration, the preview read full-size frames,
+                    # and the ring light stayed white, until the devices were
+                    # rebuilt. The capture's own error is the one reported.
+                    try:
+                        self._instance.switch_mode(self._preview_config)
+                    except Exception as exc:
+                        Logger.warning('Picamera2Camera: could not go back to the preview: %s', exc)
+                    raise
                 self._instance.switch_mode(self._preview_config)
         finally:
             self._capturing = False
+        #im = cv2.rotate(im, cv2.ROTATE_180)
+        im = self._crop_to_aspect_ratio(im, aspect_ratio)
         im = self._apply_capture_zoom(im, zoom)
 
         self._write_capture(output_name, im)
@@ -642,7 +667,6 @@ class CupsPrinter(PrintDevice):
             else:
                 Logger.warning('CupsPrinter: No printer named \'%s\' in CUPS (see http://localhost:631)', name)
         if not self._instance: raise Exception('Cannot find any CUPS printer or cups is not installed.')
-        self.cancel_stale_jobs()
 
     def print(self, file_path, print_params={}):
         if not self.is_available():
@@ -712,19 +736,46 @@ class CupsPrinter(PrintDevice):
 
         return 'pending'
 
-    def cancel_stale_jobs(self):
+    # A job nobody can still be waiting for: far beyond what the printing
+    # screen gives a printer to come back (PRINTER_WAIT_TIMEOUT) plus three
+    # minutes a sheet for the copies a guest may ask for.
+    STALE_JOB_SECONDS = 15 * 60
+
+    def cancel_stale_jobs(self, now=None):
+        """Cancel this queue's forgotten jobs. Meant for the booth's start only.
+
+        A job left over from an earlier run - the printer out of paper all
+        night, the booth restarted - would otherwise come out whenever the
+        printer is next able to, for guests long gone. A recent one is left
+        alone: restarting from the admin page must not cut a print short, and
+        neither must the camera being reset after a failed shot, which is why
+        this is no longer run each time the printer object is built.
+        """
         if self._instance is None or not self._name:
             return 0
+        now = time.time() if now is None else now
         canceled = 0
         try:
-            jobs = self._instance.getJobs(which_jobs='not-completed')
+            # Asked for by name: without requested_attributes CUPS answers
+            # with job-id and job-uri alone, and the job's printer is in
+            # job-printer-uri, not printer-uri. Looking for the latter is what
+            # left this cancelling nothing at all. CUPS counts time-at-creation
+            # in Unix seconds.
+            jobs = self._instance.getJobs(
+                which_jobs='not-completed',
+                requested_attributes=['job-id', 'job-printer-uri', 'time-at-creation'],
+            )
             for job_id, job in jobs.items():
-                if job.get('printer-uri', '').endswith('/' + self._name) or job.get('printer-name') == self._name:
-                    try:
-                        self._instance.cancelJob(job_id)
-                        canceled += 1
-                    except Exception as exc:
-                        Logger.warning('CupsPrinter: could not cancel stale job %s: %s', job_id, exc)
+                if not str(job.get('job-printer-uri') or '').endswith('/' + self._name):
+                    continue
+                created_at = job.get('time-at-creation')
+                if not isinstance(created_at, int) or now - created_at < self.STALE_JOB_SECONDS:
+                    continue
+                try:
+                    self._instance.cancelJob(job_id)
+                    canceled += 1
+                except Exception as exc:
+                    Logger.warning('CupsPrinter: could not cancel stale job %s: %s', job_id, exc)
         except Exception as exc:
             Logger.warning('CupsPrinter: stale job cleanup failed for %s: %s', self._name, exc)
         if canceled:

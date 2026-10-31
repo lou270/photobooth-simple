@@ -73,7 +73,11 @@ DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/ttyAMA3'
 
 class Config:
     def __init__(self):
-        self.config = configparser.ConfigParser()
+        # No interpolation: configparser would read a % as the start of a
+        # reference, and the admin form writes what the operator typed as it
+        # is. A WiFi password such as "50%off" then raised on the first read,
+        # every start, with the web server - the way to fix it - never up.
+        self.config = configparser.ConfigParser(interpolation=None)
         # UTF-8 whatever the locale: the admin form writes it that way, and an
         # event called "Soirée" is exactly what an operator types into it.
         loaded_files = self.config.read(CONFIG_PATH, encoding='utf-8')
@@ -228,11 +232,7 @@ class Config:
     # --- the event --------------------------------------------------------
 
     def _get_raw_string(self, section, option):
-        """A text the operator typed, read without interpolation.
-
-        configparser treats % as the start of a reference by default, and an
-        event called "100% fun" would stop the booth from starting.
-        """
+        """A text the operator typed, as typed: an event called "100% fun" included."""
         try:
             return self.config.get(section, option, raw=True, fallback='').strip()
         except configparser.Error as exc:

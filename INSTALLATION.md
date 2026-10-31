@@ -20,8 +20,8 @@ builds a DSLR booth with a printer and a webcam booth without one.
 Flash Raspberry Pi OS (or install Debian), get the machine on the network, then:
 
 ```bash
-git clone https://github.com/IArchi/py-photobooth-simple.git
-cd py-photobooth-simple
+git clone https://github.com/lou270/photobooth-simple.git
+cd photobooth-simple
 ./install.sh
 ```
 

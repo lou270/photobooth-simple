@@ -1,10 +1,15 @@
 """SessionStorage owns what a guest walks away with: saving must never lose files."""
 
+import os
+import stat
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from libs.core import SessionStorage
+from libs.file_utils import FileUtils
 
 
 def make_storage(tmp_path, **kwargs):
@@ -189,3 +194,45 @@ def test_healthy_disk_is_not_critical(tmp_path):
 
     assert not storage.is_disk_space_critical()
     assert storage.get_disk_usage()['total_gb'] > 0
+
+
+# --- text files replaced in one step ---------------------------------------------
+
+
+def test_a_text_file_is_replaced_and_keeps_its_permissions(tmp_path):
+    """config.ini holds the admin password: rewriting it must not open it up."""
+    config = tmp_path / 'config.ini'
+    config.write_text('[Global]\nADMIN_PASSWORD = old\n', encoding='utf-8')
+    os.chmod(config, 0o600)
+
+    FileUtils.write_text(str(config), '[Global]\nADMIN_PASSWORD = Soirée%2026\n')
+
+    assert config.read_text(encoding='utf-8') == '[Global]\nADMIN_PASSWORD = Soirée%2026\n'
+    assert stat.S_IMODE(config.stat().st_mode) == 0o600
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['config.ini']
+
+
+def test_a_write_that_fails_leaves_the_old_file_whole(tmp_path, monkeypatch):
+    """Opening config.ini for writing emptied it first: a power cut there left
+    a booth on its defaults, without its admin password."""
+    config = tmp_path / 'config.ini'
+    config.write_text('[Global]\nADMIN_PASSWORD = kept\n', encoding='utf-8')
+
+    def power_cut(*args):
+        raise OSError('power cut')
+
+    monkeypatch.setattr(os, 'replace', power_cut)
+    with pytest.raises(OSError):
+        FileUtils.write_text(str(config), 'half a file')
+
+    assert config.read_text(encoding='utf-8') == '[Global]\nADMIN_PASSWORD = kept\n'
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['config.ini']
+
+
+def test_a_new_text_file_is_readable_by_others(tmp_path):
+    template = tmp_path / 'strip.json'
+
+    FileUtils.write_text(str(template), '{}\n')
+
+    assert template.read_text() == '{}\n'
+    assert stat.S_IMODE(template.stat().st_mode) == 0o644

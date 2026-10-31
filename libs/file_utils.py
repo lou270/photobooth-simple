@@ -1,7 +1,16 @@
+import io
 import os
+import stat
 import tempfile
 import cv2
 import numpy as np
+from PIL import Image
+
+# Decoding allocates width x height x 3 bytes whatever the file weighs: a PNG of
+# a hundred kilobytes can announce 30000 x 30000 pixels, 2.7 GB once decoded,
+# which is the booth's process killed for want of memory. 100 MP is far above
+# anything a camera or a phone sends, and 300 MB at most once decoded.
+MAX_DECODED_PIXELS = 100_000_000
 
 class FileUtils:
     @staticmethod
@@ -11,6 +20,21 @@ class FileUtils:
         name, ext = os.path.splitext(filename)
         new_filename = f"{name}_small{ext}"
         return os.path.join(directory, new_filename)
+
+    @staticmethod
+    def decoded_size(data):
+        """(width, height) an image file announces, read from its header alone.
+
+        None when the bytes are not an image Pillow can read, or announce more
+        pixels than Pillow itself will open. Nothing is decoded: this is what to
+        ask before handing untrusted bytes to OpenCV, which allocates the whole
+        picture first.
+        """
+        try:
+            with Image.open(io.BytesIO(data)) as image:
+                return image.size
+        except Exception:
+            return None
 
     @staticmethod
     def write_image(path, image):
@@ -31,6 +55,42 @@ class FileUtils:
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        return path
+
+    @staticmethod
+    def write_text(path, text, encoding='utf-8'):
+        """Replace a text file in one step, keeping its permissions.
+
+        Opening the file for writing empties it, and a power cut before the
+        write is done left config.ini empty: a booth back on its defaults,
+        without its admin password. The text goes to a temporary file beside
+        it instead, flushed to the disk, then renamed over it. Its name ends
+        in .part, so nothing listing *.json ever takes it for a template.
+        """
+        # Through a symlink to the file it points at, which stays a symlink.
+        path = os.path.realpath(path)
+        directory = os.path.dirname(path) or '.'
+        try:
+            mode = stat.S_IMODE(os.stat(path).st_mode)
+        except FileNotFoundError:
+            mode = 0o644
+
+        fd, tmp_path = tempfile.mkstemp(prefix='.tmp_', suffix='.part', dir=directory)
+        try:
+            with os.fdopen(fd, 'w', encoding=encoding) as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # mkstemp makes it owner-only; config.ini keeps whatever it had.
+            os.chmod(tmp_path, mode)
+            os.replace(tmp_path, path)
+        except BaseException:
+            try:
+                os.remove(tmp_path)
             except OSError:
                 pass
             raise

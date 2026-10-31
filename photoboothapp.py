@@ -63,12 +63,36 @@ RINGLED = None
 # driver before we stop trying to release the device ourselves.
 DEVICE_RELEASE_TIMEOUT_SECONDS = 5
 
+# Raised by signal_handler, read by the application's clock.
+STOP_REQUESTED = False
+
+# How often the clock looks: well inside systemd's TimeoutStopSec.
+STOP_POLL_SECONDS = 0.1
+
 def signal_handler(sig, frame):
-    print("\nCtrl+C detected. Exiting gracefully...")
-    if RINGLED:
-        RINGLED.clear()
-    sys.exit(0)
+    """Ctrl+C, or systemd stopping the service: stop the way a restart does.
+
+    Stopping the application runs on_stop, which turns the ring light and the
+    chevrons off, releases the camera and stops the web server. Only Ctrl+C
+    used to be caught: the SIGTERM of `systemctl stop` or of a shutdown ended
+    the process where it stood, the lights still on.
+
+    Kivy is not called from here: a signal can interrupt the main thread
+    anywhere, holding any of its locks. The handler only raises a flag the
+    application's clock reads. Asked twice, or before the application runs,
+    it leaves at once, as it always did.
+    """
+    global STOP_REQUESTED
+    if STOP_REQUESTED or App.get_running_app() is None:
+        print("\nExiting now.")
+        if RINGLED:
+            RINGLED.clear()
+        sys.exit(0)
+    print("\nStopping...")
+    STOP_REQUESTED = True
+
 signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 class PhotoboothApp(App):
     def __init__(self, **kwargs):
@@ -154,6 +178,7 @@ class PhotoboothApp(App):
         self.pending_photo_tasks = []
         self._pending_photo_error = None
         self._pending_photo_lock = threading.Lock()
+        self._session_start_clock = None
         self.process_runner = ProcessRunner()
         self.usb_transfer = None
         self.web_server = None
@@ -172,6 +197,7 @@ class PhotoboothApp(App):
         watched a black window. Only the settings are read before this point.
         """
         Logger.info('PhotoboothApp: build().')
+        Clock.schedule_interval(self._stop_if_requested, STOP_POLL_SECONDS)
         self._touch_source = touch_source.install(Window, Clock.get_boottime)
         if self.FULLSCREEN:
             Window.fullscreen = True
@@ -181,6 +207,13 @@ class PhotoboothApp(App):
         _title_font, text_font = event.welcome_fonts(self.WELCOME_FONT)
         self.loading = LoadingScreen(font_name=text_font)
         return self.loading
+
+    def _stop_if_requested(self, dt):
+        if not STOP_REQUESTED:
+            return True
+        Logger.info('PhotoboothApp: stop requested by a signal')
+        self.stop()
+        return False
 
     def on_start(self):
         self._startup_steps = [
@@ -228,6 +261,9 @@ class PhotoboothApp(App):
             dslr_hot_pixel_filter=self.DSLR_HOT_PIXEL_FILTER,
             camera_backend=self.CAMERA_BACKEND,
         )
+        # Here and not in reset_devices(): the devices are rebuilt after every
+        # failed shot, and a print still waiting for paper is not forgotten.
+        self.devices.cancel_stale_print_jobs()
 
     def _load_templates(self):
         # Always at least one format: load_templates() falls back to a built-in
@@ -357,12 +393,13 @@ class PhotoboothApp(App):
         else:
             # The web server is a maintenance tool, not part of taking photos.
             # It can fail to bind for reasons that have nothing to do with the
-            # booth being usable: the maintenance AP not up yet at boot, or the
-            # port still held by a process left over from a crash. Refusing to
-            # run in front of guests over that is the worst possible trade.
+            # booth being usable: its address not up yet at boot, or the port
+            # still held by a process left over from a crash. Refusing to run
+            # in front of guests over that is the worst possible trade; its
+            # watchdog keeps trying in the background instead.
             Logger.error(
                 'PhotoboothApp: web server could not bind %s:%s, gallery and admin are '
-                'unavailable for this run',
+                'unavailable until a retry succeeds',
                 self.WEB_HOST,
                 self.WEB_PORT,
             )
@@ -384,9 +421,9 @@ class PhotoboothApp(App):
         Window.add_widget(self.sm)
         if self._requested_screen:
             self.sm.current = self._requested_screen
-        self.sm.current_screen.on_entry()
-        if self._requested_screen and self._requested_kwargs:
-            self.sm.current_screen.on_entry(self._requested_kwargs)
+        # Once, with what the screen was asked to show. A full disk at startup
+        # entered the error screen twice, bare then with its message.
+        self.sm.current_screen.on_entry(self._requested_kwargs or {})
 
     def on_stop(self):
         self._log_runtime_snapshot('shutdown')
@@ -435,6 +472,12 @@ class PhotoboothApp(App):
         A choice between one option is not a choice: with a single template
         installed, the format screen would be one tap asking nothing, so the
         booth goes straight to the camera.
+
+        Not before the previous guest's session is written, though. It is
+        moved out of DCIM/tmp in the background once they leave the review
+        screen, which takes seconds with a filter on a DSLR's photos: a guest
+        quick enough to be through the countdown by then saw their first shot
+        overwrite the last guest's, and end up in the last guest's session.
         """
         # A DSLR idles out of live view between guests and takes a second or
         # two to come back: start it now rather than when the countdown shows.
@@ -442,6 +485,31 @@ class PhotoboothApp(App):
             self.devices.wake_preview()
         except Exception as exc:
             Logger.warning('PhotoboothApp: could not wake the preview: %s', exc)
+        if self._session_start_clock is not None:
+            return  # a second touch while the first one waits
+        if self._is_writing_a_session():
+            Logger.info('PhotoboothApp: previous session still being written, starting once it is')
+            self._session_start_clock = Clock.schedule_interval(self._start_session_once_written, 0.1)
+            return
+        self._enter_session()
+
+    def _is_writing_a_session(self):
+        return self.has_pending_photo_tasks() or self.has_background_processes()
+
+    def _start_session_once_written(self, dt):
+        if self._is_writing_a_session() and self.get_current_screen_name() == ScreenMgr.START:
+            return True
+        self._session_start_clock = None
+        # Whoever touched the screen may have gone elsewhere in the meantime:
+        # the phones' photos, or a USB export that took the screen.
+        if self.get_current_screen_name() == ScreenMgr.START:
+            self._enter_session()
+        return False
+
+    def _enter_session(self):
+        # The welcome screen empties DCIM/tmp once it is idle, and may not
+        # have had the chance: a session starts from an empty one either way.
+        self.purge_tmp()
         if len(self.print_formats) == 1:
             self.transition_to(ScreenMgr.COUNTDOWN, shot=0, format=0)
         else:
@@ -790,7 +858,20 @@ class PhotoboothApp(App):
         return task_ids
 
     def start_photo_task(self, target, *args):
+        """Run `target` off the UI thread, after every photo task started before it.
+
+        They all work in DCIM/tmp. A photo picked from the phones' queue
+        empties it before copying itself in, and did so while the previous
+        guest's session was still being moved out of it, taking their photos
+        with it. One at a time, each finds the directory as the last one left it.
+        """
         def run_target():
+            for earlier_task in earlier_tasks:
+                earlier_task.join()
+            # What went wrong before belongs to an earlier session, whose
+            # screens have already moved on: this one starts with a clean slate.
+            with self._pending_photo_lock:
+                self._pending_photo_error = None
             try:
                 target(*args)
             except Exception:
@@ -802,6 +883,7 @@ class PhotoboothApp(App):
         with self._pending_photo_lock:
             self._pending_photo_error = None
             self.pending_photo_tasks = [task for task in self.pending_photo_tasks if task.is_alive()]
+            earlier_tasks = list(self.pending_photo_tasks)
             self.pending_photo_tasks.append(task)
         task.start()
 

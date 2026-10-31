@@ -6,7 +6,9 @@ escapes the remote directory reads any file the booth can.
 """
 
 import io
+import struct
 import sys
+import zlib
 from pathlib import Path
 
 import cv2
@@ -94,6 +96,37 @@ def test_a_photo_larger_than_the_limit_is_refused(tmp_path):
 
     with pytest.raises(RemoteSubmissionError):
         store.submit(jpeg_bytes(), SENDER)
+
+
+def png_announcing(width, height):
+    """A PNG whose header claims width x height: a few bytes, gigabytes once decoded."""
+    def chunk(kind, data):
+        return struct.pack('>I', len(data)) + kind + data + struct.pack('>I', zlib.crc32(kind + data))
+
+    header = struct.pack('>IIBBBBB', width, height, 8, 2, 0, 0, 0)
+    return (b'\x89PNG\r\n\x1a\n' + chunk(b'IHDR', header)
+            + chunk(b'IDAT', zlib.compress(b'\x00' * 64)) + chunk(b'IEND', b''))
+
+
+@pytest.mark.filterwarnings('ignore::PIL.Image.DecompressionBombWarning')
+@pytest.mark.parametrize('width,height,key', [
+    # Above the booth's own ceiling, below Pillow's: refused for its size.
+    (11000, 11000, 'web.remote.error.too_many_pixels'),
+    # So large Pillow will not even open it: 2.7 GB once decoded.
+    (30000, 30000, 'web.remote.error.unreadable'),
+])
+def test_a_photo_announcing_too_many_pixels_is_never_decoded(tmp_path, monkeypatch, width, height, key):
+    """A PNG of a hundred bytes used to be handed to OpenCV, which allocates the
+    whole picture before anything else: enough to kill the booth for memory."""
+    store = make_store(tmp_path)
+    monkeypatch.setattr(cv2, 'imread', lambda *args: pytest.fail('decoded an image it should have refused'))
+
+    with pytest.raises(RemoteSubmissionError) as refusal:
+        store.submit(png_announcing(width, height), SENDER)
+
+    assert refusal.value.key == key
+    assert store.list_entries() == []
+    assert sorted(p.name for p in Path(store.remote_directory).iterdir()) == []
 
 
 def test_an_unidentified_sender_is_refused(tmp_path):

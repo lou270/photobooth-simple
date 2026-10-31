@@ -1,3 +1,4 @@
+import signal
 import sys
 import threading
 import time
@@ -9,7 +10,9 @@ import numpy as np
 import pytest
 
 sys.path.append(str(Path(__file__).resolve().parents[1]))
-from libs.device_utils import Cv2Camera, DeviceUtils, Gphoto2Camera, Picamera2Camera
+import photoboothapp
+from libs.core import ProcessRunner
+from libs.device_utils import CupsPrinter, Cv2Camera, DeviceUtils, Gphoto2Camera, Picamera2Camera
 from libs.hardware import Camera, FakeCamera
 from libs.kivywidgets import KivyCamera
 from photoboothapp import PhotoboothApp
@@ -442,7 +445,13 @@ def test_a_session_wakes_the_preview_before_its_first_screen():
         devices=SimpleNamespace(wake_preview=lambda: calls.append('wake')),
         print_formats=[object()],
         transition_to=lambda screen, **kwargs: calls.append(screen),
+        _session_start_clock=None,
+        has_pending_photo_tasks=lambda: False,
+        has_background_processes=lambda: False,
+        purge_tmp=lambda: None,
     )
+    app._is_writing_a_session = lambda: PhotoboothApp._is_writing_a_session(app)
+    app._enter_session = lambda: PhotoboothApp._enter_session(app)
 
     PhotoboothApp.start_session(app)
 
@@ -616,3 +625,229 @@ def test_a_frame_id_that_never_moves_stops_the_preview():
         widget._update(None)
 
     assert len(reads) == 1
+
+
+# --- print jobs left behind ------------------------------------------------------
+
+
+class FakeCupsJobs:
+    """getJobs() the way CUPS answers it: only the attributes asked for."""
+
+    def __init__(self, jobs):
+        self._jobs = jobs
+        self.canceled = []
+
+    def getJobs(self, which_jobs='not-completed', requested_attributes=None):
+        wanted = set(requested_attributes or ('job-id', 'job-uri'))
+        return {job_id: {key: value for key, value in job.items() if key in wanted}
+                for job_id, job in self._jobs.items()}
+
+    def cancelJob(self, job_id):
+        self.canceled.append(job_id)
+
+
+def printer_with_jobs(jobs):
+    printer = CupsPrinter.__new__(CupsPrinter)
+    printer._name = 'photobooth'
+    printer._instance = FakeCupsJobs(jobs)
+    return printer
+
+
+def test_only_this_queues_forgotten_jobs_are_canceled():
+    now = 1_000_000
+    hour_ago = now - 3600
+    printer = printer_with_jobs({
+        1: {'job-printer-uri': 'ipp://localhost/printers/photobooth', 'time-at-creation': hour_ago, 'job-uri': 'ipp://localhost/jobs/1'},
+        2: {'job-printer-uri': 'ipp://localhost/printers/photobooth', 'time-at-creation': now - 60},
+        3: {'job-printer-uri': 'ipp://localhost/printers/office', 'time-at-creation': hour_ago},
+        4: {'job-printer-uri': 'ipp://localhost/printers/photobooth2', 'time-at-creation': hour_ago},
+        5: {'job-printer-uri': 'ipp://localhost/printers/photobooth'},
+    })
+
+    assert printer.cancel_stale_jobs(now=now) == 1
+    # 2 is a guest's print still on its way, 3 and 4 belong to other queues,
+    # and 5 says nothing about its age: none of them is the booth's to cancel.
+    assert printer._instance.canceled == [1]
+
+
+def test_forgotten_jobs_are_canceled_when_the_booth_starts_not_when_the_camera_resets(monkeypatch):
+    """Rebuilding the devices after a failed shot also rebuilt the printer, which
+    canceled its jobs: a guest's print waiting for paper went with them."""
+    built = []
+
+    class Devices:
+        def __init__(self, **kwargs):
+            self.cleanups = 0
+            built.append(self)
+
+        def cancel_stale_print_jobs(self):
+            self.cleanups += 1
+
+        def close(self):
+            return True
+
+    monkeypatch.setattr(photoboothapp, 'DeviceUtils', Devices)
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.PRINTER, app.CALIBRATION, app.CAMERA_BACKEND, app.SHARE = 'photobooth', None, 'fake', False
+    app._dslr_liveview_params, app._dslr_capture_params, app.DSLR_HOT_PIXEL_FILTER = {}, {}, False
+    app.process_runner = ProcessRunner()
+    app.sm = None
+
+    app._open_devices()
+    assert app.reset_devices(reason='capture_failure')
+
+    assert [devices.cleanups for devices in built] == [1, 0]
+
+
+# --- a webcam that went away ------------------------------------------------------
+
+
+def test_an_unplugged_webcam_does_not_spin_the_preview_thread():
+    """read() fails at once without the device, and the loop never slept."""
+    camera = Cv2Camera.__new__(Cv2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._preview_lock = threading.Lock()
+    camera._preview_frame = None
+    camera._preview_frame_id = 0
+    camera._preview_fps = 30
+    camera._preview_stop = False
+    reads = []
+
+    def unplugged():
+        reads.append(1)
+        return False, None
+
+    camera._read_latest_frame = unplugged
+    thread = threading.Thread(target=camera._preview_loop, daemon=True)
+    thread.start()
+    time.sleep(0.3)
+    camera._preview_stop = True
+    thread.join(1)
+
+    # Thirty frames a second for 0.3 s is nine reads; spinning was tens of thousands.
+    assert len(reads) < 30
+
+
+# --- stopping ----------------------------------------------------------------------
+
+
+def test_systemd_stopping_the_booth_is_caught_like_ctrl_c():
+    """SIGTERM used to end the process where it stood, the lights still on."""
+    assert signal.getsignal(signal.SIGTERM) is photoboothapp.signal_handler
+    assert signal.getsignal(signal.SIGINT) is photoboothapp.signal_handler
+
+
+def test_a_signal_asks_the_running_booth_to_stop_cleanly(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', False)
+    monkeypatch.setattr(photoboothapp.App, 'get_running_app', staticmethod(lambda: object()))
+    stopped = []
+    app = SimpleNamespace(stop=lambda: stopped.append(True))
+
+    photoboothapp.signal_handler(signal.SIGTERM, None)
+
+    assert photoboothapp.STOP_REQUESTED is True
+    assert PhotoboothApp._stop_if_requested(app, 0.1) is False
+    assert stopped == [True]
+
+
+def test_the_clock_leaves_a_booth_nobody_asked_to_stop_alone(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', False)
+    app = SimpleNamespace(stop=lambda: pytest.fail('stopped without being asked'))
+
+    assert PhotoboothApp._stop_if_requested(app, 0.1) is True
+
+
+def test_a_second_signal_leaves_at_once(monkeypatch):
+    monkeypatch.setattr(photoboothapp, 'STOP_REQUESTED', True)
+    monkeypatch.setattr(photoboothapp, 'RINGLED', None)
+    monkeypatch.setattr(photoboothapp.App, 'get_running_app', staticmethod(lambda: object()))
+
+    with pytest.raises(SystemExit):
+        photoboothapp.signal_handler(signal.SIGINT, None)
+
+
+# --- a capture that fails --------------------------------------------------------
+
+
+class RecordingFlash:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, stop=False):
+        self.calls.append('off' if stop else 'on')
+
+
+class CameraGone(Exception):
+    pass
+
+
+def test_a_failed_webcam_capture_turns_the_flash_off():
+    camera = Cv2Camera.__new__(Cv2Camera)
+    camera._camera_lock = threading.Lock()
+
+    def unplugged():
+        raise CameraGone('device disconnected')
+
+    camera._instance = SimpleNamespace(read=unplugged)
+    flash = RecordingFlash()
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg', flash_fn=flash)
+
+    assert flash.calls == ['on', 'off']
+
+
+def test_a_failed_pi_capture_turns_the_flash_off_and_goes_back_to_the_preview():
+    """Left in the still configuration, the preview read full-size frames."""
+    camera = Picamera2Camera.__new__(Picamera2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._still_config, camera._preview_config = 'still', 'preview'
+    modes = []
+
+    def capture_array():
+        raise CameraGone('frame timeout')
+
+    camera._instance = SimpleNamespace(switch_mode=modes.append, capture_array=capture_array)
+    flash = RecordingFlash()
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg', flash_fn=flash)
+
+    assert flash.calls == ['on', 'off']
+    assert modes == ['still', 'preview']
+    assert camera._capturing is False
+
+
+def test_a_pi_capture_that_works_goes_back_to_the_preview(tmp_path):
+    camera = Picamera2Camera.__new__(Picamera2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._still_config, camera._preview_config = 'still', 'preview'
+    modes = []
+    camera._instance = SimpleNamespace(
+        switch_mode=modes.append,
+        capture_array=lambda: np.full((90, 160, 3), 128, dtype=np.uint8),
+    )
+
+    camera.capture(str(tmp_path / 'capture-0.jpg'), aspect_ratio=1.0)
+
+    assert modes == ['still', 'preview']
+    assert cv2.imread(str(tmp_path / 'capture-0.jpg')).shape[:2] == (90, 90)
+
+
+def test_a_failed_dslr_capture_puts_the_live_view_settings_back():
+    camera = Gphoto2Camera.__new__(Gphoto2Camera)
+    camera._camera_lock = threading.Lock()
+    camera.dslr_capture_params = {'ISO': '400'}
+    camera.dslr_liveview_params = {'ISO': '1600'}
+    applied = []
+    camera._set_parameters = lambda params: applied.append(dict(params))
+
+    def capture_image():
+        raise CameraGone('PTP timeout')
+
+    camera._instance = SimpleNamespace(capture_image=capture_image)
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg')
+
+    assert applied == [{'ISO': '400'}, {'ISO': '1600'}]

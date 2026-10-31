@@ -367,6 +367,23 @@ def test_the_watchdog_gives_up_instead_of_retrying_forever(tmp_path):
     assert len(attempts) == len(WebServer.WATCHDOG_BACKOFF_SECONDS)
 
 
+def test_a_first_start_that_fails_is_retried(tmp_path, monkeypatch):
+    """Only a start that had worked used to be watched: a first bind that failed
+    left the gallery and the admin down for the whole evening."""
+    import libs.webserver.server as server_module
+
+    def busy_port(*args, **kwargs):
+        raise OSError(98, 'Address already in use')
+
+    monkeypatch.setattr(server_module, 'make_server', busy_port)
+    server = WebServer(str(tmp_path / 'save'), admin_password=ADMIN_PASSWORD)
+    watched = []
+    server._ensure_watchdog = lambda: watched.append(True)
+
+    assert server.start() is False
+    assert watched == [True]
+
+
 def test_the_watchdog_backoff_grows():
     delays = WebServer.WATCHDOG_BACKOFF_SECONDS
     assert list(delays) == sorted(delays)
