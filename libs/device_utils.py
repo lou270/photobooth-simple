@@ -119,10 +119,15 @@ class Cv2Camera(Camera):
             return self._preview_frame_id
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
+        flash = flash_fn if flash_fn and not self.has_physical_flash() else None
         with self._camera_lock:
-            if flash_fn and not self.has_physical_flash(): flash_fn()
-            ret, im = self._instance.read()
-            if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
+            if flash: flash()
+            try:
+                ret, im = self._instance.read()
+            finally:
+                # Off whatever happened: a read that raised left the ring light
+                # white until the devices were rebuilt.
+                if flash: flash(stop=True)
         if not ret:
             raise IOError('OpenCV camera capture failed')
         #im = cv2.flip(im, 0)
@@ -479,15 +484,19 @@ class Gphoto2Camera(Camera):
                 Logger.debug('Gphoto2Camera: could not apply capture params: %s', e)
 
             # Capture photo
-            if flash_fn and not self.has_physical_flash(): flash_fn()
-            cfile = self._instance.capture_image()
-            if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
-
-            # Set DSLR back to liveview before the preview thread can resume.
+            flash = flash_fn if flash_fn and not self.has_physical_flash() else None
+            if flash: flash()
             try:
-                self._set_parameters(self.dslr_liveview_params)
-            except Exception as e:
-                Logger.debug('Gphoto2Camera: could not apply liveview params: %s', e)
+                cfile = self._instance.capture_image()
+            finally:
+                if flash: flash(stop=True)
+                # Set DSLR back to liveview before the preview thread can
+                # resume, whether the shot worked or not: a capture that raised
+                # left the body on its capture exposure for the preview.
+                try:
+                    self._set_parameters(self.dslr_liveview_params)
+                except Exception as e:
+                    Logger.debug('Gphoto2Camera: could not apply liveview params: %s', e)
 
         # Rotate and crop if necessary
         buf = np.frombuffer(cfile.get_data(), dtype=np.uint8)
@@ -592,18 +601,32 @@ class Picamera2Camera(Camera):
         return im
 
     def capture(self, output_name, aspect_ratio=None, zoom=None, flash_fn=None):
+        flash = flash_fn if flash_fn and not self.has_physical_flash() else None
         self._capturing = True
         try:
             with self._camera_lock:
                 self._instance.switch_mode(self._still_config)
-                if flash_fn and not self.has_physical_flash(): flash_fn()
-                im = self._instance.capture_array()
-                if flash_fn and not self.has_physical_flash(): flash_fn(stop=True)
-                #im = cv2.rotate(im, cv2.ROTATE_180)
-                im = self._crop_to_aspect_ratio(im, aspect_ratio)
+                try:
+                    if flash: flash()
+                    try:
+                        im = self._instance.capture_array()
+                    finally:
+                        if flash: flash(stop=True)
+                except Exception:
+                    # Back to the preview before the error goes up: left in the
+                    # still configuration, the preview read full-size frames,
+                    # and the ring light stayed white, until the devices were
+                    # rebuilt. The capture's own error is the one reported.
+                    try:
+                        self._instance.switch_mode(self._preview_config)
+                    except Exception as exc:
+                        Logger.warning('Picamera2Camera: could not go back to the preview: %s', exc)
+                    raise
                 self._instance.switch_mode(self._preview_config)
         finally:
             self._capturing = False
+        #im = cv2.rotate(im, cv2.ROTATE_180)
+        im = self._crop_to_aspect_ratio(im, aspect_ratio)
         im = self._apply_capture_zoom(im, zoom)
 
         self._write_capture(output_name, im)

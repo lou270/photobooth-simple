@@ -764,3 +764,90 @@ def test_a_second_signal_leaves_at_once(monkeypatch):
 
     with pytest.raises(SystemExit):
         photoboothapp.signal_handler(signal.SIGINT, None)
+
+
+# --- a capture that fails --------------------------------------------------------
+
+
+class RecordingFlash:
+    def __init__(self):
+        self.calls = []
+
+    def __call__(self, stop=False):
+        self.calls.append('off' if stop else 'on')
+
+
+class CameraGone(Exception):
+    pass
+
+
+def test_a_failed_webcam_capture_turns_the_flash_off():
+    camera = Cv2Camera.__new__(Cv2Camera)
+    camera._camera_lock = threading.Lock()
+
+    def unplugged():
+        raise CameraGone('device disconnected')
+
+    camera._instance = SimpleNamespace(read=unplugged)
+    flash = RecordingFlash()
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg', flash_fn=flash)
+
+    assert flash.calls == ['on', 'off']
+
+
+def test_a_failed_pi_capture_turns_the_flash_off_and_goes_back_to_the_preview():
+    """Left in the still configuration, the preview read full-size frames."""
+    camera = Picamera2Camera.__new__(Picamera2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._still_config, camera._preview_config = 'still', 'preview'
+    modes = []
+
+    def capture_array():
+        raise CameraGone('frame timeout')
+
+    camera._instance = SimpleNamespace(switch_mode=modes.append, capture_array=capture_array)
+    flash = RecordingFlash()
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg', flash_fn=flash)
+
+    assert flash.calls == ['on', 'off']
+    assert modes == ['still', 'preview']
+    assert camera._capturing is False
+
+
+def test_a_pi_capture_that_works_goes_back_to_the_preview(tmp_path):
+    camera = Picamera2Camera.__new__(Picamera2Camera)
+    camera._camera_lock = threading.Lock()
+    camera._still_config, camera._preview_config = 'still', 'preview'
+    modes = []
+    camera._instance = SimpleNamespace(
+        switch_mode=modes.append,
+        capture_array=lambda: np.full((90, 160, 3), 128, dtype=np.uint8),
+    )
+
+    camera.capture(str(tmp_path / 'capture-0.jpg'), aspect_ratio=1.0)
+
+    assert modes == ['still', 'preview']
+    assert cv2.imread(str(tmp_path / 'capture-0.jpg')).shape[:2] == (90, 90)
+
+
+def test_a_failed_dslr_capture_puts_the_live_view_settings_back():
+    camera = Gphoto2Camera.__new__(Gphoto2Camera)
+    camera._camera_lock = threading.Lock()
+    camera.dslr_capture_params = {'ISO': '400'}
+    camera.dslr_liveview_params = {'ISO': '1600'}
+    applied = []
+    camera._set_parameters = lambda params: applied.append(dict(params))
+
+    def capture_image():
+        raise CameraGone('PTP timeout')
+
+    camera._instance = SimpleNamespace(capture_image=capture_image)
+
+    with pytest.raises(CameraGone):
+        camera.capture('unused.jpg')
+
+    assert applied == [{'ISO': '400'}, {'ISO': '1600'}]
