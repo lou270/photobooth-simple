@@ -1,5 +1,4 @@
 import os
-import subprocess
 import threading
 import time
 import traceback
@@ -7,7 +6,6 @@ import numpy as np
 from kivy.logger import Logger
 
 from libs import print_sizes
-from libs.file_utils import FileUtils
 from libs.hardware import Camera, FakeCamera
 
 try:
@@ -23,14 +21,13 @@ except ImportError:
 
 try:
     import cv2
-    import numpy as np
     from libs.imaging.hot_pixels import remove_hot_pixels
 except ImportError:
     cv2 = None
 
 try:
     import libs.gphoto2 as gp
-except:
+except Exception:
     gp = None
 
 class PrintDevice:

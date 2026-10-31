@@ -1,6 +1,6 @@
 """What a guest can reach: the collages, and the page they land on first."""
 
-from flask import Blueprint, g, make_response, redirect, render_template, request, send_file, session
+from flask import Blueprint, g, make_response, redirect, render_template, request, send_file
 
 from libs import i18n
 from libs.webserver import paths

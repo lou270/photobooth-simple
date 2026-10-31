@@ -421,9 +421,9 @@ class PhotoboothApp(App):
         Window.add_widget(self.sm)
         if self._requested_screen:
             self.sm.current = self._requested_screen
-        self.sm.current_screen.on_entry()
-        if self._requested_screen and self._requested_kwargs:
-            self.sm.current_screen.on_entry(self._requested_kwargs)
+        # Once, with what the screen was asked to show. A full disk at startup
+        # entered the error screen twice, bare then with its message.
+        self.sm.current_screen.on_entry(self._requested_kwargs or {})
 
     def on_stop(self):
         self._log_runtime_snapshot('shutdown')

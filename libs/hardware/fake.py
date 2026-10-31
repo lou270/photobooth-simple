@@ -5,7 +5,6 @@ import time
 import cv2
 import numpy as np
 
-from libs.file_utils import FileUtils
 from libs.hardware.camera import Camera
 
 Logger = logging.getLogger('kivy.photobooth')
