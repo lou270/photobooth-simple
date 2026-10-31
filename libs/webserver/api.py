@@ -14,6 +14,7 @@ from kivy.logger import Logger
 from PIL import Image
 
 from libs import i18n
+from libs.file_utils import FileUtils
 from libs.template_collage import TemplateCollage
 from libs.webserver import paths
 from libs.template_schema import (
@@ -171,9 +172,9 @@ def create_blueprint(server):
                 filename = paths.unique_template_filename(server.templates_directory, filename)
 
             template_path = os.path.join(server.templates_directory, filename)
-            with open(template_path, 'w', encoding='utf-8') as handle:
-                json.dump(template_data, handle, indent=2, ensure_ascii=False)
-                handle.write('\n')
+            # In one step: the booth reloads its templates as soon as one is
+            # saved, and a half-written file is one it refuses.
+            FileUtils.write_text(template_path, json.dumps(template_data, indent=2, ensure_ascii=False) + '\n')
         except Exception as e:
             Logger.error(f'WebServer: Error saving template {filename}: {e}')
             return jsonify({'error': 'Unable to save template'}), 500

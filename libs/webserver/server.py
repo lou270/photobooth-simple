@@ -14,6 +14,7 @@ from werkzeug.serving import make_server
 from kivy.logger import Logger
 
 from libs import event, i18n, print_sizes
+from libs.file_utils import FileUtils
 from libs.login_throttle import LoginThrottle
 from libs.webserver import config_form, paths
 from libs.template_schema import TemplateValidationError, validate_template
@@ -428,10 +429,9 @@ class WebServer:
             raise
 
     def _save_config_text(self, content):
-        """Persist config.ini content to disk."""
+        """Persist config.ini content to disk, in one step: see FileUtils.write_text."""
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as handle:
-                handle.write(content)
+            FileUtils.write_text(self.config_file, content)
         except Exception as e:
             Logger.error(f'WebServer: Error saving config file: {e}')
             raise

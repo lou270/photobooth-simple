@@ -1,5 +1,6 @@
 import io
 import os
+import stat
 import tempfile
 import cv2
 import numpy as np
@@ -54,6 +55,42 @@ class FileUtils:
             try:
                 if os.path.exists(tmp_path):
                     os.remove(tmp_path)
+            except OSError:
+                pass
+            raise
+
+        return path
+
+    @staticmethod
+    def write_text(path, text, encoding='utf-8'):
+        """Replace a text file in one step, keeping its permissions.
+
+        Opening the file for writing empties it, and a power cut before the
+        write is done left config.ini empty: a booth back on its defaults,
+        without its admin password. The text goes to a temporary file beside
+        it instead, flushed to the disk, then renamed over it. Its name ends
+        in .part, so nothing listing *.json ever takes it for a template.
+        """
+        # Through a symlink to the file it points at, which stays a symlink.
+        path = os.path.realpath(path)
+        directory = os.path.dirname(path) or '.'
+        try:
+            mode = stat.S_IMODE(os.stat(path).st_mode)
+        except FileNotFoundError:
+            mode = 0o644
+
+        fd, tmp_path = tempfile.mkstemp(prefix='.tmp_', suffix='.part', dir=directory)
+        try:
+            with os.fdopen(fd, 'w', encoding=encoding) as handle:
+                handle.write(text)
+                handle.flush()
+                os.fsync(handle.fileno())
+            # mkstemp makes it owner-only; config.ini keeps whatever it had.
+            os.chmod(tmp_path, mode)
+            os.replace(tmp_path, path)
+        except BaseException:
+            try:
+                os.remove(tmp_path)
             except OSError:
                 pass
             raise
