@@ -148,6 +148,11 @@ class UsbTransfer:
         for item in src_path.iterdir():
             if self._stop_event.is_set():
                 return copied_files
+            # Hidden files are the booth's own bookkeeping: .stats.json, which
+            # lists every session of the evening, and temporary files being
+            # written. Nothing a guest's drive should carry.
+            if item.name.startswith('.'):
+                continue
             # The gallery's grid thumbnail lives in the session so the web page
             # can serve something small. On a guest's USB stick it is only a
             # second, worse copy of the collage beside the real one.
@@ -160,7 +165,12 @@ class UsbTransfer:
             else:
                 if not d.exists():
                     Clock.schedule_once(lambda dt, label=item.name: self._app.sm.get_screen(ScreenMgr.COPYING).on_update({'label': label}), 0)
-                    shutil.copy2(s, d)
+                    # Under another name until it is whole: a drive pulled out
+                    # mid-copy left a truncated photo that every later export
+                    # skipped, since a file by that name already existed.
+                    partial = d.with_name(d.name + '.part')
+                    shutil.copy2(s, partial)
+                    os.replace(partial, d)
                     copied_files += 1
 
         return copied_files
