@@ -1,6 +1,7 @@
-import os
-import time
 import ctypes
+import logging
+import subprocess
+import time
 
 RETRIES = 1
 GP_CAPTURE_IMAGE = 0
@@ -19,6 +20,9 @@ GP_WIDGET_TEXT_TYPES = (2, 5, 6)   # TEXT, RADIO, MENU: all carry a char*
 GP_WIDGET_INT_TYPES = (GP_WIDGET_TOGGLE, GP_WIDGET_DATE)
 
 PTR = ctypes.pointer
+
+# Child of Kivy's logger, without importing Kivy: see libs/hardware/camera.py.
+Logger = logging.getLogger('kivy.photobooth')
 
 # Loaded on first use rather than at import: this module has to be importable,
 # and its logic testable, on a machine with no libgphoto2 at all.
@@ -241,9 +245,23 @@ class camera():
 
             # Error (Could not lock the device)
             elif ans == -60:
-                os.system('gvfs-mount -s gphoto2')
+                release_from_gvfs()
                 time.sleep(1)
         check(ans)
+
+def release_from_gvfs():
+    """Ask GVfs to unmount the camera it claimed, the way a desktop does.
+
+    gvfs-mount, which this used to run, is gone from current distributions:
+    gio replaced it. A booth without a desktop has neither, and no GVfs to
+    hold the camera either, so a missing command is not an error.
+    """
+    try:
+        subprocess.run(['gio', 'mount', '-s', 'gphoto2'], timeout=5, check=False,
+                       stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.TimeoutExpired) as exc:
+        Logger.debug('gphoto2: could not ask GVfs to release the camera: %s', exc)
+
 
 class cameraFile():
     def __init__(self, cam = None, srcfolder = None, srcfilename = None):
