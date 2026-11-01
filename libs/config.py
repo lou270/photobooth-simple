@@ -66,6 +66,14 @@ MAX_RINGLED_PIXELS = 256
 DEFAULT_CHEVRONS_PINS = (17, 27, 22)
 DEFAULT_CHEVRONS_IDLE_PERCENT = 30
 DEFAULT_CHEVRONS_PWM_FREQUENCY = 200
+# The wave on the welcome screen: points above the ambient level, and the
+# seconds one pass takes. Shorter than a second it reads as a flicker.
+DEFAULT_CHEVRONS_WAVE_PERCENT = 15
+DEFAULT_CHEVRONS_WAVE_SECONDS = 3.0
+MIN_CHEVRONS_WAVE_SECONDS = 1.0
+MAX_CHEVRONS_WAVE_SECONDS = 20.0
+# A row lit by the countdown; the shot itself always goes off at 100 %.
+DEFAULT_CHEVRONS_COUNTDOWN_PERCENT = 100
 # Where the PWM comes from: the Pi's own pins, or an RP2040 on its serial port.
 CHEVRONS_DRIVERS = ('gpio', 'serial')
 # UART3 (dtoverlay=uart3), TX on GPIO 4: leaves the console port and Bluetooth alone.
@@ -240,6 +248,21 @@ class Config:
     def get_chevrons_idle_percent(self):
         """Power of the chevrons between photos, from 0 (off) to 100."""
         percent = self._get_int(('Lights',), 'CHEVRONS_IDLE_PERCENT', fallback=DEFAULT_CHEVRONS_IDLE_PERCENT)
+        return min(100, max(0, percent))
+
+    def get_chevrons_wave_percent(self):
+        """How many points above the ambient level the welcome wave peaks: 0 holds it still."""
+        percent = self._get_int(('Lights',), 'CHEVRONS_WAVE_PERCENT', fallback=DEFAULT_CHEVRONS_WAVE_PERCENT)
+        return min(100, max(0, percent))
+
+    def get_chevrons_wave_seconds(self):
+        """Seconds the welcome wave takes to roll across the three rows and round again."""
+        seconds = self._get_float(('Lights',), 'CHEVRONS_WAVE_SECONDS', fallback=DEFAULT_CHEVRONS_WAVE_SECONDS)
+        return min(MAX_CHEVRONS_WAVE_SECONDS, max(MIN_CHEVRONS_WAVE_SECONDS, seconds))
+
+    def get_chevrons_countdown_percent(self):
+        """Power of a row the countdown has lit, from 0 to 100: the shot is at 100 whatever this says."""
+        percent = self._get_int(('Lights',), 'CHEVRONS_COUNTDOWN_PERCENT', fallback=DEFAULT_CHEVRONS_COUNTDOWN_PERCENT)
         return min(100, max(0, percent))
 
     def get_chevrons_pwm_frequency(self):

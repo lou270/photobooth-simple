@@ -568,6 +568,18 @@
             "label": "Chevrons between photos",
             "help": "Power of the chevrons while nobody is being photographed. A slightly brighter wave rolls towards the lens on the welcome screen; the countdown lights them from the outside in, and the shot is taken at full power. 0 keeps them off in between."
           },
+          "CHEVRONS_WAVE_PERCENT": {
+            "label": "Chevrons wave brightness",
+            "help": "How many points above the level between photos the wave on the welcome screen peaks. 15 is a gentle swell; 0 holds the chevrons still. Never goes past 100 %."
+          },
+          "CHEVRONS_WAVE_SECONDS": {
+            "label": "Chevrons wave duration",
+            "help": "How long the wave on the welcome screen takes to roll from the outer row to the inner one and start again. Lower is faster."
+          },
+          "CHEVRONS_COUNTDOWN_PERCENT": {
+            "label": "Chevrons during the countdown",
+            "help": "Power of the rows the countdown lights, from the outside in. The shot itself is always taken at 100 %, whatever this says."
+          },
           "CHEVRONS_PWM_FREQUENCY": {
             "label": "Chevrons PWM frequency",
             "help": "Raise it if the live preview shows bands. On the Raspberry Pi's pins, lower it if the chevrons waver or look brighter than set. The RP2040 holds 1000 Hz and more. The shot itself is taken at 100 %, with no PWM."

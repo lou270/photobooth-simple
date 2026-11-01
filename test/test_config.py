@@ -395,6 +395,33 @@ def test_the_chevrons_ambient_level_is_a_percentage(tmp_path, monkeypatch, raw, 
     assert config.get_chevrons_idle_percent() == expected
 
 
+@pytest.mark.parametrize('raw,expected', [('25', 25), ('0', 0), ('-5', 0), ('150', 100), ('strong', 15)])
+def test_the_chevrons_wave_rises_a_percentage_above_the_ambient_level(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Lights]
+        CHEVRONS_WAVE_PERCENT = {raw}
+    """)
+    assert config.get_chevrons_wave_percent() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [('4.5', 4.5), ('2', 2.0), ('0.2', 1.0), ('600', 20.0), ('slow', 3.0)])
+def test_the_chevrons_wave_takes_a_watchable_time(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Lights]
+        CHEVRONS_WAVE_SECONDS = {raw}
+    """)
+    assert config.get_chevrons_wave_seconds() == expected
+
+
+@pytest.mark.parametrize('raw,expected', [('60', 60), ('-5', 0), ('150', 100), ('dim', 100)])
+def test_the_chevrons_countdown_level_is_a_percentage(tmp_path, monkeypatch, raw, expected):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Lights]
+        CHEVRONS_COUNTDOWN_PERCENT = {raw}
+    """)
+    assert config.get_chevrons_countdown_percent() == expected
+
+
 @pytest.mark.parametrize('raw,expected', [('400', 400), ('10', 50), ('99999', 2000), ('fast', 200)])
 def test_the_chevrons_pwm_frequency_stays_flicker_free(tmp_path, monkeypatch, raw, expected):
     config = write_config(tmp_path, monkeypatch, f"""

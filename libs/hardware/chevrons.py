@@ -4,8 +4,8 @@ Each row (the left and right chevron of the same rank, wired together) hangs
 off its own MOSFET, so the three are driven independently. On the welcome
 screen a slow wave, a little brighter than the ambient level, rolls towards
 the lens; elsewhere they hold that ambient level. The countdown lights them
-from the outside in, outer row at 3, middle at 2, inner at 1, and the shot is
-taken with all three at full power.
+from the outside in, outer row at 3, middle at 2, inner at 1, at a level of
+their own, and the shot is taken with all three at full power.
 
 The PWM comes either from the Pi's own GPIO, or from an RP2040 on the Pi's
 serial port running firmware/chevrons_rp2040/main.py. The Pi can only make
@@ -40,6 +40,8 @@ DRIVERS = ('gpio', 'serial')
 # Inner (next to the lens), middle, outer: the wiring the chevrons were built with.
 DEFAULT_PINS = (17, 27, 22)
 DEFAULT_IDLE_PERCENT = 30
+# How bright a row lit by the countdown is. The shot itself is always at 100 %.
+DEFAULT_COUNTDOWN_PERCENT = 100
 DEFAULT_SERIAL_PORT = '/dev/ttyAMA3'
 SERIAL_BAUDRATE = 115200
 
@@ -56,10 +58,10 @@ DEFAULT_PWM_FREQUENCY = 200
 GAMMA = 2.2
 
 # The welcome screen's wave: how much brighter than the ambient level it
-# peaks, as the eye sees it, and how long it takes to roll from the outer row
-# to the inner one and round again.
-WAVE_BOOST = 0.15
-WAVE_PERIOD_SECONDS = 3.0
+# peaks, in points as the eye sees it, and how long it takes to roll from the
+# outer row to the inner one and round again.
+DEFAULT_WAVE_PERCENT = 15
+DEFAULT_WAVE_SECONDS = 3.0
 # Where each row's crest sits in the period, inner first: the outer row
 # leads, so the wave travels towards the lens.
 WAVE_CRESTS = (2 / 3, 1 / 3, 0.0)
@@ -67,9 +69,9 @@ WAVE_HALF_WIDTH = 0.35
 FRAME_SECONDS = 1 / 50
 
 
-def wave_levels(seconds, idle, boost=WAVE_BOOST):
+def wave_levels(seconds, idle, boost=DEFAULT_WAVE_PERCENT / 100, period=DEFAULT_WAVE_SECONDS):
     """Brightness of each row, inner first, `seconds` into the welcome wave."""
-    phase = (seconds / WAVE_PERIOD_SECONDS) % 1.0
+    phase = (seconds / period) % 1.0
     peak = min(1.0, idle + boost)
     levels = []
     for crest in WAVE_CRESTS:
@@ -80,13 +82,14 @@ def wave_levels(seconds, idle, boost=WAVE_BOOST):
     return levels
 
 
-def countdown_levels(remaining, idle):
+def countdown_levels(remaining, idle, lit=DEFAULT_COUNTDOWN_PERCENT / 100):
     """Brightness of each row, inner first, with `remaining` seconds on the counter.
 
     The outer row lights at 3, the middle one joins it at 2 and the inner one
-    at 1; a longer countdown holds the ambient level until it reaches 3.
+    at 1, each at `lit`; a longer countdown holds the ambient level until it
+    reaches 3.
     """
-    return [1.0 if remaining <= rows_from_lens else idle for rows_from_lens in (1, 2, 3)]
+    return [lit if remaining <= rows_from_lens else idle for rows_from_lens in (1, 2, 3)]
 
 
 def duty_cycle(level):
@@ -216,9 +219,13 @@ class PwmChevrons(Chevrons):
 
     WORKER_STOP_TIMEOUT_SECONDS = 1
 
-    def __init__(self, rows, idle_percent=DEFAULT_IDLE_PERCENT):
+    def __init__(self, rows, idle_percent=DEFAULT_IDLE_PERCENT, wave_percent=DEFAULT_WAVE_PERCENT,
+                 wave_seconds=DEFAULT_WAVE_SECONDS, countdown_percent=DEFAULT_COUNTDOWN_PERCENT):
         self._rows = rows
         self._idle = min(100, max(0, idle_percent)) / 100
+        self._countdown = min(100, max(0, countdown_percent)) / 100
+        self._wave_boost = min(100, max(0, wave_percent)) / 100
+        self._wave_period = max(FRAME_SECONDS, wave_seconds)
         self._proc = None
         self._stop = threading.Event()
         self._lock = threading.Lock()
@@ -266,10 +273,14 @@ class PwmChevrons(Chevrons):
         the rows can never drift from the number the guests are reading.
         """
         Logger.info('Chevrons: show_countdown(%s).', remaining)
-        self._show(countdown_levels(remaining, self._idle))
+        self._show(countdown_levels(remaining, self._idle, self._countdown))
 
     def wave(self):
         Logger.info('Chevrons: wave().')
+        if not self._wave_boost:
+            # A flat wave: nothing to redraw fifty times a second.
+            self._hold(self._idle)
+            return
         with self._lock:
             self._stop_worker()
             self._proc = threading.Thread(target=self._wave, name='chevrons-wave', daemon=True)
@@ -278,7 +289,7 @@ class PwmChevrons(Chevrons):
     def _wave(self):
         start = time.monotonic()
         while True:
-            self._set(wave_levels(time.monotonic() - start, self._idle))
+            self._set(wave_levels(time.monotonic() - start, self._idle, self._wave_boost, self._wave_period))
             if self._stop.wait(FRAME_SECONDS):
                 return
 
@@ -324,7 +335,9 @@ def _open_serial_rows(port, frequency, idle_percent):
 
 
 def create_chevrons(enabled=True, driver='gpio', pins=DEFAULT_PINS, idle_percent=DEFAULT_IDLE_PERCENT,
-                    frequency=DEFAULT_PWM_FREQUENCY, serial_port=DEFAULT_SERIAL_PORT):
+                    frequency=DEFAULT_PWM_FREQUENCY, serial_port=DEFAULT_SERIAL_PORT,
+                    wave_percent=DEFAULT_WAVE_PERCENT, wave_seconds=DEFAULT_WAVE_SECONDS,
+                    countdown_percent=DEFAULT_COUNTDOWN_PERCENT):
     """Return usable chevrons, never raising.
 
     A missing library, a machine that is not a Pi or an unplugged RP2040 must
@@ -343,7 +356,9 @@ def create_chevrons(enabled=True, driver='gpio', pins=DEFAULT_PINS, idle_percent
         Logger.warning('Chevrons: unavailable (%s), continuing without them', exc)
         return NullChevrons()
 
-    Logger.info('Chevrons: enabled on %s, ambient %s%%, %s Hz', description, idle_percent, frequency)
-    chevrons = PwmChevrons(rows, idle_percent=idle_percent)
+    Logger.info('Chevrons: enabled on %s, ambient %s%%, wave +%s%% every %s s, countdown %s%%, %s Hz',
+                description, idle_percent, wave_percent, wave_seconds, countdown_percent, frequency)
+    chevrons = PwmChevrons(rows, idle_percent=idle_percent, wave_percent=wave_percent, wave_seconds=wave_seconds,
+                           countdown_percent=countdown_percent)
     chevrons.idle()
     return chevrons

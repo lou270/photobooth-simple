@@ -9,7 +9,8 @@ import pytest
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 import libs.hardware.chevrons as chevrons_module
 from libs.hardware.chevrons import (
-    GAMMA, WAVE_BOOST, GpioRows, NullChevrons, PwmChevrons, SerialRows, countdown_levels, create_chevrons, wave_levels,
+    DEFAULT_WAVE_PERCENT, GAMMA, GpioRows, NullChevrons, PwmChevrons, SerialRows, countdown_levels, create_chevrons,
+    wave_levels,
 )
 
 
@@ -28,9 +29,9 @@ class FakeRow:
         self.closed = True
 
 
-def make_chevrons(idle_percent=30):
+def make_chevrons(idle_percent=30, **wave):
     rows = [FakeRow(), FakeRow(), FakeRow()]
-    return PwmChevrons(GpioRows(rows), idle_percent=idle_percent), rows
+    return PwmChevrons(GpioRows(rows), idle_percent=idle_percent, **wave), rows
 
 
 def test_disabled_chevrons_do_nothing():
@@ -342,6 +343,28 @@ def test_the_countdown_shows_on_the_rows():
     assert [row.value for row in rows] == pytest.approx([0.3 ** GAMMA, 1.0, 1.0])
 
 
+def test_the_countdown_can_light_the_rows_below_full_power():
+    assert countdown_levels(2, 0.3, lit=0.6) == [0.3, 0.6, 0.6]
+
+
+def test_a_dimmed_countdown_still_takes_the_shot_at_full_power():
+    chevrons, rows = make_chevrons(idle_percent=30, countdown_percent=60)
+
+    chevrons.show_countdown(1)
+    assert [row.value for row in rows] == pytest.approx([0.6 ** GAMMA] * 3)
+    chevrons.flash()
+    assert [row.value for row in rows] == [1.0, 1.0, 1.0]
+
+
+def test_the_countdown_level_reaches_the_chevrons(monkeypatch):
+    monkeypatch.setattr(chevrons_module, 'PWMLED', FakeRow)
+
+    chevrons = create_chevrons(enabled=True, countdown_percent=70)
+    chevrons.show_countdown(1)
+
+    assert [row.value for row in chevrons._rows._rows] == pytest.approx([0.7 ** GAMMA] * 3)
+
+
 def test_the_wave_reaches_the_outer_row_first_and_the_inner_row_last():
     crest_of = {}
     for step in range(300):
@@ -357,7 +380,20 @@ def test_the_wave_reaches_the_outer_row_first_and_the_inner_row_last():
 def test_the_wave_stays_between_the_ambient_level_and_a_little_above():
     for step in range(300):
         for level in wave_levels(step / 100, 0.3):
-            assert 0.3 <= level <= 0.3 + WAVE_BOOST + 1e-9
+            assert 0.3 <= level <= 0.3 + DEFAULT_WAVE_PERCENT / 100 + 1e-9
+
+
+def test_the_wave_peaks_as_high_as_it_is_told():
+    peak = max(max(wave_levels(step / 100, 0.3, boost=0.4)) for step in range(300))
+    assert peak == pytest.approx(0.7)
+
+
+def test_a_shorter_period_rolls_the_wave_faster():
+    def crest_moment(period):
+        moments = [step / 1000 for step in range(int(period * 1000))]
+        return max(moments, key=lambda moment: wave_levels(moment, 0.3, period=period)[0])
+
+    assert crest_moment(1.5) == pytest.approx(crest_moment(3.0) / 2, abs=0.002)
 
 
 def test_the_wave_never_goes_past_full_power():
@@ -375,6 +411,35 @@ def test_the_wave_moves_until_something_else_is_shown():
     assert len(set(rows[0].history)) > 2
     assert [row.value for row in rows] == [1.0, 1.0, 1.0]
     assert chevrons._proc is None
+
+
+def test_the_wave_plays_the_brightness_it_was_configured_with():
+    chevrons, rows = make_chevrons(idle_percent=30, wave_percent=50, wave_seconds=1)
+
+    chevrons.wave()
+    time.sleep(0.3)
+    chevrons.idle()
+
+    # The outer row leads, so it crests as the wave starts.
+    assert max(rows[2].history) > (0.3 + DEFAULT_WAVE_PERCENT / 100) ** GAMMA
+
+
+def test_a_flat_wave_holds_the_ambient_level_without_a_thread():
+    chevrons, rows = make_chevrons(idle_percent=30, wave_percent=0)
+
+    chevrons.wave()
+
+    assert chevrons._proc is None
+    assert [row.value for row in rows] == pytest.approx([0.3 ** GAMMA] * 3)
+
+
+def test_the_wave_settings_reach_the_chevrons(monkeypatch):
+    monkeypatch.setattr(chevrons_module, 'PWMLED', FakeRow)
+
+    chevrons = create_chevrons(enabled=True, wave_percent=40, wave_seconds=5.5)
+
+    assert chevrons._wave_boost == pytest.approx(0.4)
+    assert chevrons._wave_period == 5.5
 
 
 def test_full_power_reaches_the_rp2040_as_its_top_value():

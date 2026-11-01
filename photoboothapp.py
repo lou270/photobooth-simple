@@ -185,6 +185,9 @@ class PhotoboothApp(App):
             idle_percent=config.get_chevrons_idle_percent(),
             frequency=config.get_chevrons_pwm_frequency(),
             serial_port=config.get_chevrons_serial_port(),
+            wave_percent=config.get_chevrons_wave_percent(),
+            wave_seconds=config.get_chevrons_wave_seconds(),
+            countdown_percent=config.get_chevrons_countdown_percent(),
         )
 
         # Assign local variables

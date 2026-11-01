@@ -568,6 +568,18 @@
             "label": "Chevrons entre deux photos",
             "help": "La puissance des chevrons quand personne n'est photographié. Sur l'écran d'accueil, une vague un peu plus lumineuse avance vers l'objectif ; le décompte les allume de l'extérieur vers l'intérieur, et la photo est prise à 100 %. 0 les laisse éteints entre deux photos."
           },
+          "CHEVRONS_WAVE_PERCENT": {
+            "label": "Intensité de la vague des chevrons",
+            "help": "De combien de points la vague de l'écran d'accueil dépasse la puissance entre deux photos. 15 donne une ondulation discrète ; 0 laisse les chevrons immobiles. Ne dépasse jamais 100 %."
+          },
+          "CHEVRONS_WAVE_SECONDS": {
+            "label": "Durée de la vague des chevrons",
+            "help": "Le temps que met la vague de l'écran d'accueil pour aller du rang extérieur au rang intérieur et recommencer. Plus court, elle va plus vite."
+          },
+          "CHEVRONS_COUNTDOWN_PERCENT": {
+            "label": "Chevrons pendant le décompte",
+            "help": "La puissance des rangs que le décompte allume, de l'extérieur vers l'intérieur. La photo elle-même est toujours prise à 100 %, quelle que soit cette valeur."
+          },
           "CHEVRONS_PWM_FREQUENCY": {
             "label": "Fréquence PWM des chevrons",
             "help": "À augmenter si l'aperçu montre des bandes. Avec les broches du Raspberry Pi, à baisser si les chevrons scintillent ou paraissent plus lumineux que réglé. Le RP2040 tient 1000 Hz et plus. La photo elle-même est prise à 100 %, sans PWM."

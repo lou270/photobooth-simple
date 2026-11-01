@@ -51,7 +51,7 @@ RINGLED_PIXELS = 12
 # Raspberry Pi OS). They sit at CHEVRONS_IDLE_PERCENT between photos, with a
 # slightly brighter wave rolling towards the lens on the welcome screen. The
 # countdown lights them from the outside in (outer row at 3, middle at 2, all
-# three at 1), and the shot is taken at full power.
+# three at 1) at CHEVRONS_COUNTDOWN_PERCENT, and the shot is taken at full power.
 CHEVRONS = False
 
 # Where the PWM comes from. gpio: the Pi's own pins, in software, which can
@@ -71,6 +71,17 @@ CHEVRONS_SERIAL_PORT = /dev/ttyAMA3
 # Brightness of the chevrons between photos, in percent as the eye sees it
 # (30 % is a duty cycle of about 7 %): 0 keeps them off
 CHEVRONS_IDLE_PERCENT = 30
+
+# The wave on the welcome screen: how many points above CHEVRONS_IDLE_PERCENT
+# it peaks (never past 100; 0 holds the chevrons still), and how many seconds,
+# from 1 to 20, it takes to roll from the outer row to the inner one and round
+# again
+CHEVRONS_WAVE_PERCENT = 15
+CHEVRONS_WAVE_SECONDS = 3.0
+
+# Brightness, in percent as the eye sees it, of the rows the countdown lights.
+# The shot itself is always taken at 100 %, whatever this says
+CHEVRONS_COUNTDOWN_PERCENT = 100
 
 # PWM frequency, in Hz. Raise it if the live preview shows bands. With the gpio
 # driver, lower it if the chevrons look brighter than set or waver: the pins

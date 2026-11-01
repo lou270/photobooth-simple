@@ -258,7 +258,7 @@ by its default rather than stopping the booth.
 | `[Capture]` | `CAMERA`, `COUNTDOWN`, `FILTERS`, `CALIBRATION`, `DSLR_HOT_PIXEL_FILTER`, the blur behind the preview and the photos |
 | `[Print]` | `PRINTER` (CUPS queue, `None` for no printer), `MAX_PRINTS` (quota for the evening), `MAX_COPIES`, `COLLAGE_DPI`, `CUT_OFFSET`, `PRINTER_WAIT_TIMEOUT` |
 | `[Timing]` | Every delay a guest may notice: auto-keep, idle timeouts per screen, capture timeout, print timeouts |
-| `[Lights]` | `RINGLED`, `RINGLED_PIXELS`; `CHEVRONS`, `CHEVRONS_DRIVER` (`gpio` or `serial`), `CHEVRONS_PINS`, `CHEVRONS_SERIAL_PORT`, `CHEVRONS_IDLE_PERCENT`, `CHEVRONS_PWM_FREQUENCY` |
+| `[Lights]` | `RINGLED`, `RINGLED_PIXELS`; `CHEVRONS`, `CHEVRONS_DRIVER` (`gpio` or `serial`), `CHEVRONS_PINS`, `CHEVRONS_SERIAL_PORT`, `CHEVRONS_IDLE_PERCENT`, `CHEVRONS_WAVE_PERCENT`, `CHEVRONS_WAVE_SECONDS`, `CHEVRONS_COUNTDOWN_PERCENT`, `CHEVRONS_PWM_FREQUENCY` |
 | `[Web]` | `WEB_PORT` (80), `WEB_HOST` (0.0.0.0; 127.0.0.1 keeps the web pages on the booth) |
 | `[WiFi]` | `WIFI_SSID`, `WIFI_PASSWORD`, `WIFI_HIDDEN` - the network the QR codes join, see [Guest network](#guest-network-and-qr-codes) |
 | `[Remote]` | `REMOTE_CAPTURE`, `REMOTE_URL` and the upload limits, see [Phone as a remote camera](#phone-as-a-remote-camera) |
