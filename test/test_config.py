@@ -441,3 +441,57 @@ def test_a_percent_sign_typed_in_the_admin_form_is_read_as_typed(tmp_path, monke
     assert config.get_printer() == 'dnp%20ds620'
     assert config.get_event_name() == '100% Lou & Max'
     assert config.get_date_format() == '%d/%m/%Y'
+
+
+BROKEN_FILES = {
+    'duplicate': 'EVENT_NAME = a\nEVENT_NAME = b\n',
+    'stray_line': 'oops\n',
+}
+
+
+@pytest.mark.parametrize('broken', sorted(BROKEN_FILES))
+def test_a_file_configparser_refuses_is_reported_not_raised(tmp_path, monkeypatch, broken):
+    """Raised, it stopped the booth before its window drew anything, and
+    systemd started it again into the same file, forever."""
+    config_path = tmp_path / 'config.ini'
+    config_path.write_text(
+        '[Global]\nLANGUAGE = fr\nROTATION = 90\n[Event]\n' + BROKEN_FILES[broken], encoding='utf-8')
+    monkeypatch.setattr(config_module, 'CONFIG_PATH', config_path)
+
+    config, error = config_module.load_config()
+
+    assert error is not None
+    # What the failure is shown in: the operator's language, the right way up.
+    assert config.get_language() == 'fr'
+    assert config.get_window_rotation() == 90
+    assert config_module.window_settings_from_config()[2] == 90
+
+
+def test_a_file_not_saved_as_utf8_is_reported_not_raised(tmp_path, monkeypatch):
+    config_path = tmp_path / 'config.ini'
+    config_path.write_bytes('[Global]\nLANGUAGE = fr\n[Event]\nEVENT_NAME = Soirée\n'.encode('cp1252'))
+    monkeypatch.setattr(config_module, 'CONFIG_PATH', config_path)
+
+    config, error = config_module.load_config()
+
+    assert isinstance(error, UnicodeError)
+    assert config.get_language() == 'fr'
+
+
+def test_a_missing_file_is_reported_on_the_defaults(tmp_path, monkeypatch):
+    monkeypatch.setattr(config_module, 'CONFIG_PATH', tmp_path / 'absent.ini')
+
+    config, error = config_module.load_config()
+
+    assert isinstance(error, FileNotFoundError)
+    assert config.get_camera_backend() == 'auto'
+
+
+def test_a_readable_file_comes_back_without_an_error(tmp_path, monkeypatch):
+    write_config(tmp_path, monkeypatch, """
+        [Global]
+        LANGUAGE = fr
+    """)
+    config, error = config_module.load_config()
+    assert error is None
+    assert config.get_language() == 'fr'

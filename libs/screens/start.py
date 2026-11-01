@@ -351,7 +351,8 @@ class StartScreen(BackgroundScreen):
     def __init__(self, app, **kwargs):
         Logger.info('StartScreen: __init__().')
         # The event's own photo when the operator uploaded one from the admin.
-        super(StartScreen, self).__init__(bg=str(event.welcome_background()), **kwargs)
+        super(StartScreen, self).__init__(bg=str(event.welcome_background()),
+                                          fallback_bg=str(event.DEFAULT_WELCOME_BACKGROUND), **kwargs)
 
         self.app = app
 

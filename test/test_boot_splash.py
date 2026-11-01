@@ -113,21 +113,28 @@ def test_the_theme_files_have_unix_line_endings(tmp_path):
 
 # --- the application's loading screen ---------------------------------------
 
-STARTUP_KEYS = ('title', 'camera', 'templates', 'storage', 'services', 'screens')
+STARTUP_KEYS = ('title', 'camera', 'templates', 'storage', 'services', 'screens', 'failed')
+FAILURE_KEYS = ('title', 'camera', 'generic', 'ok',
+                'config', 'config_missing', 'config_encoding', 'config_duplicate', 'config_line')
 
 
 @pytest.mark.parametrize('lang', i18n.AVAILABLE_LANGUAGES)
 def test_every_startup_step_is_named_in_every_language(lang):
     texts = json.loads((LOCALES / f'{lang}.json').read_text(encoding='utf-8'))
     assert sorted(texts['loading']) == sorted(STARTUP_KEYS)
+    assert sorted(texts['loading']['failed']) == sorted(FAILURE_KEYS)
 
 
 class FakeLoading:
     def __init__(self):
         self.shown = []
+        self.failure = None
 
     def show_step(self, caption, progress):
         self.shown.append((caption, progress))
+
+    def show_failure(self, title, message, ok_text, on_ok):
+        self.failure = (title, message, ok_text, on_ok)
 
 
 class FakeWindow:
@@ -187,3 +194,112 @@ def test_a_startup_step_waits_for_its_caption_to_reach_the_screen(monkeypatch):
     assert order == ['camera', 'screens', 'booth']
     assert [progress for _, progress in app.loading.shown] == [0.0, 0.5]
     assert window.on_flip == []
+
+
+def test_a_camera_that_does_not_answer_waits_for_ok_instead_of_crashing(monkeypatch):
+    """A failed step used to end the application, and systemd started it
+    again into the same failure, forever. The booth now says what failed and
+    restarts only once someone has pressed OK."""
+    import photoboothapp
+    from photoboothapp import PhotoboothApp
+
+    monkeypatch.setattr(photoboothapp, 'Window', FakeWindow())
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.loading = FakeLoading()
+    restarts = []
+    app.request_restart = lambda: restarts.append(True)
+    later_steps = []
+
+    def no_camera():
+        raise Exception('This app requires at least a piCamera, a DSLR or a webcam to work.')
+
+    app._startup_steps = [
+        ('loading.camera', no_camera),
+        ('loading.screens', lambda: later_steps.append('screens')),
+    ]
+    app._startup_step_count = 2
+
+    app._run_startup_step(0)
+
+    title, message, ok_text, on_ok = app.loading.failure
+    assert message == i18n.t('loading.failed.camera')
+    assert later_steps == [] and app._startup_steps == []
+    assert restarts == []
+    on_ok()
+    assert restarts == [True]
+
+
+def test_the_failure_ok_button_restarts_once():
+    from kivy.core.window import Window
+    from libs.screens.loading import LoadingScreen
+
+    screen = LoadingScreen()
+    presses = []
+    screen.show_failure('title', 'message', 'OK', lambda: presses.append(True))
+
+    assert screen.progress_bar.parent is None
+    assert screen.ok_button.parent is screen.layout
+    Window.dispatch('on_key_down', 13, 0, '', [])
+    screen.ok_button.dispatch('on_release')
+    assert presses == [True]
+
+
+def config_error(body):
+    import configparser
+    parser = configparser.ConfigParser(interpolation=None)
+    try:
+        parser.read_string(body, source='config.ini')
+    except configparser.Error as exc:
+        return exc
+    raise AssertionError('the file was accepted')
+
+
+@pytest.mark.parametrize('error, expected', [
+    (lambda: FileNotFoundError('config.ini'), 'introuvable'),
+    (lambda: UnicodeDecodeError('utf-8', b'\xe9', 0, 1, 'invalid'), 'UTF-8'),
+    (lambda: config_error('[Event]\nEVENT_NAME = a\nEVENT_NAME = b\n'), "l'option EVENT_NAME apparaît deux fois (ligne 3)"),
+    (lambda: config_error('[Event]\nEVENT_NAME = a\noups\n'), 'à la ligne 3'),
+    (lambda: config_error('EVENT_NAME = a\n'), 'à la ligne 1'),
+])
+def test_the_failure_says_what_is_wrong_with_config_ini(error, expected):
+    from photoboothapp import config_failure_message
+
+    i18n.set_language('fr')
+    try:
+        assert expected in config_failure_message(error())
+    finally:
+        i18n.set_language(i18n.DEFAULT_LANGUAGE)
+
+
+def test_an_unreadable_config_stops_the_startup_at_the_message():
+    from photoboothapp import PhotoboothApp
+
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app._config_error = FileNotFoundError('config.ini')
+    app._startup_steps = []
+    app.loading = FakeLoading()
+    restarts = []
+    app.request_restart = lambda: restarts.append(True)
+
+    app.on_start()
+
+    assert app._startup_steps == []
+    assert app.loading.shown == []
+    title, message, ok_text, on_ok = app.loading.failure
+    on_ok()
+    assert restarts == [True]
+
+
+@pytest.mark.parametrize('content', [b'', b'\xff\xd8\xff\xe0 cut short'])
+def test_a_welcome_picture_kivy_cannot_read_falls_back_to_the_default(tmp_path, monkeypatch, content):
+    from libs import event
+    from libs.screens.loading import LoadingScreen
+
+    picture = tmp_path / 'welcome_background.jpg'
+    picture.write_bytes(content)
+    monkeypatch.setattr(event, 'WELCOME_BACKGROUND_PATH', picture)
+
+    screen = LoadingScreen()
+
+    assert screen.background_image.source == str(event.DEFAULT_WELCOME_BACKGROUND)
+    assert screen.background_image.texture is not None

@@ -5,7 +5,18 @@
     "templates": "Preparing the layouts…",
     "storage": "Opening the photo gallery…",
     "services": "Starting sharing…",
-    "screens": "Almost ready…"
+    "screens": "Almost ready…",
+    "failed": {
+      "title": "The photo booth cannot start",
+      "camera": "The camera is not responding.\nCheck that it is switched on and plugged in, then press OK to restart.",
+      "generic": "Something went wrong while starting.\nPress OK to restart.",
+      "config": "The config.ini file cannot be read.\nFix it, then press OK to restart.",
+      "config_missing": "The config.ini file is missing.\nCopy config.ini.example to config.ini, then press OK to restart.",
+      "config_encoding": "The config.ini file is not saved as UTF-8.\nSave it again as UTF-8, then press OK to restart.",
+      "config_duplicate": "In config.ini, the option {option} appears twice (line {line}).\nRemove one of them, then press OK to restart.",
+      "config_line": "The config.ini file has an error on line {line}.\nFix it, then press OK to restart.",
+      "ok": "OK"
+    }
   },
   "start": {
     "title": "Photo Booth",

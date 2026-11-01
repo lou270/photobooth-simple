@@ -71,6 +71,11 @@ CHEVRONS_DRIVERS = ('gpio', 'serial')
 # UART3 (dtoverlay=uart3), TX on GPIO 4: leaves the console port and Bluetooth alone.
 DEFAULT_CHEVRONS_SERIAL_PORT = '/dev/ttyAMA3'
 
+# What Config() raises over the file itself rather than over a value in it:
+# missing, not UTF-8, or a line configparser cannot take - an option written
+# twice, a word with no "=".
+CONFIG_READ_ERRORS = (OSError, UnicodeError, configparser.Error)
+
 class Config:
     def __init__(self):
         # No interpolation: configparser would read a % as the start of a
@@ -86,6 +91,26 @@ class Config:
                 f'Cannot load configuration file: {CONFIG_PATH}. '
                 'Copy config.ini.example to config.ini and adjust it.'
             )
+
+    @classmethod
+    def salvaged(cls):
+        """What can still be read of a config.ini that Config() refused.
+
+        An option given twice keeps its last value, a line that is not an
+        option is skipped and bytes that are not UTF-8 are replaced. Enough for
+        the language and the window the booth reports the problem in, so an
+        upright booth does not say it lying on its side; not a file to run the
+        booth on.
+        """
+        config = cls.__new__(cls)
+        config.config = configparser.ConfigParser(interpolation=None, strict=False)
+        try:
+            text = Path(CONFIG_PATH).read_bytes().decode('utf-8', errors='replace')
+            # A parsing error is raised once every other line is read.
+            config.config.read_string(text)
+        except (OSError, configparser.Error):
+            pass
+        return config
 
     def _get_value(self, getter_name, sections, option, fallback=None):
         """Read the first section that carries `option`, falling back on nonsense.
@@ -498,10 +523,23 @@ def window_settings_from_config():
     these from the Kivy config as it stands at that moment - so config.ini has to
     be consulted at the top of photoboothapp.py, ahead of every Kivy import. A
     file that cannot be read is not reported here: the application loads it again
-    a moment later and raises then, with the message an operator should see.
+    a moment later, and says so on the screen sized from what was salvaged.
+    """
+    config, _error = load_config(log=False)
+    return config.get_window_size() + (config.get_window_rotation(),)
+
+
+def load_config(log=True):
+    """(config, error): config.ini, or what Config.salvaged() kept of it and why.
+
+    `error` is None when the file was read. A file Config() refused used to
+    stop the application before its window drew anything, and systemd started
+    it again into the same file: a booth restarting forever on a black screen,
+    with the web server, the one way to fix it remotely, never up.
     """
     try:
-        config = Config()
-    except (OSError, configparser.Error):
-        return DEFAULT_WINDOW_SIZE + (0,)
-    return config.get_window_size() + (config.get_window_rotation(),)
+        return Config(), None
+    except CONFIG_READ_ERRORS as exc:
+        if log:
+            Logger.error('Config: cannot read %s: %s', CONFIG_PATH, exc)
+        return Config.salvaged(), exc

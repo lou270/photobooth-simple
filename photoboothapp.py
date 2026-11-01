@@ -1,5 +1,6 @@
 #!/usr/bin/python3
 
+import configparser
 import os
 import shutil
 import sys
@@ -39,7 +40,7 @@ from kivy.core.window import Window
 from kivy.logger import Logger
 from kivy.uix.screenmanager import FadeTransition
 
-from libs.config import Config
+from libs.config import load_config
 from libs.core import ProcessRunner, SessionStorage
 from libs.device_utils import DeviceUtils
 from libs.file_utils import FileUtils
@@ -94,14 +95,35 @@ def signal_handler(sig, frame):
 signal.signal(signal.SIGINT, signal_handler)
 signal.signal(signal.SIGTERM, signal_handler)
 
+def config_failure_message(error):
+    """What the loading screen says about a config.ini that could not be read.
+
+    The line, and the option when it is written twice: the operator fixing it
+    over SSH should not have to start the booth by hand to find out.
+    """
+    if isinstance(error, FileNotFoundError):
+        return i18n.t('loading.failed.config_missing')
+    if isinstance(error, UnicodeError):
+        return i18n.t('loading.failed.config_encoding')
+    line = getattr(error, 'lineno', None)
+    if isinstance(error, configparser.DuplicateOptionError) and line is not None:
+        # configparser lowercases option names; config.ini writes them upper.
+        return i18n.t('loading.failed.config_duplicate', option=error.option.upper(), line=line)
+    if line is None and isinstance(error, configparser.ParsingError) and error.errors:
+        line = error.errors[0][0]
+    if line is not None:
+        return i18n.t('loading.failed.config_line', line=line)
+    return i18n.t('loading.failed.config')
+
 class PhotoboothApp(App):
     def __init__(self, **kwargs):
         global RINGLED
         Logger.info('PhotoboothApp: __init__().')
         super(PhotoboothApp, self).__init__(**kwargs)
 
-        # Load configuration
-        config = Config()
+        # Load configuration. A file that cannot be read is reported by
+        # on_start, in place of starting the booth on what was salvaged of it.
+        config, self._config_error = load_config()
         # Screens are built once at startup and kept for the life of the
         # process, so the language must be fixed before ScreenMgr builds any
         # of them.
@@ -216,6 +238,9 @@ class PhotoboothApp(App):
         return False
 
     def on_start(self):
+        if self._config_error is not None:
+            self._show_startup_failure(config_failure_message(self._config_error))
+            return
         self._startup_steps = [
             ('loading.camera', self._open_devices),
             ('loading.templates', self._load_templates),
@@ -246,11 +271,31 @@ class PhotoboothApp(App):
     def _run_startup_step(self, dt):
         key, step = self._startup_steps.pop(0)
         started_at = time.monotonic()
-        # An exception here ends the application, as it did when this work ran
-        # in __init__, and systemd starts it again.
-        step()
+        try:
+            step()
+        except Exception as exc:
+            # Leaving the exception to end the application had systemd start it
+            # again, straight into the same failure: a camera switched off sent
+            # the booth round that loop forever, the loading screen flashing
+            # with nothing on it to say why. The booth now says what failed and
+            # waits for someone to fix it and press OK, which restarts it.
+            Logger.error('PhotoboothApp: startup step %s failed: %s', key, exc)
+            Logger.error(traceback.format_exc())
+            self._startup_steps = []
+            failure_key = 'loading.failed.camera' if key == 'loading.camera' else 'loading.failed.generic'
+            self._show_startup_failure(i18n.t(failure_key))
+            return
         Logger.info('PhotoboothApp: startup step %s took %.2fs', key, time.monotonic() - started_at)
         self._announce_startup_step()
+
+    def _show_startup_failure(self, message):
+        """Say why the booth cannot start, and restart it once OK is pressed."""
+        self.loading.show_failure(
+            i18n.t('loading.failed.title'),
+            message,
+            i18n.t('loading.failed.ok'),
+            self.request_restart,
+        )
 
     def _open_devices(self):
         self.devices = DeviceUtils(

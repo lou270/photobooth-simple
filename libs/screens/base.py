@@ -63,11 +63,22 @@ class HomeTimeoutMixin:
         self._stop_home_timeout()
         self.app.transition_to(ScreenNames.START)
 
+DEFAULT_BACKGROUND = './assets/backgrounds/bg_default.jpeg'
+
+
 class BackgroundScreen(Screen):
-    def __init__(self, bg='./assets/backgrounds/bg_default.jpeg', **kwargs):
+    def __init__(self, bg=DEFAULT_BACKGROUND, fallback_bg=DEFAULT_BACKGROUND, **kwargs):
         super(BackgroundScreen, self).__init__(**kwargs)
         with self.canvas.before:
-            self.background_image = Rectangle(pos=self.pos, size=self.size, source=bg)
+            self.background_image = Rectangle(pos=self.pos, size=self.size)
+        # Kivy raises on a picture it cannot decode, and the welcome one is the
+        # operator's: an empty or cut-short file stopped the booth as its
+        # window opened, and systemd started it again into the same file.
+        try:
+            self.background_image.source = bg
+        except Exception as exc:
+            Logger.error('BackgroundScreen: cannot load %s (%s), using %s', bg, exc, fallback_bg)
+            self.background_image.source = fallback_bg
 
     def on_pos(self, *args):
         self.background_image.pos = self.pos

@@ -5,7 +5,18 @@
     "templates": "Préparation des mises en page…",
     "storage": "Ouverture de la galerie…",
     "services": "Démarrage du partage…",
-    "screens": "Presque prêt…"
+    "screens": "Presque prêt…",
+    "failed": {
+      "title": "Le photobooth ne peut pas démarrer",
+      "camera": "L'appareil photo ne répond pas.\nVérifiez qu'il est allumé et branché, puis appuyez sur OK pour relancer.",
+      "generic": "Une erreur est survenue au démarrage.\nAppuyez sur OK pour relancer.",
+      "config": "Le fichier config.ini est illisible.\nCorrigez-le, puis appuyez sur OK pour relancer.",
+      "config_missing": "Le fichier config.ini est introuvable.\nCopiez config.ini.example en config.ini, puis appuyez sur OK pour relancer.",
+      "config_encoding": "Le fichier config.ini n'est pas enregistré en UTF-8.\nRéenregistrez-le en UTF-8, puis appuyez sur OK pour relancer.",
+      "config_duplicate": "Dans config.ini, l'option {option} apparaît deux fois (ligne {line}).\nSupprimez l'une des deux, puis appuyez sur OK pour relancer.",
+      "config_line": "Le fichier config.ini contient une erreur à la ligne {line}.\nCorrigez-la, puis appuyez sur OK pour relancer.",
+      "ok": "OK"
+    }
   },
   "start": {
     "title": "Photo Booth",
