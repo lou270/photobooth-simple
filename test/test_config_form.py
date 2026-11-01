@@ -105,6 +105,42 @@ def test_a_missing_option_is_added_to_its_section():
     assert parser.get('Capture', 'COUNTDOWN') == '5'
 
 
+def test_a_missing_option_goes_after_the_last_one_of_its_section():
+    # Not after the blank line, glued to the header of the next section.
+    content = textwrap.dedent("""\
+        [Print]
+        PRINTER_WAIT_TIMEOUT = 45
+        # MAX_PRINTS = 10
+
+        [USB]
+        USB_EXPORT = True
+        """)
+    result = apply_updates(content, {('Print', 'MAX_COPIES'): '3'})
+
+    assert result == textwrap.dedent("""\
+        [Print]
+        PRINTER_WAIT_TIMEOUT = 45
+        MAX_COPIES = 3
+        # MAX_PRINTS = 10
+
+        [USB]
+        USB_EXPORT = True
+        """)
+
+
+@pytest.mark.parametrize('last_line', ['# the end', 'CUSTOM = 1'])
+def test_a_file_without_a_final_line_break_keeps_its_last_line(last_line):
+    # Notepad and VS Code save that way; what the form added to the end used
+    # to be glued onto that line, lost in a comment or in another value.
+    content = f'[DSLR_Capture]\nSHUTTERSPEED = 1/125\n{last_line}'
+    result = apply_updates(content, {('DSLR_Capture', 'ISO'): '400', ('Web', 'WEB_PORT'): '5001'})
+
+    assert last_line in result.splitlines()
+    parser = load_parser(result)
+    assert parser.get('DSLR_Capture', 'ISO') == '400'
+    assert parser.get('Web', 'WEB_PORT') == '5001'
+
+
 def test_a_missing_section_is_appended():
     result = apply_updates(SAMPLE, {('Web', 'WEB_PORT'): '5001'})
 

@@ -452,15 +452,28 @@ def apply_updates(content, updates):
     existing_sections = set()
     seen_options = set()
     current_section = None
+    # Where an option the section lacks goes: after its last option, not after
+    # the blank line and the comments that lead to the next section.
+    section_end = 0
     line_ending = '\n'
 
+    def end_line_before(index):
+        # Editors save without a final line break: whatever is added after the
+        # file's last line would be glued onto it, into a comment or a value.
+        if index > 0 and not rendered_lines[index - 1].endswith('\n'):
+            rendered_lines[index - 1] += line_ending
+
     def append_missing_options(section):
+        missing_lines = []
         for option, value in section_values.get(section, {}).items():
             key = (section, option)
             if key in seen_options:
                 continue
-            rendered_lines.append(f'{option} = {value}{line_ending}')
+            missing_lines.append(f'{option} = {value}{line_ending}')
             seen_options.add(key)
+        if missing_lines:
+            end_line_before(section_end)
+            rendered_lines[section_end:section_end] = missing_lines
 
     for line in lines:
         if line.endswith('\r\n'):
@@ -475,6 +488,7 @@ def apply_updates(content, updates):
             current_section = section_match.group(1).strip()
             existing_sections.add(current_section)
             rendered_lines.append(line)
+            section_end = len(rendered_lines)
             continue
 
         option_match = OPTION_PATTERN.match(line)
@@ -487,9 +501,12 @@ def apply_updates(content, updates):
                     f'{updates[key]}{option_match.group(5) or line_ending}'
                 )
                 seen_options.add(key)
+                section_end = len(rendered_lines)
                 continue
 
         rendered_lines.append(line)
+        if line.strip() and not line.lstrip().startswith(('#', ';')):
+            section_end = len(rendered_lines)
 
     if current_section is not None:
         append_missing_options(current_section)
@@ -497,6 +514,7 @@ def apply_updates(content, updates):
     for section, options in section_values.items():
         if section in existing_sections:
             continue
+        end_line_before(len(rendered_lines))
         if rendered_lines and rendered_lines[-1].strip():
             rendered_lines.append(line_ending)
         rendered_lines.append(f'[{section}]{line_ending}')
