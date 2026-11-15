@@ -8,6 +8,7 @@ four look like ordinary code at the call site — the missing piece is always
 something that was never written, so nothing points at it.
 """
 
+import json
 import os
 import sys
 import time
@@ -450,6 +451,7 @@ class WelcomeApp:
     SLIDESHOW = False
     SLIDESHOW_IDLE_SECONDS = 60
     SLIDESHOW_PHOTO_SECONDS = 6
+    PRINTER = ''
 
     def __init__(self, pending=0):
         self.pending = pending
@@ -785,3 +787,34 @@ def test_the_slideshow_shows_the_newest_sessions_small_copy_first(tmp_path):
         '20260913_210000/collage_small.jpg',
         '20260913_200000/collage.jpg',
     ]
+
+
+# --- sheets stuck in the printer ---------------------------------------------
+
+
+def test_stuck_sheets_put_a_banner_on_the_welcome_screen():
+    """The printing screen lets a guest go after their first sheet: a copy
+    that runs out of paper behind it has nobody watching but the next guest."""
+    screen = welcome()
+
+    screen._apply_print_problem('paper')
+
+    assert screen.print_banner.parent is screen.overlay_layout
+    assert screen.lbl_print_banner.text == t('start.print_stuck.paper')
+    # The welcome words make room for it rather than run under it.
+    assert screen.start_label.top <= screen.print_banner.y
+
+
+def test_the_banner_goes_once_the_printer_is_through():
+    screen = welcome()
+    screen._apply_print_problem('ribbon')
+
+    screen._apply_print_problem(None)
+
+    assert screen.print_banner.parent is None
+
+
+def test_every_stuck_reason_has_words_in_both_languages():
+    for language in ('en', 'fr'):
+        words = json.loads((Path(__file__).resolve().parents[1] / 'locales' / f'{language}.json').read_text(encoding='utf-8'))
+        assert set(words['start']['print_stuck']) == {'paper', 'ribbon', 'jam', 'cover', 'stopped'}

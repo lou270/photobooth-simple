@@ -22,7 +22,14 @@
     "title": "Photo Booth",
     "version": "Version {version}",
     "send_photo": "SEND A PHOTO",
-    "photos_waiting": "PHOTOS RECEIVED"
+    "photos_waiting": "PHOTOS RECEIVED",
+    "print_stuck": {
+      "paper": "Out of paper: some photos are waiting to be printed.\nPlease call an operator.",
+      "ribbon": "Ribbon used up: some photos are waiting to be printed.\nPlease call an operator.",
+      "jam": "Paper jam: some photos are waiting to be printed.\nPlease call an operator.",
+      "cover": "Printer open: some photos are waiting to be printed.\nPlease call an operator.",
+      "stopped": "Printer stopped: some photos are waiting to be printed.\nPlease call an operator."
+    }
   },
   "select_format": {
     "photo_count_singular": "{count} photo",

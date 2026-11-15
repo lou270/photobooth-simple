@@ -200,6 +200,10 @@ class PhotoboothApp(App):
         self._templates_lock = threading.Lock()
         self._templates_generation = 0
         self._pending_print_formats = None
+        # Every sheet sent to the printer and not yet out of it. The printing
+        # screen only waits for the first, so these outlive it.
+        self._queued_print_jobs = []
+        self._queued_print_jobs_lock = threading.Lock()
         self.pending_photo_tasks = []
         self._pending_photo_error = None
         self._pending_photo_lock = threading.Lock()
@@ -902,8 +906,31 @@ class PhotoboothApp(App):
             to_print = collage
 
         task_ids = [self.devices.print(to_print, options) for _ in range(copies)]
+        with self._queued_print_jobs_lock:
+            self._queued_print_jobs.extend(task_ids)
         Logger.info('PhotoboothApp: print jobs queued tasks=%s', task_ids)
         return task_ids
+
+    def get_print_queue_problem(self):
+        """What keeps the booth's queued sheets in the printer, or None.
+
+        A CUPS round trip: call it off the UI thread. Sheets that came out, or
+        that CUPS dropped, are forgotten along the way.
+        """
+        with self._queued_print_jobs_lock:
+            asked = list(self._queued_print_jobs)
+        if not asked:
+            return None
+        try:
+            still_queued, problem = self.devices.get_print_queue_problem(asked)
+        except Exception as exc:
+            Logger.warning('PhotoboothApp: print queue check failed: %s', exc)
+            return None
+        with self._queued_print_jobs_lock:
+            # Sheets queued while CUPS was being asked are kept as they are.
+            done = set(asked) - set(still_queued)
+            self._queued_print_jobs = [task_id for task_id in self._queued_print_jobs if task_id not in done]
+        return problem
 
     def start_photo_task(self, target, *args):
         """Run `target` off the UI thread, after every photo task started before it.

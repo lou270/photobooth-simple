@@ -100,6 +100,8 @@ def test_trigger_print_ignores_stale_print_collage_for_fullpage(tmp_path):
     app.get_collage = lambda: str(collage)
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
+    app._queued_print_jobs = []
+    app._queued_print_jobs_lock = threading.Lock()
 
     assert app.trigger_print(1, format=0) == [123]
     assert printer.file_path == str(collage)
@@ -121,6 +123,8 @@ def test_trigger_print_uses_print_collage_for_duplicated_strip(tmp_path):
     app.get_collage = lambda: str(collage)
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
+    app._queued_print_jobs = []
+    app._queued_print_jobs_lock = threading.Lock()
 
     assert app.trigger_print(1, format=0) == [123]
     assert printer.file_path == str(print_collage)
@@ -145,6 +149,8 @@ def test_three_copies_are_three_single_copy_jobs(tmp_path):
     app.get_collage = lambda: str(collage)
     app.get_saved_collage = lambda: None
     app.has_printer = lambda: True
+    app._queued_print_jobs = []
+    app._queued_print_jobs_lock = threading.Lock()
 
     assert app.trigger_print(3, format=0) == [123, 123, 123]
     assert printer.jobs == [(str(collage), {'PageSize': 'w288h432', 'copies': '1'})] * 3
@@ -851,3 +857,129 @@ def test_a_failed_dslr_capture_puts_the_live_view_settings_back():
         camera.capture('unused.jpg')
 
     assert applied == [{'ISO': '400'}, {'ISO': '1600'}]
+
+
+# --- sheets the printing screen no longer waits for --------------------------
+
+
+class QueueDevices:
+    """CUPS as get_print_queue_problem sees it: jobs still in, and why."""
+
+    def __init__(self, still_queued, problem):
+        self.still_queued = still_queued
+        self.problem = problem
+        self.asked = []
+
+    def get_print_queue_problem(self, task_ids):
+        self.asked.append(list(task_ids))
+        return [task_id for task_id in task_ids if task_id in self.still_queued], self.problem
+
+
+def queue_app(devices, queued):
+    app = PhotoboothApp.__new__(PhotoboothApp)
+    app.devices = devices
+    app._queued_print_jobs = list(queued)
+    app._queued_print_jobs_lock = threading.Lock()
+    return app
+
+
+def test_trigger_print_remembers_every_sheet_it_queues(tmp_path):
+    collage = tmp_path / 'collage.jpg'
+    collage.write_bytes(b'fullpage')
+    app = queue_app(FakePrinter(), [])
+    app.print_formats = [FakePrintFormat({'PageSize': 'w288h432'})]
+    app.storage = FakeStorage(str(tmp_path / 'missing_print.jpg'))
+    app.stats_store = UnlimitedPrints()
+    app.get_collage = lambda: str(collage)
+    app.get_saved_collage = lambda: None
+    app.has_printer = lambda: True
+
+    app.trigger_print(2, format=0)
+
+    assert app._queued_print_jobs == [123, 123]
+
+
+def test_a_stuck_queue_is_reported_and_its_sheets_kept():
+    app = queue_app(QueueDevices([8, 9], 'paper'), [7, 8, 9])
+
+    assert app.get_print_queue_problem() == 'paper'
+    assert app._queued_print_jobs == [8, 9]
+
+
+def test_sheets_that_came_out_are_forgotten():
+    app = queue_app(QueueDevices([], None), [7, 8])
+
+    assert app.get_print_queue_problem() is None
+    assert app._queued_print_jobs == []
+
+
+def test_nothing_queued_asks_cups_nothing():
+    devices = QueueDevices([], None)
+    app = queue_app(devices, [])
+
+    assert app.get_print_queue_problem() is None
+    assert devices.asked == []
+
+
+def test_a_failed_queue_check_shows_no_banner_and_forgets_nothing():
+    class Broken:
+        def get_print_queue_problem(self, task_ids):
+            raise RuntimeError('cups is down')
+
+    app = queue_app(Broken(), [7])
+
+    assert app.get_print_queue_problem() is None
+    assert app._queued_print_jobs == [7]
+
+
+class QueueCups:
+    def __init__(self, job_states, printer):
+        self.job_states = job_states
+        self.printer = printer
+
+    def getJobAttributes(self, task_id, requested_attributes=None):
+        if task_id not in self.job_states:
+            raise RuntimeError('client-error-not-found')
+        return {'job-state': self.job_states[task_id]}
+
+    def getPrinters(self):
+        return {'QW410': self.printer} if self.printer is not None else {}
+
+
+def cups_queue(job_states, printer, monkeypatch):
+    connection = QueueCups(job_states, printer)
+    monkeypatch.setattr(CupsPrinter, '_connect', staticmethod(lambda: connection))
+    instance = CupsPrinter.__new__(CupsPrinter)
+    instance._name = 'QW410'
+    instance._instance = object()  # the booth's connection is left alone
+    return instance
+
+
+def test_cups_names_a_printer_out_of_paper(monkeypatch):
+    printer = cups_queue({7: 4, 8: 3}, {'printer-state': 4, 'printer-state-reasons': ['media-empty-error']}, monkeypatch)
+
+    assert printer.get_queue_problem([7, 8]) == ([7, 8], 'paper')
+
+
+def test_cups_reasons_that_only_report_are_not_a_problem(monkeypatch):
+    printer = cups_queue({7: 4}, {'printer-state': 4, 'printer-state-reasons': ['marker-supply-low-report', 'media-empty-report']}, monkeypatch)
+
+    assert printer.get_queue_problem([7]) == ([7], None)
+
+
+def test_cups_sheets_waiting_their_turn_are_not_a_problem(monkeypatch):
+    printer = cups_queue({7: 4, 8: 3}, {'printer-state': 4, 'printer-state-reasons': 'none'}, monkeypatch)
+
+    assert printer.get_queue_problem([7, 8]) == ([7, 8], None)
+
+
+def test_cups_a_stopped_queue_with_no_reason_is_still_stuck(monkeypatch):
+    printer = cups_queue({7: 6}, {'printer-state': 5, 'printer-state-reasons': ['none']}, monkeypatch)
+
+    assert printer.get_queue_problem([7]) == ([7], 'stopped')
+
+
+def test_cups_finished_or_vanished_jobs_are_not_waited_for(monkeypatch):
+    printer = cups_queue({7: 9, 8: 7, 9: 8}, {'printer-state': 5, 'printer-state-reasons': ['media-empty-error']}, monkeypatch)
+
+    assert printer.get_queue_problem([7, 8, 9, 10]) == ([], None)

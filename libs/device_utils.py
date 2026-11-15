@@ -736,6 +736,70 @@ class CupsPrinter(PrintDevice):
 
         return 'pending'
 
+    @staticmethod
+    def _connect():
+        return cups.Connection()
+
+    # printer-state-reasons that keep a sheet in the printer, and what the
+    # welcome screen calls each. Matched on the prefix: CUPS appends -error,
+    # -warning or -report, and only a -report is not something going wrong.
+    QUEUE_PROBLEMS = (
+        ('media-empty', 'paper'),
+        ('media-needed', 'paper'),
+        ('marker-supply-empty', 'ribbon'),
+        ('toner-empty', 'ribbon'),
+        ('media-jam', 'jam'),
+        ('door-open', 'cover'),
+        ('cover-open', 'cover'),
+    )
+
+    def get_queue_problem(self, task_ids):
+        """Which of `task_ids` are still to come out, and what holds them up.
+
+        Returns (still_queued, problem). problem is None while they are simply
+        waiting their turn, else a key of QUEUE_PROBLEMS or 'stopped' for a
+        queue that is stuck for a reason CUPS does not name. A job CUPS no
+        longer knows, or that ended one way or another, is not waited for.
+
+        Asked from the welcome screen's own thread, so on a connection of its
+        own, like get_pages.
+        """
+        connection = self._connect()
+        still_queued = []
+        job_stopped = False
+        for task_id in task_ids:
+            try:
+                state = connection.getJobAttributes(task_id, requested_attributes=['job-state'])['job-state']
+            except Exception:
+                continue
+            if state in (self.JOB_STATE_CANCELED, self.JOB_STATE_ABORTED, self.JOB_STATE_COMPLETED):
+                continue
+            still_queued.append(task_id)
+            job_stopped = job_stopped or state == self.JOB_STATE_PROCESSING_STOPPED
+        if not still_queued:
+            return [], None
+
+        printer = (connection.getPrinters() or {}).get(self._name)
+        if not printer:
+            return still_queued, 'stopped'
+        reasons = printer.get('printer-state-reasons') or []
+        if isinstance(reasons, str):
+            reasons = [reasons]
+        for reason in reasons:
+            reason = str(reason)
+            if reason.endswith('-report'):
+                continue
+            for prefix, problem in self.QUEUE_PROBLEMS:
+                if reason.startswith(prefix):
+                    return still_queued, problem
+        if job_stopped or printer.get('printer-state') == 5 or printer.get('printer-is-accepting-jobs') is False:
+            Logger.warning(
+                'CupsPrinter: queue stuck, reasons=%s message=%s',
+                reasons, printer.get('printer-state-message'),
+            )
+            return still_queued, 'stopped'
+        return still_queued, None
+
     # A job nobody can still be waiting for: far beyond what the printing
     # screen gives a printer to come back (PRINTER_WAIT_TIMEOUT) plus three
     # minutes a sheet for the copies a guest may ask for.
@@ -921,6 +985,14 @@ class DeviceUtils:
     def get_print_status(self, task_id):
         if not self._printer: return 'done'
         return self._printer.get_print_status(task_id)
+
+    def get_print_queue_problem(self, task_ids):
+        """See CupsPrinter.get_queue_problem; jobs with no printer left are stuck."""
+        if not task_ids:
+            return [], None
+        if not self._printer:
+            return list(task_ids), 'stopped'
+        return self._printer.get_queue_problem(task_ids)
 
     def close(self):
         """Release every device. False when one of them could not be freed.

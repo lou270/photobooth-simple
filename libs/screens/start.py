@@ -19,13 +19,13 @@ from kivy.uix.widget import Widget
 from libs import event
 from libs.i18n import t
 from libs.kivywidgets import (
-    FeedbackButtonBehavior, is_offscreen, LayoutButton, make_icon_button, short_side,
+    BackgroundBoxLayout, FeedbackButtonBehavior, is_offscreen, LayoutButton, make_icon_button, short_side,
 )
 from libs.version import APP_VERSION
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
-    BADGE_COLOR, darken_rgba, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
-    REMOTE_COLOR, SHARE_COLOR, TIMINGS, TINY_FONT, wh_bind,
+    BADGE_COLOR, CANCEL_COLOR, darken_rgba, ICON_QRCODE, ICON_SHOT_TAKEN, ICON_TOUCH, ICON_TTF,
+    REMOTE_COLOR, SHARE_COLOR, SMALL_FONT, TIMINGS, TINY_FONT, wh_bind,
 )
 from libs.screens.base import BackgroundScreen
 from libs.screens.popups import QRCodePopup
@@ -432,6 +432,28 @@ class StartScreen(BackgroundScreen):
             )
             overlay_layout.add_widget(self.btn_remote_qr)
 
+        # Sheets stuck in the printer. The printing screen lets the guest go
+        # once their first sheet is out, so a copy that runs out of paper
+        # after it has nobody watching - except whoever walks up next.
+        self.print_banner = BackgroundBoxLayout(
+            orientation='vertical',
+            size_hint=(None, None),
+            pos_hint={},
+            padding=short_side(0.018),
+            background_color=darken_rgba(CANCEL_COLOR, 0.25)[:3] + (0.92,),
+        )
+        self.lbl_print_banner = Label(
+            text='',
+            font_size=SMALL_FONT(),
+            halign='center',
+            valign='middle',
+        )
+        wh_bind(self.lbl_print_banner, 'font_size', SMALL_FONT)
+        self.lbl_print_banner.bind(size=self.lbl_print_banner.setter('text_size'))
+        self.print_banner.add_widget(self.lbl_print_banner)
+        self._print_problem = None
+        self._print_clock = None
+
         overlay_layout.bind(on_release=self.on_click)
         self.overlay_layout = overlay_layout
 
@@ -471,6 +493,8 @@ class StartScreen(BackgroundScreen):
         # version label and some air, the top.
         bottom = max(side * 0.22, self._place_touch_hint(width, side) + side * 0.06)
         top = height - side * 0.07
+        if self.print_banner.parent is not None:
+            top = self._place_print_banner(width, height, side) - side * 0.04
         room = top - bottom
         text_width = width * 0.84
 
@@ -508,6 +532,14 @@ class StartScreen(BackgroundScreen):
             self._rule.pos = (width / 2.0 - rule_width / 2.0, rule_y)
             self._rule_shadow.size = (rule_width, rule_thickness * 3)
             self._rule_shadow.pos = (width / 2.0 - rule_width / 2.0, rule_y - rule_thickness * 1.5)
+
+    def _place_print_banner(self, width, height, side):
+        """The banner across the top; returns where it begins, from below."""
+        margin = side * 0.03
+        self.print_banner.size = (min(width - 2 * margin, side * 1.2), side * 0.16)
+        self.print_banner.x = width / 2.0 - self.print_banner.width / 2.0
+        self.print_banner.top = height - margin
+        return self.print_banner.y
 
     def _place_touch_hint(self, width, side):
         """The icon at the foot of the screen, between the corner tabs."""
@@ -629,6 +661,10 @@ class StartScreen(BackgroundScreen):
             self._refresh_pending_count()
             self._queue_clock = Clock.schedule_interval(self._refresh_pending_count, 5)
 
+        if self.app.PRINTER:
+            self._refresh_print_problem()
+            self._print_clock = Clock.schedule_interval(self._refresh_print_problem, 5)
+
     def _purge_when_idle(self, *args):
         if self.app.get_current_screen_name() != ScreenNames.START:
             return
@@ -643,6 +679,9 @@ class StartScreen(BackgroundScreen):
         if self._queue_clock is not None:
             Clock.unschedule(self._queue_clock)
             self._queue_clock = None
+        if self._print_clock is not None:
+            Clock.unschedule(self._print_clock)
+            self._print_clock = None
         self._dismiss_qr_popup()
         # After the popup, whose dismissal starts the idle count again.
         self._stop_slideshow(rearm=False)
@@ -650,6 +689,30 @@ class StartScreen(BackgroundScreen):
         self.touch_hint.stop()
         self.app.ringled.clear()
         self.app.chevrons.idle()
+
+    # --- sheets stuck in the printer -------------------------------------
+
+    def _refresh_print_problem(self, *args):
+        """Ask CUPS off the UI thread: it is a round trip, on every tick."""
+        def read_problem():
+            problem = self.app.get_print_queue_problem()
+            Clock.schedule_once(lambda dt: self._apply_print_problem(problem), 0)
+
+        threading.Thread(target=read_problem, name='photobooth-print-queue', daemon=True).start()
+
+    def _apply_print_problem(self, problem):
+        if problem == self._print_problem:
+            return
+        self._print_problem = problem
+        if problem:
+            Logger.warning('StartScreen: printed sheets are stuck: %s', problem)
+            self.lbl_print_banner.text = t(f'start.print_stuck.{problem}')
+            if self.print_banner.parent is None:
+                self.overlay_layout.add_widget(self.print_banner)
+        elif self.print_banner.parent is not None:
+            Logger.info('StartScreen: the printer is through its queue again.')
+            self.overlay_layout.remove_widget(self.print_banner)
+        self._layout_welcome()
 
     # --- photos waiting from phones --------------------------------------
 

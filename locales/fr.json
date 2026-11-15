@@ -22,7 +22,14 @@
     "title": "Photo Booth",
     "version": "Version {version}",
     "send_photo": "ENVOYER UNE PHOTO",
-    "photos_waiting": "PHOTOS REÇUES"
+    "photos_waiting": "PHOTOS REÇUES",
+    "print_stuck": {
+      "paper": "Plus de papier : des photos attendent d'être imprimées.\nMerci d'appeler un opérateur.",
+      "ribbon": "Ruban épuisé : des photos attendent d'être imprimées.\nMerci d'appeler un opérateur.",
+      "jam": "Papier coincé : des photos attendent d'être imprimées.\nMerci d'appeler un opérateur.",
+      "cover": "Imprimante ouverte : des photos attendent d'être imprimées.\nMerci d'appeler un opérateur.",
+      "stopped": "Imprimante arrêtée : des photos attendent d'être imprimées.\nMerci d'appeler un opérateur."
+    }
   },
   "select_format": {
     "photo_count_singular": "{count} photo",
