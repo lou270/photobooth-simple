@@ -43,6 +43,9 @@ class PrintingScreen(ColorScreen):
         self._copies = 1
         self._clock = None
         self._can_leave = False
+        # Sheets an earlier guest left in the queue. Kept across visits: they
+        # come out before this guest's, and the deadline has to allow for them.
+        self._earlier_task_ids = []
 
         layout = BoxLayout(orientation='vertical', size_hint=(0.9, 0.9), pos_hint={'center_x': 0.5, 'center_y': 0.5})
 
@@ -148,6 +151,18 @@ class PrintingScreen(ColorScreen):
             return True
         return super(PrintingScreen, self).on_touch_down(touch)
 
+    def _count_sheets_ahead(self):
+        """How many of the earlier guest's sheets are still in the queue."""
+        still_queued = []
+        for task_id in self._earlier_task_ids:
+            try:
+                if self.app.devices.get_print_status(task_id) != 'done':
+                    still_queued.append(task_id)
+            except Exception:
+                pass  # canceled or aborted: it holds nobody up any more
+        self._earlier_task_ids = still_queued
+        return len(still_queued)
+
     def _tick(self, obj):
         if self.app.has_pending_photo_tasks():
             self.message.text = t('printing.saving')
@@ -173,21 +188,25 @@ class PrintingScreen(ColorScreen):
 
             self.message.text = t('printing.sending')
             try:
-                # One task per sheet: the booth queues the copies itself, so
-                # the screen is only done once every one of them is through.
+                # One task per sheet: the booth queues the copies itself.
                 self._print_task_ids = list(self.app.trigger_print(self._copies, self._current_format) or [])
                 if not self._print_task_ids:
                     raise RuntimeError('Printer did not return a task id')
                 self._print_started = True
                 self._print_started_at = time.monotonic()
-                Logger.info('PrintingScreen: print started tasks=%s copies=%s', self._print_task_ids, self._copies)
+                self._sheets_ahead = self._count_sheets_ahead()
+                Logger.info(
+                    'PrintingScreen: print started tasks=%s copies=%s sheets_ahead=%s',
+                    self._print_task_ids, self._copies, self._sheets_ahead,
+                )
             except Exception as exc:
                 self._fail(t('printing.print_failed'), str(exc))
                 return
 
-        # A ceiling on the printing itself, budgeted per sheet. Only a safety
-        # net against a job CUPS never finishes; nobody should ever reach it.
-        printing_deadline = TIMINGS.print_sheet_timeout * max(1, len(self._print_task_ids))
+        # A ceiling on the first sheet, budgeted per sheet that comes out
+        # before it. Only a safety net against a job CUPS never finishes;
+        # nobody should ever reach it.
+        printing_deadline = TIMINGS.print_sheet_timeout * (1 + self._sheets_ahead)
         if time.monotonic() - self._print_started_at >= printing_deadline:
             self._fail(t('printing.print_failed'), t('printing.timed_out'))
             return
@@ -209,17 +228,25 @@ class PrintingScreen(ColorScreen):
             Logger.info('PrintingScreen: printer recovered after %.2fs', time.monotonic() - self._printer_wait_started_at)
             self._printer_wait_started_at = None
 
+        # Only the first sheet is waited for. It proves the printer takes this
+        # photo; the others are the same file on the same queue and come out
+        # behind it. Waiting for the last one held the guest - and the next
+        # one - for a minute a copy on a dye-sub.
+        first_task_id = self._print_task_ids[0]
         try:
-            statuses = [self.app.devices.get_print_status(task_id) for task_id in self._print_task_ids]
+            status = self.app.devices.get_print_status(first_task_id)
         except Exception as exc:
             self._fail(t('printing.print_failed'), str(exc))
             return
 
-        Logger.info('PrintingScreen: print status tasks=%s statuses=%s', self._print_task_ids, statuses)
-        if all(status == 'done' for status in statuses):
+        Logger.info('PrintingScreen: print status task=%s status=%s', first_task_id, status)
+        if status == 'done':
             if not self._print_counted:
+                # Every copy is queued, and charged now: nobody is left on
+                # this screen to charge the others when they come out.
                 self.app.track_print_sent(self._copies)
                 self._print_counted = True
+            self._earlier_task_ids = self._print_task_ids[1:]
             self._done()
         else:
             self.message.text = t('printing.printing')

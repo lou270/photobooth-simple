@@ -74,6 +74,7 @@ class Printing:
     _fail = PrintingScreen._fail
     _done = PrintingScreen._done
     _leave = PrintingScreen._leave
+    _count_sheets_ahead = PrintingScreen._count_sheets_ahead
 
     def __init__(self, app, copies=1):
         self.app = app
@@ -83,6 +84,7 @@ class Printing:
         self._print_started = False
         self._print_counted = False
         self._print_task_ids = []
+        self._earlier_task_ids = []
         self._printer_wait_started_at = None
         self._can_leave = False
         self._timeout = app.PRINTER_WAIT_TIMEOUT
@@ -126,20 +128,26 @@ def test_a_job_of_three_copies_is_sent_and_counted_as_three(quick_exit):
     assert app.counted == 3
 
 
-def test_every_sheet_of_a_three_copy_job_is_waited_for(quick_exit):
-    """Three sheets are three printer tasks, and the guest waits for them all."""
+def test_only_the_first_sheet_of_a_three_copy_job_is_waited_for(quick_exit):
+    """Three sheets are three printer tasks; the guest waits for the first.
+
+    Waiting for the last held the booth a minute a copy on a dye-sub, while the
+    other sheets were only ever going to come out behind the first.
+    """
     app = FakeApp()
+    app.devices.get_print_status = lambda task_id: 'done' if task_id == 7 else 'pending'
     screen = Printing(app, copies=3)
 
     screen._tick(None)
 
     assert screen._print_task_ids == [7, 8, 9]
-    assert app.devices.asked == [7, 8, 9]
+    assert app.counted == 3
+    assert screen._can_leave
 
 
-def test_a_job_is_not_done_while_one_of_its_sheets_is_still_printing(quick_exit):
+def test_a_job_is_not_done_while_its_first_sheet_is_still_printing(quick_exit):
     app = FakeApp()
-    app.devices.get_print_status = lambda task_id: 'done' if task_id == 7 else 'pending'
+    app.devices.get_print_status = lambda task_id: 'pending' if task_id == 7 else 'done'
     screen = Printing(app, copies=2)
 
     screen._tick(None)
@@ -301,3 +309,28 @@ def test_a_job_the_printer_never_finishes_still_gives_up_eventually():
     screen._tick(None)
 
     assert app.transitions[0][0] == ScreenMgr.ERROR
+
+
+def test_sheets_an_earlier_guest_left_queued_extend_the_deadline():
+    """The next guest's first sheet comes out behind the last guest's copies."""
+    app = FakeApp(status='pending')
+    screen = Printing(app, copies=1)
+    screen._earlier_task_ids = [3, 4]                   # still in the queue
+    screen._tick(None)
+    assert screen._sheets_ahead == 2
+
+    screen._print_started_at = time.monotonic() - (TIMINGS.print_sheet_timeout + 1)
+    screen._tick(None)
+
+    assert app.transitions == []
+
+
+def test_earlier_sheets_already_out_do_not_extend_the_deadline():
+    app = FakeApp(status='pending')
+    app.devices.get_print_status = lambda task_id: 'done' if task_id < 7 else 'pending'
+    screen = Printing(app, copies=1)
+    screen._earlier_task_ids = [3, 4]
+    screen._tick(None)
+
+    assert screen._sheets_ahead == 0
+    assert screen._earlier_task_ids == []
