@@ -432,6 +432,15 @@
             font-weight: 700;
         }
 
+        .card-notice {
+            padding: 8px 12px;
+            border: 1px solid var(--notice-warning-border);
+            border-radius: var(--radius-md);
+            background: var(--notice-warning-bg);
+            color: var(--notice-warning-text);
+            font-size: 14px;
+        }
+
         .danger-card {
             margin-top: 28px;
             border-color: var(--notice-error-border);
@@ -547,6 +556,9 @@
                     <span class="eyebrow">{{ t('web.admin.templates_eyebrow') }}</span>
                     <h2>{{ t('web.admin.edit_layouts') }}</h2>
                     <p>{{ t('web.admin.edit_layouts_hint') }}</p>
+                    {% for warning in ink_warnings %}
+                    <p class="card-notice">{{ t('web.admin.ink_warning', name=warning.name, size=warning.size, sheet=warning.sheet, fuller=warning.fuller, count=warning.count) }}</p>
+                    {% endfor %}
                     <div class="actions"><a href="/admin/editor" class="btn btn-ghost">{{ t('web.admin.open_template_editor') }}</a></div>
                 </article>
 

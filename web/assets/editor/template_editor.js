@@ -2084,6 +2084,16 @@
         return matches ? size.page_size : 'custom';
     }
 
+    // A template printed on its own where the printer offers a sheet cut into
+    // several of the same print: it spends that whole sheet's ink on one
+    // (print_sizes.fuller_sheet). Returns its size and the cut sheet, or null.
+    function inkWaste(template) {
+        const pageSize = (template.print_params || {}).PageSize;
+        const size = PRINT_SIZES.find(candidate => candidate.page_size === pageSize);
+        if (!size || !size.fuller_sheet || copiesPerSheet(template) !== 1) return null;
+        return { size, fuller: size.fuller_sheet };
+    }
+
     function fillFormatSelect() {
         const select = byId('formatSelect');
         const custom = select.querySelector('option[value="custom"]');
@@ -2093,6 +2103,7 @@
             option.value = size.page_size;
             const parts = [size.label, `${cm(size.short_in)} × ${cm(size.long_in)} cm`];
             if (size.count > 1) parts.push(fmt(I18N.per_sheet, { count: size.count }));
+            if (size.fuller_sheet) parts.push(fmt(I18N.whole_sheet_ink, { sheet: size.fuller_sheet.sheet }));
             option.textContent = parts.join(' · ');
             select.insertBefore(option, custom);
         });
@@ -2122,6 +2133,7 @@
         const entry = currentEntry();
         const controls = ['orientationSelect', 'formatSelect', 'widthInput', 'heightInput'];
         controls.forEach(id => { byId(id).disabled = !entry; });
+        byId('inkWarning').hidden = true;
         if (!entry) return;
         const page = entry.template.page;
         const format = entry.customFormat ? 'custom' : detectFormat(entry.template);
@@ -2132,7 +2144,30 @@
         byId('widthInput').disabled = format !== 'custom';
         byId('heightInput').disabled = format !== 'custom';
         byId('sizeCm').textContent = sizeInCm(page.width, page.height);
+        updateInkWarning(entry, format);
     }
+
+    function updateInkWarning(entry, format) {
+        const waste = inkWaste(entry.template);
+        if (!waste) return;
+        const values = { size: waste.size.label, sheet: waste.fuller.sheet, fuller: waste.fuller.label, count: waste.fuller.count };
+        byId('inkWarningText').textContent = fmt(I18N.ink_warning, values);
+        byId('inkWarningSwitch').textContent = fmt(I18N.ink_switch, values);
+        // Switching lays the page on one print of the cut sheet: a page sized
+        // by hand would be resized under the operator's design.
+        byId('inkWarningSwitch').hidden = format === 'custom';
+        byId('inkWarning').hidden = false;
+    }
+
+    // The print is the same size on the cut sheet, so the page keeps its size
+    // and the design stays as it is; only the sheet it is printed on changes.
+    byId('inkWarningSwitch').addEventListener('click', () => {
+        const entry = currentEntry();
+        const waste = entry && inkWaste(entry.template);
+        if (!waste) return;
+        byId('formatSelect').value = waste.fuller.page_size;
+        byId('formatSelect').dispatchEvent(new Event('change'));
+    });
 
     function resizePage(width, height) {
         const entry = currentEntry();
@@ -2386,6 +2421,8 @@
         meta.append(name, element('div', 'template-item-desc', typeof entry.template.description === 'string' ? entry.template.description : ''));
         if (!isDraft(entry)) meta.append(element('div', 'template-item-file', `templates/${entry.filename}`));
         if (entry.error) meta.append(element('div', 'template-item-error', fmt(I18N.booth_rejected, { error: entry.error })));
+        const waste = inkWaste(entry.template);
+        if (waste) meta.append(element('div', 'template-item-warning', fmt(I18N.ink_warning_short, { size: waste.size.label, sheet: waste.fuller.sheet })));
 
         const actions = element('div', 'template-item-actions');
         actions.append(

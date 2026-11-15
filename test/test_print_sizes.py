@@ -90,6 +90,46 @@ def test_every_fallback_size_is_usable():
     assert len(describe_all(FALLBACK_PAGE_SIZES)) == len(FALLBACK_PAGE_SIZES)
 
 
+# --- a print on its own, on a sheet that could carry several -----------------
+
+def fuller_sheets(choices):
+    return {size['page_size']: size['fuller_sheet'] for size in describe_all(choices)}
+
+
+def test_a_4x3_on_its_own_spends_the_ink_of_the_4x6_it_is_cut_from():
+    """What the QW410 does: one panel of ribbon per sheet, so 4x3*2 prints two for the same."""
+    sheets = fuller_sheets(tuple(entry.split('/', 1)) for entry in QW410_PPD.split())
+
+    assert sheets['w288h216'] == {'page_size': 'w288h432-div2', 'label': '4x3*2', 'count': 2, 'sheet': '4x6'}
+    assert sheets['w324h216']['page_size'] == 'w324h432-div2'
+    assert sheets['w324h288'] == {'page_size': 'w324h576-div2', 'label': '4.5x4*2', 'count': 2, 'sheet': '4.5x8'}
+
+
+@pytest.mark.parametrize('page_size', [
+    'w288h432',        # 4x6: the sheet itself
+    'w288h288',        # 4x4: the sheet 2x4*2 is cut from, so media of its own
+    'w324h324',        # 4.5x4.5: no sheet is cut into these
+    'w288h432-div2',   # already two per sheet
+])
+def test_a_print_that_fills_its_sheet_is_not_flagged(page_size):
+    sheets = fuller_sheets(tuple(entry.split('/', 1)) for entry in QW410_PPD.split())
+
+    assert sheets[page_size] is None
+
+
+def test_a_ds620_strip_on_its_own_is_pointed_at_the_smallest_sheet_of_strips():
+    """2x6*2 on a 4x6 rather than 2x6*4 on a 6x8: two strips nobody asked for are fewer than four."""
+    sheets = fuller_sheets([
+        ('w144h432', '2x6'), ('w288h432', '4x6'), ('w288h432-div2', '2x6*2'),
+        ('w432h576-div4', '2x6*4'), ('w432h576-div2', '4x6*2'),
+    ])
+
+    assert sheets['w144h432']['page_size'] == 'w288h432-div2'
+    # The DS620's 4x6 is the sheet its strips are cut from: media of its own,
+    # though a 6x8 is also cut into 4x6.
+    assert sheets['w288h432'] is None
+
+
 # --- laying copies out where the cutter separates them ----------------------
 
 # The QW410's own lines for the sizes measured with tools/manual/cut_calibration.py.

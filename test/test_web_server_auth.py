@@ -313,6 +313,61 @@ def test_a_printer_that_cannot_be_asked_does_not_break_the_editor(client, server
     assert sizes
 
 
+QW410_SIZES = [('w288h432', '4x6'), ('w288h216', '4x3'), ('w288h432-div2', '4x3*2')]
+
+
+def write_template(server, filename, page_size, **extra):
+    directory = Path(server.templates_directory)
+    directory.mkdir(parents=True, exist_ok=True)
+    template = dict(valid_template(name=filename.split('.')[0].title()), print_params={'PageSize': page_size}, **extra)
+    (directory / filename).write_text(json.dumps(template), encoding='utf-8')
+
+
+def test_the_editor_is_told_which_size_wastes_a_sheet(client, server):
+    server.page_sizes_provider = lambda: QW410_SIZES
+    login(client)
+
+    sizes, _page = editor_print_sizes(client)
+
+    by_name = {size['page_size']: size['fuller_sheet'] for size in sizes}
+    assert by_name['w288h216']['label'] == '4x3*2'
+    assert by_name['w288h432'] is None and by_name['w288h432-div2'] is None
+
+
+def test_the_admin_page_names_a_template_that_wastes_half_a_sheet(client, server):
+    server.page_sizes_provider = lambda: QW410_SIZES
+    write_template(server, 'single.json', 'w288h216')
+    write_template(server, 'pair.json', 'w288h432-div2', copies_per_sheet=2)
+    login(client)
+
+    page = client.get('/admin').get_data(as_text=True)
+
+    assert page.count('class="card-notice"') == 1
+    assert 'Single' in page and '4x3*2' in page
+
+
+def test_without_a_printer_the_admin_page_does_not_guess(client, server):
+    server.page_sizes_provider = lambda: []
+    write_template(server, 'single.json', 'w288h216')
+    login(client)
+
+    page = client.get('/admin').get_data(as_text=True)
+
+    assert 'class="card-notice"' not in page
+
+
+def test_a_template_switched_to_the_cut_sheet_is_no_longer_named(client, server):
+    """Read again once the file changes, not served from what was read before."""
+    server.page_sizes_provider = lambda: QW410_SIZES
+    write_template(server, 'single.json', 'w288h216')
+    login(client)
+    assert 'class="card-notice"' in client.get('/admin').get_data(as_text=True)
+
+    write_template(server, 'single.json', 'w288h432-div2', copies_per_sheet=2, description='switched')
+
+    assert 'class="card-notice"' not in client.get('/admin').get_data(as_text=True)
+
+
 def test_the_editor_script_only_asks_for_strings_the_page_hands_it():
     """A key missing from the bundle shows as `undefined` in the operator's face."""
     import re

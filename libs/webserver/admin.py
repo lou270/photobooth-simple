@@ -56,6 +56,7 @@ EDITOR_PAGE_JS_KEYS = {name: f'web.editor.js.{name}' for name in (
     'font_size', 'alignment', 'text_left', 'text_center', 'text_right', 'bold', 'italic', 'new_label_text',
     'label_info', 'photo_order', 'photo_info', 'field_info', 'placeholder_event_title', 'placeholder_date_title',
     'placeholder_time_title', 'printed_again', 'per_sheet', 'status_hint',
+    'whole_sheet_ink', 'ink_warning', 'ink_warning_short', 'ink_switch',
     # images, preview, export
     'uploading_image', 'image_failed', 'image_unsupported', 'image_too_heavy', 'image_loading', 'image_missing',
     'image_missing_help', 'images_missing_error', 'no_photo_slot', 'hidden_slot_error', 'too_many_layers',

@@ -192,6 +192,14 @@
             overflow-wrap: anywhere;
         }
 
+        .template-item-warning {
+            margin-top: 4px;
+            font-size: 12px;
+            line-height: 1.4;
+            color: var(--warning);
+            overflow-wrap: anywhere;
+        }
+
         .template-item-actions {
             display: flex;
             gap: 4px;
@@ -317,6 +325,30 @@
             font-size: 12px;
             color: var(--text-muted);
             white-space: nowrap;
+        }
+
+        .ink-warning {
+            display: inline-flex;
+            flex-wrap: wrap;
+            align-items: center;
+            gap: 6px 10px;
+            padding: 4px 6px 4px 10px;
+            border: 1px solid var(--notice-warning-border);
+            border-radius: 8px;
+            background: var(--notice-warning-bg);
+            color: var(--notice-warning-text);
+            font-size: 12px;
+            line-height: 1.4;
+        }
+
+        .ink-warning[hidden] {
+            display: none;
+        }
+
+        .ink-warning .btn {
+            min-height: 26px;
+            padding: 2px 10px;
+            font-size: 12px;
         }
 
         .canvas-area {
@@ -908,6 +940,11 @@
                         <option value="custom">{{ t('web.editor.custom') }}</option>
                     </select>
                 </label>
+                {# Shown by the editor when the format spends a whole sheet's ink on one print. #}
+                <span class="ink-warning" id="inkWarning" role="status" hidden>
+                    <span id="inkWarningText"></span>
+                    <button type="button" class="btn btn-secondary" id="inkWarningSwitch"></button>
+                </span>
                 <label title="{{ t('web.editor.size_info') }}">{{ t('web.editor.size') }}
                     <input type="number" id="widthInput" min="1" max="{{ page_limits.side }}">
                     ×

@@ -113,6 +113,9 @@ class WebServer:
         self.config_file = os.path.join(self.project_root, 'config.ini')
         self.logs_directory = os.path.join(self.project_root, 'logs')
         self.templates_directory = os.path.join(self.project_root, 'templates')
+        # What each template file prints on, by (filename, mtime, size): see
+        # _template_print_settings.
+        self._print_settings_cache = {}
         self.template_editor_path = os.path.join(self.web_directory, 'editor', 'template_editor.html')
         # The photo behind the welcome screen, uploaded from the admin page.
         self.welcome_background_path = str(event.WELCOME_BACKGROUND_PATH)
@@ -408,6 +411,67 @@ class WebServer:
             return {'from_printer': True, 'sizes': sizes}
         return {'from_printer': False, 'sizes': print_sizes.describe_all(print_sizes.FALLBACK_PAGE_SIZES)}
 
+    def _template_print_settings(self):
+        """(name, PageSize, copies per sheet) of every template file.
+
+        Only what the admin page needs to say a template wastes ink, and kept
+        until the file changes: a template carries its images, megabytes of
+        them, and the admin page is drawn again after every form it sends.
+        """
+        if not os.path.isdir(self.templates_directory):
+            return []
+        settings, cache = [], {}
+        for filename in sorted(os.listdir(self.templates_directory)):
+            if not filename.lower().endswith('.json'):
+                continue
+            path = os.path.join(self.templates_directory, filename)
+            try:
+                stat = os.stat(path)
+            except OSError:
+                continue
+            key = (filename, stat.st_mtime_ns, stat.st_size)
+            entry = self._print_settings_cache[key] if key in self._print_settings_cache else self._read_print_settings(path)
+            cache[key] = entry
+            if entry is not None:
+                settings.append(entry)
+        self._print_settings_cache = cache
+        return settings
+
+    @staticmethod
+    def _read_print_settings(path):
+        try:
+            with open(path, 'r', encoding='utf-8') as handle:
+                data = json.load(handle)
+        except (OSError, ValueError):
+            return None
+        if not isinstance(data, dict):
+            return None
+        params = data.get('print_params')
+        page_size = params.get('PageSize') if isinstance(params, dict) else None
+        copies = data.get('copies_per_sheet') or (
+            (2 if data.get('duplicate_horizontal') else 1) * (2 if data.get('duplicate_vertical') else 1))
+        name = data.get('name') if isinstance(data.get('name'), str) else os.path.basename(path)
+        return name, page_size, copies
+
+    def _ink_warnings(self):
+        """The templates printing one photo on a sheet the printer could cut into several.
+
+        Against the connected printer's own sizes only: without one, nothing
+        says these are the sizes of the printer the booth will print on.
+        """
+        sizes = self._print_sizes()
+        if not sizes['from_printer']:
+            return []
+        by_name = {size['page_size']: size for size in sizes['sizes']}
+        warnings = []
+        for name, page_size, copies in self._template_print_settings():
+            size = by_name.get(page_size)
+            fuller = size['fuller_sheet'] if size else None
+            if fuller and copies == 1:
+                warnings.append({'name': name, 'size': size['label'], 'sheet': fuller['sheet'],
+                                 'fuller': fuller['label'], 'count': fuller['count']})
+        return warnings
+
     def _event_text_values(self):
         """Today's values for template placeholders, from config.ini as it stands."""
         event_name, date_format = '', event.DEFAULT_DATE_FORMAT
@@ -604,6 +668,7 @@ class WebServer:
             config_sections=config_sections,
             disk_usage=self._get_disk_usage_info(),
             welcome_background_set=os.path.isfile(self.welcome_background_path),
+            ink_warnings=self._ink_warnings(),
             error_message=error_message,
             success_message=success_message,
         )

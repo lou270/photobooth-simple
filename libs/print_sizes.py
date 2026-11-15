@@ -218,8 +218,49 @@ def sheet_layout(page_size, page, copies, design_size, cut_offset):
     return {'rotate': rotate, 'along_x': along_x, 'pad': pad}
 
 
+def _sheet_inches(page_size):
+    """The sheet a size is printed on, short side first, from its name."""
+    match = _NAME.match(page_size)
+    return tuple(sorted(float(match.group(side)) / POINTS_PER_INCH for side in (1, 2)))
+
+
+def fuller_sheet(size, sizes):
+    """The cut sheet that prints several of this print for the ink of one, or None.
+
+    A dye-sub printer spends a whole panel of ribbon on every sheet it feeds,
+    however little of it is printed: a 4x3 on its own on a QW410 uses the ink
+    of the 4x6 it comes out of, and "4x3*2" prints two of them for the same.
+    A single print is taken to be that wasteful when some cut sheet of the
+    printer is made of prints its size, unless it is itself a sheet another
+    cut is made from: that one is media of its own, as the DS620's 4x6 is,
+    and printing it on its own wastes nothing.
+
+    sizes is every size the printer offers, as describe_all lists them. Of
+    several cut sheets, the smallest: it adds the fewest prints nobody asked
+    for, and is the likeliest to be loaded already. Returns its page_size,
+    label, count and sheet ("4x6").
+    """
+    if size['count'] != 1:
+        return None
+    own_short, own_long = _sheet_inches(size['page_size'])
+    cuts = [(other, _sheet_inches(other['page_size'])) for other in sizes if other['count'] > 1]
+    if any(_fits(long, short, own_long, own_short) for _cut, (short, long) in cuts):
+        return None
+    same_prints = [(cut, sheet) for cut, sheet in cuts
+                   if _fits(cut['long_in'], cut['short_in'], size['long_in'], size['short_in'])]
+    if not same_prints:
+        return None
+    best, (short, long) = min(same_prints, key=lambda pair: pair[1][0] * pair[1][1])
+    return {'page_size': best['page_size'], 'label': best['label'], 'count': best['count'],
+            'sheet': f'{_inches(short)}x{_inches(long)}'}
+
+
 def describe_all(choices):
-    """Every usable size in a printer's (name, label) list, in the driver's order."""
+    """Every usable size in a printer's (name, label) list, in the driver's order.
+
+    Each also says, under fuller_sheet, which cut sheet would print it
+    several times for the same ink, or None: see fuller_sheet.
+    """
     sizes = []
     seen = set()
     for name, label in choices:
@@ -227,4 +268,6 @@ def describe_all(choices):
         if size and size['page_size'] not in seen:
             seen.add(size['page_size'])
             sizes.append(size)
+    for size in sizes:
+        size['fuller_sheet'] = fuller_sheet(size, sizes)
     return sizes
