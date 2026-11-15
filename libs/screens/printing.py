@@ -13,14 +13,23 @@ import time
 from kivy.clock import Clock
 from kivy.logger import Logger
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.label import Label
 
 from libs.i18n import t
 from libs.kivywidgets import PaperFeedAnimation, ResizeLabel
 from libs.screens.names import ScreenNames
 from libs.screens.theme import (
-    ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, TIMINGS,
+    ICON_ERROR_PRINTING, ICON_PRINT, ICON_TTF, PRINT_DONE_SECONDS, SMALL_FONT, TIMINGS, wh_bind,
 )
 from libs.screens.base import ColorScreen
+
+
+# What stops a printer until someone sees to it, as DeviceUtils.get_printer_problem()
+# names it; the guest reads it as the title (printing.stuck_title), the words the
+# welcome screen's banner uses. Anything else is a printer that went away. The
+# job stays in the queue, which the booth starts again by itself, so it is also
+# what they read when the booth stops waiting: the photo still comes out.
+STUCK_PROBLEMS = ('paper', 'ribbon', 'jam', 'cover', 'stopped')
 
 
 class PrintingScreen(ColorScreen):
@@ -68,13 +77,19 @@ class PrintingScreen(ColorScreen):
         )
         layout.add_widget(self.title)
 
-        self.message = ResizeLabel(
+        # A plain label, wrapped: what to do about a printer out of paper is a
+        # sentence rather than a status line, wider than a panel turned
+        # portrait, and a ResizeLabel sizes its font to fit the whole text on
+        # one line, which shrank it to a few pixels.
+        self.message = Label(
             text=t('printing.saving'),
             size_hint=(1, 0.14),
-            wh_fraction=0.035,
+            font_size=SMALL_FONT(),
             halign='center',
             valign='middle',
         )
+        wh_bind(self.message, 'font_size', SMALL_FONT)
+        self.message.bind(size=self.message.setter('text_size'))
         layout.add_widget(self.message)
 
         self.add_widget(layout)
@@ -144,6 +159,50 @@ class PrintingScreen(ColorScreen):
         self._clock = None
         self.app.transition_to(ScreenNames.START)
 
+    def _wait_for_printer(self, problem):
+        """Say why the printer is not printing, for up to PRINTER_WAIT_TIMEOUT.
+
+        Said at once: the screen used to go on announcing the photo for as long
+        as the driver took to find the printer empty, then counted down a wait
+        for a printer that had "gone", without a word about paper.
+        """
+        now = time.monotonic()
+        if self._printer_wait_started_at is None:
+            self._printer_wait_started_at = now
+            Logger.warning('PrintingScreen: printer cannot print (%s), waiting for it', problem)
+            # The sheet stops when the printer does.
+            self.animation.stop()
+        waited = now - self._printer_wait_started_at
+
+        if problem in STUCK_PROBLEMS:
+            title = t(f'printing.stuck_title.{problem}')
+            message = t('printing.stuck_message')
+            if waited >= self._timeout:
+                self._fail(title, message)
+                return
+            self.title.text = title
+            self.message.text = message
+        else:
+            if waited >= self._timeout:
+                self._fail(t('printing.print_failed'), t('printing.printer_reconnect_failed'))
+                return
+            self.message.text = t('printing.printer_unavailable', remaining=max(0, int(self._timeout - waited)))
+        self._clock = Clock.schedule_once(self._tick, 1)
+
+    def _end_printer_wait(self):
+        """Back to printing, after _wait_for_printer, once the printer is."""
+        if self._printer_wait_started_at is None:
+            return
+        waited = time.monotonic() - self._printer_wait_started_at
+        Logger.info('PrintingScreen: printer recovered after %.2fs', waited)
+        # Waiting for someone to refill the printer is not the printing taking
+        # too long: it does not count against the printing's ceiling.
+        self._print_started_at += waited
+        self._printer_wait_started_at = None
+        self.title.text = t('printing.title')
+        self.message.text = t('printing.printing')
+        self.animation.start()
+
     def on_touch_down(self, touch):
         # A guest who has understood should not have to wait out the delay.
         if self._can_leave:
@@ -203,6 +262,39 @@ class PrintingScreen(ColorScreen):
                 self._fail(t('printing.print_failed'), str(exc))
                 return
 
+        # Only the first sheet is waited for. It proves the printer takes this
+        # photo; the others are the same file on the same queue and come out
+        # behind it. Waiting for the last one held the guest - and the next
+        # one - for a minute a copy on a dye-sub. Asked before anything about
+        # the printer: once it is out the guest can go, whatever stops the
+        # copies behind it, which the welcome screen then reports.
+        first_task_id = self._print_task_ids[0]
+        problem = self.app.get_printer_problem()
+        try:
+            status = self.app.devices.get_print_status(first_task_id)
+        except Exception as exc:
+            if problem != 'unavailable':
+                self._fail(t('printing.print_failed'), str(exc))
+                return
+            status = None  # CUPS itself is out of reach: waited for like the printer
+
+        Logger.info('PrintingScreen: print status task=%s status=%s', first_task_id, status)
+        if status == 'done':
+            self._end_printer_wait()
+            if not self._print_counted:
+                # Every copy is queued, and charged now: nobody is left on
+                # this screen to charge the others when they come out.
+                self.app.track_print_sent(self._copies)
+                self._print_counted = True
+            self._earlier_task_ids = self._print_task_ids[1:]
+            self._done()
+            return
+
+        if problem:
+            self._wait_for_printer(problem)
+            return
+        self._end_printer_wait()
+
         # A ceiling on the first sheet, budgeted per sheet that comes out
         # before it. Only a safety net against a job CUPS never finishes;
         # nobody should ever reach it.
@@ -211,43 +303,5 @@ class PrintingScreen(ColorScreen):
             self._fail(t('printing.print_failed'), t('printing.timed_out'))
             return
 
-        if not self.app.has_printer():
-            if self._printer_wait_started_at is None:
-                self._printer_wait_started_at = time.monotonic()
-                Logger.warning('PrintingScreen: printer unavailable, waiting for recovery')
-            waited = time.monotonic() - self._printer_wait_started_at
-            remaining = max(0, int(self._timeout - waited))
-            self.message.text = t('printing.printer_unavailable', remaining=remaining)
-            if waited >= self._timeout:
-                self._fail(t('printing.print_failed'), t('printing.printer_reconnect_failed'))
-                return
-            self._clock = Clock.schedule_once(self._tick, 1)
-            return
-
-        if self._printer_wait_started_at is not None:
-            Logger.info('PrintingScreen: printer recovered after %.2fs', time.monotonic() - self._printer_wait_started_at)
-            self._printer_wait_started_at = None
-
-        # Only the first sheet is waited for. It proves the printer takes this
-        # photo; the others are the same file on the same queue and come out
-        # behind it. Waiting for the last one held the guest - and the next
-        # one - for a minute a copy on a dye-sub.
-        first_task_id = self._print_task_ids[0]
-        try:
-            status = self.app.devices.get_print_status(first_task_id)
-        except Exception as exc:
-            self._fail(t('printing.print_failed'), str(exc))
-            return
-
-        Logger.info('PrintingScreen: print status task=%s status=%s', first_task_id, status)
-        if status == 'done':
-            if not self._print_counted:
-                # Every copy is queued, and charged now: nobody is left on
-                # this screen to charge the others when they come out.
-                self.app.track_print_sent(self._copies)
-                self._print_counted = True
-            self._earlier_task_ids = self._print_task_ids[1:]
-            self._done()
-        else:
-            self.message.text = t('printing.printing')
-            self._clock = Clock.schedule_once(self._tick, 1)
+        self.message.text = t('printing.printing')
+        self._clock = Clock.schedule_once(self._tick, 1)

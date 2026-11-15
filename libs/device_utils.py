@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import time
 import traceback
@@ -645,6 +646,46 @@ class Picamera2Camera(Camera):
 
 class CupsPrinter(PrintDevice):
     _name = None
+    # What had stopped the queue when the booth last started it again, and
+    # when, by time.monotonic(): see resume_if_stopped(). Written by the
+    # booth's watch thread only, as one tuple so get_problem() never reads half
+    # of it.
+    _resumed = (None, None)
+
+    # IPP printer-state, RFC 8011 section 5.4.11: 3 idle, 4 processing.
+    PRINTER_STATE_STOPPED = 5
+
+    # How often a queue its driver stopped is given another try. Each try
+    # renders the sheet again, hence no more often than this; it is also the
+    # longest a refilled printer waits before the booth finds it out.
+    RESUME_INTERVAL = 30
+
+    # What keeps a sheet in the printer, and the word the screens use for it.
+    #
+    # IPP printers say it in printer-state-reasons, matched here on the
+    # prefix: CUPS appends -error, -warning or -report, and only a -report is
+    # not something going wrong.
+    QUEUE_PROBLEMS = (
+        ('media-empty', 'paper'),
+        ('media-needed', 'paper'),
+        ('input-tray-missing', 'paper'),
+        ('marker-supply-empty', 'ribbon'),
+        ('marker-supply-missing', 'ribbon'),
+        ('toner-empty', 'ribbon'),
+        ('media-jam', 'jam'),
+        ('door-open', 'cover'),
+        ('cover-open', 'cover'),
+    )
+    # Gutenprint's dye-sub backends name no reason. A queue one of them stopped
+    # keeps its last error as printer-state-message instead, in its own words:
+    # "Printer not ready: Paper End, please correct..." on a DNP, or Ribbon
+    # End, Paper Jam, Cover Open.
+    STOP_MESSAGES = (
+        (re.compile(r'\b(paper|media)\s+(end|empty|out)\b|\b(out\s+of|no)\s+(paper|media)\b', re.I), 'paper'),
+        (re.compile(r'\bribbon\s+(end|empty|out)\b|\b(out\s+of|no)\s+ribbon\b', re.I), 'ribbon'),
+        (re.compile(r'\bjam(med)?\b', re.I), 'jam'),
+        (re.compile(r'\b(cover|door|lid)\s+(is\s+)?open\b', re.I), 'cover'),
+    )
 
     def __init__(self, name=None):
         if cups:
@@ -704,12 +745,17 @@ class CupsPrinter(PrintDevice):
     JOB_STATE_COMPLETED = 9
 
     @staticmethod
-    def _format_job_reasons(attributes):
-        """job-state-reasons is a string on some CUPS versions, a list on others."""
-        reasons = attributes.get('job-state-reasons') or 'unknown'
-        if isinstance(reasons, (list, tuple)):
-            return ', '.join(str(reason) for reason in reasons) or 'unknown'
-        return str(reasons)
+    def _reason_list(reasons):
+        """*-state-reasons is a string on some CUPS versions, a list on others."""
+        if not reasons:
+            return []
+        if isinstance(reasons, str):
+            reasons = reasons.split(',')
+        return [str(reason).strip() for reason in reasons if str(reason).strip()]
+
+    @classmethod
+    def _format_job_reasons(cls, attributes):
+        return ', '.join(cls._reason_list(attributes.get('job-state-reasons'))) or 'unknown'
 
     def get_print_status(self, task_id):
         attributes = self._instance.getJobAttributes(task_id)
@@ -740,26 +786,14 @@ class CupsPrinter(PrintDevice):
     def _connect():
         return cups.Connection()
 
-    # printer-state-reasons that keep a sheet in the printer, and what the
-    # welcome screen calls each. Matched on the prefix: CUPS appends -error,
-    # -warning or -report, and only a -report is not something going wrong.
-    QUEUE_PROBLEMS = (
-        ('media-empty', 'paper'),
-        ('media-needed', 'paper'),
-        ('marker-supply-empty', 'ribbon'),
-        ('toner-empty', 'ribbon'),
-        ('media-jam', 'jam'),
-        ('door-open', 'cover'),
-        ('cover-open', 'cover'),
-    )
-
     def get_queue_problem(self, task_ids):
         """Which of `task_ids` are still to come out, and what holds them up.
 
         Returns (still_queued, problem). problem is None while they are simply
-        waiting their turn, else a key of QUEUE_PROBLEMS or 'stopped' for a
-        queue that is stuck for a reason CUPS does not name. A job CUPS no
-        longer knows, or that ended one way or another, is not waited for.
+        waiting their turn, else a word of QUEUE_PROBLEMS or 'stopped' for a
+        queue that is stuck for a reason nobody names (see why_stopped). A job
+        CUPS no longer knows, or that ended one way or another, is not waited
+        for.
 
         Asked from the welcome screen's own thread, so on a connection of its
         own, like get_pages.
@@ -782,23 +816,18 @@ class CupsPrinter(PrintDevice):
         printer = (connection.getPrinters() or {}).get(self._name)
         if not printer:
             return still_queued, 'stopped'
-        reasons = printer.get('printer-state-reasons') or []
-        if isinstance(reasons, str):
-            reasons = [reasons]
-        for reason in reasons:
-            reason = str(reason)
-            if reason.endswith('-report'):
-                continue
-            for prefix, problem in self.QUEUE_PROBLEMS:
-                if reason.startswith(prefix):
-                    return still_queued, problem
-        if job_stopped or printer.get('printer-state') == 5 or printer.get('printer-is-accepting-jobs') is False:
+        problem = self._named_problem(printer)
+        if problem:
+            return still_queued, problem
+        if (job_stopped or printer.get('printer-state') == self.PRINTER_STATE_STOPPED
+                or printer.get('printer-is-accepting-jobs') is False):
             Logger.warning(
                 'CupsPrinter: queue stuck, reasons=%s message=%s',
-                reasons, printer.get('printer-state-message'),
+                printer.get('printer-state-reasons'), printer.get('printer-state-message'),
             )
-            return still_queued, 'stopped'
-        return still_queued, None
+            return still_queued, self.why_stopped(printer)
+        # Started again by the booth and being tried: see get_problem.
+        return still_queued, self._resumed_problem(time.monotonic())
 
     # A job nobody can still be waiting for: far beyond what the printing
     # screen gives a printer to come back (PRINTER_WAIT_TIMEOUT) plus three
@@ -820,18 +849,9 @@ class CupsPrinter(PrintDevice):
         now = time.time() if now is None else now
         canceled = 0
         try:
-            # Asked for by name: without requested_attributes CUPS answers
-            # with job-id and job-uri alone, and the job's printer is in
-            # job-printer-uri, not printer-uri. Looking for the latter is what
-            # left this cancelling nothing at all. CUPS counts time-at-creation
-            # in Unix seconds.
-            jobs = self._instance.getJobs(
-                which_jobs='not-completed',
-                requested_attributes=['job-id', 'job-printer-uri', 'time-at-creation'],
-            )
+            # CUPS counts time-at-creation in Unix seconds.
+            jobs = self._queue_jobs(self._instance, ['time-at-creation'])
             for job_id, job in jobs.items():
-                if not str(job.get('job-printer-uri') or '').endswith('/' + self._name):
-                    continue
                 created_at = job.get('time-at-creation')
                 if not isinstance(created_at, int) or now - created_at < self.STALE_JOB_SECONDS:
                     continue
@@ -846,24 +866,135 @@ class CupsPrinter(PrintDevice):
             Logger.warning('CupsPrinter: canceled stale jobs count=%s printer=%s', canceled, self._name)
         return canceled
 
-    def is_available(self):
+    def _queue_jobs(self, connection, attributes=()):
+        """This queue's jobs that are not completed yet, by job id.
+
+        Attributes asked for by name: without requested_attributes CUPS answers
+        with job-id and job-uri alone, and the job's printer is in
+        job-printer-uri, not printer-uri. Looking for the latter is what left
+        cancel_stale_jobs cancelling nothing at all.
+        """
+        jobs = connection.getJobs(
+            which_jobs='not-completed',
+            requested_attributes=['job-id', 'job-printer-uri', *attributes],
+        )
+        return {
+            job_id: job for job_id, job in jobs.items()
+            if str(job.get('job-printer-uri') or '').endswith('/' + self._name)
+        }
+
+    @classmethod
+    def _named_problem(cls, printer):
+        """The word of QUEUE_PROBLEMS the queue's reasons name, or None.
+
+        `printer` is the queue as getPrinters() describes it.
+        """
+        for reason in cls._reason_list(printer.get('printer-state-reasons')):
+            if reason.endswith('-report'):
+                continue
+            for prefix, problem in cls.QUEUE_PROBLEMS:
+                if reason.startswith(prefix):
+                    return problem
+        return None
+
+    @classmethod
+    def why_stopped(cls, printer):
+        """What stopped a stopped queue: a word of QUEUE_PROBLEMS, else 'stopped'."""
+        problem = cls._named_problem(printer)
+        if problem:
+            return problem
+        message = printer.get('printer-state-message') or ''
+        for pattern, problem in cls.STOP_MESSAGES:
+            if pattern.search(message):
+                return problem
+        return 'stopped'
+
+    def _resumed_problem(self, now):
+        """What had stopped the queue, while the booth's last try of it may still fail."""
+        problem, resumed_at = self._resumed
+        if problem and now - resumed_at < self.RESUME_INTERVAL:
+            return problem
+        return None
+
+    @staticmethod
+    def _paused_by_hand(printer):
+        """True for a queue someone paused, which the booth leaves paused.
+
+        CUPS words a pause "Paused" when cupsdisable or its web page give no
+        reason; a queue its driver stopped keeps the driver's last error instead
+        (stop_printer() in CUPS's ipp.c, finalize_job() in its job.c).
+        """
+        return (printer.get('printer-state-message') or '').strip().lower() == 'paused'
+
+    def get_problem(self, now=None):
+        """Why this queue cannot print a guest's photo now, or None when it can.
+
+        For a stopped queue, what stopped it (see why_stopped): 'paper',
+        'ribbon', 'jam', 'cover' or 'stopped'. 'unavailable' when it is out of
+        reach: unknown to CUPS, refusing jobs, or CUPS not answering.
+
+        A queue the booth has just started again still counts as stopped until
+        the next try, unless its jobs are through. The driver only says whether
+        the paper is back once it has rendered the sheet again, and in the
+        meantime the queue looks like it is printing: the guest would read
+        that their photo is coming out, every thirty seconds, for as long as
+        nobody refills the printer.
+        """
         if self._instance is None or not self._name:
-            return False
-
+            return 'unavailable'
         try:
-            printers = self._instance.getPrinters()
-            printer = printers.get(self._name)
-            if not printer:
-                return False
-
-            if printer.get('printer-is-accepting-jobs') is False:
-                return False
-
-            # CUPS states: 3=idle, 4=printing, 5=stopped
-            return printer.get('printer-state') != 5
+            printer = self._instance.getPrinters().get(self._name)
+            if not printer or printer.get('printer-is-accepting-jobs') is False:
+                return 'unavailable'
+            if printer.get('printer-state') == self.PRINTER_STATE_STOPPED:
+                return self.why_stopped(printer)
+            problem = self._resumed_problem(time.monotonic() if now is None else now)
+            if problem and self._queue_jobs(self._instance):
+                return problem
+            return None
         except Exception as e:
             Logger.warning('CupsPrinter: availability check failed for %s: %s', self._name, e)
+            return 'unavailable'
+
+    def is_available(self):
+        return self.get_problem() is None
+
+    def resume_if_stopped(self, now=None):
+        """Start this queue again if its driver stopped it. True when it did.
+
+        Meant to run every RESUME_INTERVAL. Gutenprint's dye-sub backends stop
+        their queue for anything the printer reports, running out of paper
+        included, and CUPS leaves a stopped queue alone until someone runs
+        cupsenable: refilling the printer was only half the fix. The guest's
+        job stays in the queue, so trying it again is how a refilled printer
+        is found out: still empty, and the driver stops the queue again;
+        refilled, and the photo comes out.
+
+        On a connection of its own: it runs on the booth's watch thread, while
+        the screens use the booth's.
+        """
+        if self._instance is None or not self._name:
             return False
+        try:
+            connection = self._connect()
+            printer = connection.getPrinters().get(self._name)
+            if not printer or printer.get('printer-state') != self.PRINTER_STATE_STOPPED:
+                return False
+            if self._paused_by_hand(printer):
+                return False
+            problem = self.why_stopped(printer)
+            connection.enablePrinter(self._name)
+        except Exception as exc:
+            # Resume-Printer is an administrator's operation in CUPS: the
+            # booth's user needs to be in lpadmin, which install.sh sees to.
+            Logger.warning('CupsPrinter: could not start %s again: %s', self._name, exc)
+            return False
+        self._resumed = (problem, time.monotonic() if now is None else now)
+        Logger.warning(
+            'CupsPrinter: started %s again, stopped by its driver (%s): %s',
+            self._name, problem, printer.get('printer-state-message') or '-',
+        )
+        return True
 
 class DeviceUtils:
     _preview = None
@@ -958,6 +1089,17 @@ class DeviceUtils:
         if self._printer is None:
             return False
         return self._printer.is_available()
+
+    def get_printer_problem(self):
+        """Why the printer cannot print now, or None: see CupsPrinter.get_problem."""
+        if self._printer is None:
+            return 'unavailable'
+        return self._printer.get_problem()
+
+    def resume_stopped_printer(self):
+        if self._printer is None:
+            return False
+        return self._printer.resume_if_stopped()
 
     def cancel_stale_print_jobs(self):
         if self._printer is None:

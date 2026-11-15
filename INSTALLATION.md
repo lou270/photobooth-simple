@@ -381,6 +381,17 @@ touches it.
 under the configured name and lists the ones it does have. A registered but
 paused queue: `cupsenable <name>`.
 
+**Printer out of paper.** The Gutenprint driver pauses the queue when the
+printer reports an empty roll, an open cover or a jam, and CUPS never starts a
+paused queue again by itself. The booth does: every 30 seconds it starts the
+queue again, the guest's photo still in it, and either the driver finds the
+printer still empty and pauses it again, or the photo comes out. Refilling the
+printer is enough; the booth tells the guest the printer is out of paper as
+soon as the queue stops. A queue paused by hand (`cupsdisable`, or Pause on
+CUPS's web page) is left paused. Starting a queue is a CUPS administrator's
+operation: the booth's user must be in the `lpadmin` group, which `install.sh`
+sees to; otherwise the log says `could not start <name> again`.
+
 **Guests scan the code but nothing loads.** Check the address the doctor reports:
 it is the one the codes carry, and the phone must be on that same network. On
 the venue's WiFi, client isolation is the usual cause; a travel router avoids

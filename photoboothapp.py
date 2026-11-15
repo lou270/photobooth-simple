@@ -42,7 +42,7 @@ from kivy.uix.screenmanager import FadeTransition
 
 from libs.config import load_config
 from libs.core import ProcessRunner, SessionStorage
-from libs.device_utils import DeviceUtils
+from libs.device_utils import CupsPrinter, DeviceUtils
 from libs.file_utils import FileUtils
 from libs.imaging import DEFAULT_FILTER, apply_filter, apply_filter_to_file
 from libs import event, i18n, touch_source
@@ -417,7 +417,11 @@ class PhotoboothApp(App):
             self.usb_transfer.start()
         else:
             Logger.info('PhotoboothApp: USB export disabled')
-        
+
+        self._printer_watch_stop = threading.Event()
+        if self.PRINTER:
+            threading.Thread(target=self._watch_printer, name='photobooth-printer-watch', daemon=True).start()
+
         # The web server always runs for gallery/admin access; SHARE only controls UI buttons.
         abs_save_directory = os.path.abspath(self.save_directory)
         self.web_server = WebServer(
@@ -483,6 +487,8 @@ class PhotoboothApp(App):
             self.ringled.clear()
         if self.chevrons:
             self.chevrons.close()
+        if getattr(self, '_printer_watch_stop', None):
+            self._printer_watch_stop.set()
         if getattr(self, 'web_server', None):
             self.web_server.stop()
         if getattr(self, 'usb_transfer', None):
@@ -859,6 +865,23 @@ class PhotoboothApp(App):
 
     def has_printer(self):
         return self.devices.has_printer()
+
+    def get_printer_problem(self):
+        return self.devices.get_printer_problem()
+
+    def _watch_printer(self):
+        """Start the print queue again whenever its driver stops it.
+
+        See CupsPrinter.resume_if_stopped: refilling the printer used to leave
+        the queue paused, with the guest's photo in it, until someone ran
+        cupsenable. Through self.devices each time, which a failed shot
+        rebuilds.
+        """
+        while not self._printer_watch_stop.wait(CupsPrinter.RESUME_INTERVAL):
+            try:
+                self.devices.resume_stopped_printer()
+            except Exception as exc:
+                Logger.warning('PhotoboothApp: print queue watch failed: %s', exc)
 
     def can_start_print(self):
         if not self.has_printer():

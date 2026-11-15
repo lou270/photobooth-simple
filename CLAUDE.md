@@ -46,7 +46,9 @@ REMOTE_GALLERY (photo d'un téléphone → PROCESSING).
   reconstruits (`reset_devices`).
 - Écriture des sessions et photos des téléphones : `app.start_photo_task`,
   les tâches s'exécutent l'une après l'autre, car toutes travaillent dans `DCIM/tmp`.
-- Serveur web, export USB et rechargement des templates ont leurs propres threads.
+- Serveur web, export USB et rechargement des templates ont leurs propres threads,
+  tout comme la surveillance de la file CUPS (`_watch_printer`), qui relance une
+  file que le pilote a mise en pause (plus de papier, capot ouvert).
 
 ### Où vit quoi
 - Caméras : contrat dans `libs/hardware/camera.py`, backends Picamera2,

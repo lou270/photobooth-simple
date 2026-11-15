@@ -286,7 +286,9 @@ COLLAGE_DPI = 300
 # another printer with tools/manual/cut_calibration.py.
 CUT_OFFSET = 20
 
-# Seconds to wait for printer recovery before continuing without printing
+# Seconds the printing screen waits for a printer in error before letting the
+# guest go. A printer out of paper still prints the photo once refilled: the
+# booth starts its paused queue again by itself.
 PRINTER_WAIT_TIMEOUT = 45
 
 [USB]

@@ -6,6 +6,7 @@ the error screen. Exercised without building a screen, which needs a window
 this suite does not have.
 """
 
+import json
 import os
 import sys
 import time
@@ -20,6 +21,7 @@ os.environ.setdefault('KIVY_GL_BACKEND', 'mock')
 sys.path.append(str(Path(__file__).resolve().parents[1]))
 from kivy.clock import Clock
 
+from libs import i18n
 from libs.screens import PrintingScreen, ScreenMgr
 from libs.screens import printing as printing_module
 from libs.timings import TIMINGS
@@ -38,9 +40,9 @@ class FakeDevices:
 class FakeApp:
     PRINTER_WAIT_TIMEOUT = 45
 
-    def __init__(self, status='done', printer=True, pending=False, photo_error=None):
+    def __init__(self, status='done', problem=None, pending=False, photo_error=None):
         self.devices = FakeDevices(status)
-        self.printer = printer
+        self.problem = problem
         self.pending = pending
         self.photo_error = photo_error
         self.printed = []
@@ -53,8 +55,8 @@ class FakeApp:
     def get_pending_photo_error(self):
         return self.photo_error
 
-    def has_printer(self):
-        return self.printer
+    def get_printer_problem(self):
+        return self.problem
 
     def trigger_print(self, copies, format_idx):
         self.printed.append((copies, format_idx))
@@ -75,6 +77,8 @@ class Printing:
     _done = PrintingScreen._done
     _leave = PrintingScreen._leave
     _count_sheets_ahead = PrintingScreen._count_sheets_ahead
+    _wait_for_printer = PrintingScreen._wait_for_printer
+    _end_printer_wait = PrintingScreen._end_printer_wait
 
     def __init__(self, app, copies=1):
         self.app = app
@@ -91,7 +95,9 @@ class Printing:
         self._clock = None
         self.title = SimpleNamespace(text='')
         self.message = SimpleNamespace(text='')
-        self.animation = SimpleNamespace(stop=lambda: None)
+        self.animation = SimpleNamespace(running=True)
+        self.animation.start = lambda: setattr(self.animation, 'running', True)
+        self.animation.stop = lambda: setattr(self.animation, 'running', False)
 
 
 def settle(seconds):
@@ -194,7 +200,7 @@ def test_a_printer_that_refuses_the_job_sends_the_guest_to_the_error_screen():
 
 
 def test_a_printer_that_never_comes_back_gives_up():
-    app = FakeApp(printer=False)
+    app = FakeApp(status='pending', problem='unavailable')
     screen = Printing(app)
     screen._printer_wait_started_at = time.monotonic() - 100
 
@@ -204,13 +210,105 @@ def test_a_printer_that_never_comes_back_gives_up():
 
 
 def test_a_printer_that_is_only_briefly_away_is_waited_for():
-    app = FakeApp(printer=False)
+    app = FakeApp(status='pending', problem='unavailable')
     screen = Printing(app)
 
     screen._tick(None)
 
     assert app.transitions == []
     assert screen._printer_wait_started_at is not None
+
+
+# --- a printer out of paper ------------------------------------------------
+
+def test_a_printer_out_of_paper_says_so_at_once():
+    """It used to announce the photo, then count down a wait for a printer
+    that had "gone": nothing told the guest it was paper, or to fetch someone."""
+    app = FakeApp(status='pending', problem='paper')
+    screen = Printing(app)
+
+    screen._tick(None)
+
+    assert screen.title.text == i18n.t('printing.stuck_title.paper')
+    assert screen.message.text == i18n.t('printing.stuck_message')
+    assert app.transitions == []
+    assert not screen.animation.running   # the sheet stops with the printer
+
+
+@pytest.mark.parametrize('problem', ['ribbon', 'jam', 'cover', 'stopped'])
+def test_a_printer_stopped_for_another_reason_names_it(problem):
+    app = FakeApp(status='pending', problem=problem)
+    screen = Printing(app)
+
+    screen._tick(None)
+
+    assert screen.title.text == i18n.t(f'printing.stuck_title.{problem}')
+    assert app.transitions == []
+
+
+def test_every_stuck_reason_has_a_title_like_the_welcome_banner():
+    """The printing screen and the welcome banner name the same problems."""
+    for language in ('en', 'fr'):
+        words = json.loads((Path(__file__).resolve().parents[1] / 'locales' / f'{language}.json').read_text(encoding='utf-8'))
+        assert set(words['printing']['stuck_title']) == set(printing_module.STUCK_PROBLEMS)
+        assert set(words['printing']['stuck_title']) == set(words['start']['print_stuck'])
+
+
+def test_a_guest_who_waited_too_long_is_told_their_photo_will_still_come_out():
+    """The job stays queued and the booth starts the queue again by itself."""
+    app = FakeApp(status='pending', problem='paper')
+    screen = Printing(app)
+    screen._tick(None)
+
+    screen._printer_wait_started_at = time.monotonic() - (app.PRINTER_WAIT_TIMEOUT + 1)
+    screen._tick(None)
+
+    screen_name, kwargs = app.transitions[0]
+    assert screen_name == ScreenMgr.ERROR
+    assert i18n.t('printing.stuck_title.paper') in kwargs['message']
+    assert i18n.t('printing.stuck_message') in kwargs['message']
+
+
+def test_a_refilled_printer_finishes_the_print(quick_exit):
+    app = FakeApp(status='pending', problem='paper')
+    screen = Printing(app)
+    screen._tick(None)
+
+    app.problem = None                  # refilled, and the queue started again
+    app.devices.status = 'done'
+    screen._tick(None)
+
+    assert app.counted == 1
+    assert screen._can_leave
+    assert screen.title.text == i18n.t('printing.title')
+    assert screen.animation.running
+
+
+def test_a_first_sheet_out_frees_the_guest_whatever_stops_the_copies(quick_exit):
+    """The copies behind it are the welcome screen's banner's to report."""
+    app = FakeApp(status='done', problem='paper')
+    screen = Printing(app, copies=3)
+    screen._tick(None)
+
+    assert screen._can_leave
+    assert app.counted == 3
+
+
+def test_waiting_for_paper_does_not_count_against_the_printing_ceiling():
+    """An operator who gives the refill five minutes must get five minutes."""
+    app = FakeApp(status='pending', problem='paper')
+    screen = Printing(app)
+    screen._tick(None)
+
+    # Most of the ceiling went on waiting for someone to refill the printer.
+    wait = TIMINGS.print_sheet_timeout - 1
+    screen._print_started_at -= wait + 2
+    screen._printer_wait_started_at = time.monotonic() - wait
+    app.problem = None
+    screen._tick(None)
+
+    assert app.transitions == []
+    assert screen.message.text == i18n.t('printing.printing')
 
 
 def test_nothing_is_sent_while_the_photo_is_still_being_written():

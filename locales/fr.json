@@ -58,6 +58,14 @@
     "sending": "Envoi de la photo à l'imprimante...",
     "printing": "Votre photo sort de l'imprimante.",
     "printer_unavailable": "Imprimante indisponible. Attente de reconnexion... {remaining}s",
+    "stuck_title": {
+      "paper": "PLUS DE PAPIER",
+      "ribbon": "RUBAN ÉPUISÉ",
+      "jam": "PAPIER COINCÉ",
+      "cover": "IMPRIMANTE OUVERTE",
+      "stopped": "IMPRIMANTE ARRÊTÉE"
+    },
+    "stuck_message": "Merci d'appeler un opérateur : votre photo sortira dès que l'imprimante repartira.",
     "printer_reconnect_failed": "L'imprimante ne s'est pas reconnectée à temps.",
     "timed_out": "L'impression a dépassé le délai imparti.",
     "print_failed": "L'impression a échoué mais la photo a été enregistrée.",
@@ -525,7 +533,7 @@
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Attente si l'imprimante ne répond plus",
-            "help": "Quand l'imprimante est débranchée ou en erreur, temps pendant lequel la borne attend son retour avant d'abandonner l'impression (la photo reste enregistrée). Minimum 5 secondes."
+            "help": "Quand l'imprimante est débranchée ou en erreur, temps pendant lequel l'écran d'impression attend son retour avant de laisser partir l'invité (la photo reste enregistrée). Une imprimante en panne de papier l'imprime quand même une fois rechargée. Minimum 5 secondes."
           }
         },
         "Global": {

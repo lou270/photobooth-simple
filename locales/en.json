@@ -58,6 +58,14 @@
     "sending": "Sending photo to printer...",
     "printing": "Your photo is coming out of the printer.",
     "printer_unavailable": "Printer unavailable. Waiting for it to come back... {remaining}s",
+    "stuck_title": {
+      "paper": "OUT OF PAPER",
+      "ribbon": "RIBBON USED UP",
+      "jam": "PAPER JAM",
+      "cover": "PRINTER OPEN",
+      "stopped": "PRINTER STOPPED"
+    },
+    "stuck_message": "Please call an operator: your photo will come out as soon as the printer starts again.",
     "printer_reconnect_failed": "The printer did not come back in time.",
     "timed_out": "The print operation timed out.",
     "print_failed": "Printing failed but the photo has been saved.",
@@ -525,7 +533,7 @@
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Wait when the printer stops answering",
-            "help": "When the printer is unplugged or in error, how long the booth waits for it to come back before giving up the print (the photo stays saved). At least 5 seconds."
+            "help": "When the printer is unplugged or in error, how long the printing screen waits for it to come back before letting the guest go (the photo stays saved). A printer out of paper still prints it once refilled. At least 5 seconds."
           }
         },
         "Global": {
