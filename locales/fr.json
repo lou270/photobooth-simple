@@ -247,7 +247,8 @@
       "templates_eyebrow": "Modèles",
       "edit_layouts": "Modifier les mises en page",
       "edit_layouts_hint": "Créez et modifiez les mises en page imprimées, avec leurs cadres photo et leurs textes.",
-      "ink_warning": "« {name} » imprime un {size} seul, qui consomme l'encre d'une feuille {sheet} entière. Passez-le en {fuller} dans l'éditeur : {count} tirages pour la même encre.",
+      "ink_warning": "« {name} » ({size}) ne couvre qu'une partie de la feuille {sheet}, mais en consomme toute l'encre. Passez-le en {fuller} dans l'éditeur : {count} tirages pour la même encre.",
+      "ink_warning_alone": "« {name} » ({size}) ne couvre qu'une partie de la feuille {sheet}, mais en consomme toute l'encre.",
       "welcome_background_title": "Photo de l'écran d'accueil",
       "welcome_background_hint": "La photo derrière le titre que voient les invités pendant que la borne attend. Envoyée à part : elle s'enregistre dès l'envoi, sans le bouton Enregistrer.",
       "welcome_background_none": "Aucune photo envoyée : la borne affiche la sienne.",
@@ -321,7 +322,8 @@
         "unlimited": "Illimité",
         "automatic": "automatique",
         "printing_disabled": "aucune (impression désactivée)",
-        "open_network": "Réseau ouvert"
+        "open_network": "Réseau ouvert",
+        "unknown": "inconnu"
       },
       "units": {
         "seconds": "s",
@@ -531,6 +533,10 @@
           "CUT_OFFSET": {
             "label": "Point de départ des coupes",
             "help": "Pour un modèle imprimé sur une feuille que l'imprimante découpe en plusieurs tirages (2x4*3…) : à quelle distance du début de la page l'imprimante commence à mesurer ses coupes, en pixels à 300 dpi. La borne place chaque exemplaire sur son propre tirage à partir de là, pour que les coupes tombent entre les exemplaires. 20 sur une DNP QW410 ; une autre imprimante se mesure avec tools/manual/cut_calibration.py."
+          },
+          "PRINTER_MEDIA": {
+            "label": "Support chargé dans l'imprimante",
+            "help": "Le format écrit sur la boîte du rouleau : 4x6, 4.5x8… L'imprimante consomme l'encre d'une feuille entière à chaque tirage : l'éditeur de modèles et cette page signalent tout format plus petit que cette feuille, et proposent celui qui y imprime plus de photos pour la même encre (2x4*3 plutôt que 2x4*2 sur du 4x6). Laissé vide, seul un tirage seul est signalé (un 4x3 plutôt que 4x3*2)."
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Attente si l'imprimante ne répond plus",
@@ -938,8 +944,8 @@
         "printed_again": "Imprimé encore ici",
         "per_sheet": "{count} par feuille",
         "whole_sheet_ink": "⚠ encre d'une feuille {sheet}",
-        "ink_warning": "Un {size} seul consomme l'encre d'une feuille {sheet} entière : {fuller} en imprime {count} pour la même encre.",
-        "ink_warning_short": "Un {size} seul consomme l'encre d'une feuille {sheet} entière.",
+        "ink_warning": "{size} ne couvre qu'une partie de la feuille {sheet}, mais en consomme toute l'encre : {fuller} en imprime {count} pour la même encre.",
+        "ink_warning_short": "{size} ne couvre qu'une partie de la feuille {sheet}, mais en consomme toute l'encre.",
         "ink_switch": "Passer en {fuller}",
         "status_hint": "Ctrl + molette pour zoomer · Ctrl + glisser pour se déplacer · déposez une image sur la page pour l'ajouter",
         "uploading_image": "Envoi de l'image…",

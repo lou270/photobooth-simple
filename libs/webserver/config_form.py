@@ -114,6 +114,7 @@ CONFIG_FORM_SECTIONS = (
             {'section': 'Print', 'option': 'COLLAGE_DPI', 'advanced': True, 'control': 'select', 'default': '300',
              'choices': [('300', 'web.config.choices.collage_dpi.300'), ('600', 'web.config.choices.collage_dpi.600')]},
             {'section': 'Print', 'option': 'CUT_OFFSET', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 0, 'max': 100, 'step': 1, 'unit': 'pixels', 'default': '20'},
+            {'section': 'Print', 'option': 'PRINTER_MEDIA', 'advanced': True, 'control': 'text', 'placeholder': '4x6', 'none_means_empty': True, 'default': 'None', 'default_key': 'web.config.value.unknown'},
             {'section': 'Print', 'option': 'PRINTER_WAIT_TIMEOUT', 'advanced': True, 'control': 'number', 'number_type': 'int', 'min': 5, 'step': 1, 'unit': 'seconds', 'default': '45'},
         ),
     },

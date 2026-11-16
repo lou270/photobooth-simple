@@ -483,6 +483,7 @@ GETTERS = {
     ('Print', 'MAX_COPIES'): 'get_max_copies',
     ('Print', 'COLLAGE_DPI'): 'get_collage_dpi',
     ('Print', 'CUT_OFFSET'): 'get_cut_offset',
+    ('Print', 'PRINTER_MEDIA'): 'get_printer_media',
     ('Print', 'PRINTER_WAIT_TIMEOUT'): 'get_printer_wait_timeout',
     ('USB', 'USB_EXPORT'): 'get_usb_export_enabled',
     ('USB', 'USB_MIN_FREE_GB'): 'get_usb_min_free_gb',

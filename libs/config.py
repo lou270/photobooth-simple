@@ -4,7 +4,7 @@ import logging
 from datetime import datetime
 from pathlib import Path
 
-from libs import event
+from libs import event, print_sizes
 from libs.event import DEFAULT_DATE_FORMAT
 from libs.i18n import AVAILABLE_LANGUAGES, DEFAULT_LANGUAGE
 from libs import timings
@@ -467,6 +467,20 @@ class Config:
         Measured on a DNP QW410 with tools/manual/cut_calibration.py.
         """
         return min(100, max(0, self._get_int(('Print', 'Picture'), 'CUT_OFFSET', fallback=DEFAULT_CUT_OFFSET)))
+
+    def get_printer_media(self):
+        """The media loaded in the printer, (short, long) in inches, or None when not said.
+
+        Only advises the operator on ink (see print_sizes.fuller_sheet): a
+        value that does not read as a size is dropped rather than refused.
+        """
+        raw = self._get_string(('Print', 'Picture'), 'PRINTER_MEDIA', fallback='None').strip()
+        if not raw or raw.upper() == 'NONE':
+            return None
+        media = print_sizes.parse_media(raw)
+        if media is None:
+            Logger.warning('Config: PRINTER_MEDIA=%r is not a size like 4x6, ignored', raw)
+        return media
 
     def get_collage_dpi(self):
         """Resolution the saved and printed collage is assembled at."""

@@ -187,6 +187,35 @@ def test_a_resolution_templates_cannot_be_scaled_to_falls_back(tmp_path, monkeyp
     assert config.get_collage_dpi() == 300
 
 
+def test_the_loaded_media_is_unknown_by_default(tmp_path, monkeypatch):
+    config = write_config(tmp_path, monkeypatch, """
+        [Print]
+        PRINTER = photobooth
+    """)
+
+    assert config.get_printer_media() is None
+
+
+@pytest.mark.parametrize('raw, media', [('4x6', (4, 6)), ('6x4', (4, 6)), ('4.5x8', (4.5, 8)), (' 4 x 6 ', (4, 6))])
+def test_the_loaded_media_is_read_short_side_first(tmp_path, monkeypatch, raw, media):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Print]
+        PRINTER_MEDIA = {raw}
+    """)
+
+    assert config.get_printer_media() == media
+
+
+@pytest.mark.parametrize('raw', ['A6', '4x3*2', '0x6', 'roll'])
+def test_media_that_is_not_a_size_is_ignored(tmp_path, monkeypatch, raw):
+    config = write_config(tmp_path, monkeypatch, f"""
+        [Print]
+        PRINTER_MEDIA = {raw}
+    """)
+
+    assert config.get_printer_media() is None
+
+
 @pytest.mark.parametrize('raw', ['abc', '', '5s', '1,5'])
 def test_a_malformed_number_falls_back_instead_of_raising(tmp_path, monkeypatch, raw):
     """The admin form rewrites this file on site; a typo must not brick the booth.

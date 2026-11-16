@@ -286,6 +286,14 @@ COLLAGE_DPI = 300
 # another printer with tools/manual/cut_calibration.py.
 CUT_OFFSET = 20
 
+# The media loaded in the printer, as written on its box: 4x6, 4.5x8... (None
+# if unknown). The printer spends a whole sheet's ink on every print, so the
+# template editor and the admin page flag any format smaller than that sheet,
+# and offer the one printing more photos on it for the same ink (2x4*3 rather
+# than 2x4*2 on a 4x6). Unknown, only a print alone is flagged (a 4x3 rather
+# than 4x3*2), since nothing then says which sizes are media of their own.
+PRINTER_MEDIA = None
+
 # Seconds the printing screen waits for a printer in error before letting the
 # guest go. A printer out of paper still prints the photo once refilled: the
 # booth starts its paused queue again by itself.

@@ -256,7 +256,7 @@ by its default rather than stopping the booth.
 | `[Event]` | `WELCOME_TITLE`, `WELCOME_SUBTITLE`, `WELCOME_FONT`, `BACKGROUND_COLOR`, `EVENT_NAME`, `DATE_FORMAT` - see [Dressing the booth](#dressing-the-booth-for-an-event) |
 | `[Slideshow]` | `SLIDESHOW`, `SLIDESHOW_IDLE_SECONDS`, `SLIDESHOW_PHOTO_SECONDS` |
 | `[Capture]` | `CAMERA`, `COUNTDOWN`, `FILTERS`, `CALIBRATION`, `DSLR_HOT_PIXEL_FILTER`, the blur behind the preview and the photos |
-| `[Print]` | `PRINTER` (CUPS queue, `None` for no printer), `MAX_PRINTS` (quota for the evening), `MAX_COPIES`, `COLLAGE_DPI`, `CUT_OFFSET`, `PRINTER_WAIT_TIMEOUT` |
+| `[Print]` | `PRINTER` (CUPS queue, `None` for no printer), `MAX_PRINTS` (quota for the evening), `MAX_COPIES`, `COLLAGE_DPI`, `CUT_OFFSET`, `PRINTER_MEDIA` (media loaded, to flag formats wasting ink), `PRINTER_WAIT_TIMEOUT` |
 | `[Timing]` | Every delay a guest may notice: auto-keep, idle timeouts per screen, capture timeout, print timeouts |
 | `[Lights]` | `RINGLED`, `RINGLED_PIXELS`; `CHEVRONS`, `CHEVRONS_DRIVER` (`gpio` or `serial`), `CHEVRONS_PINS`, `CHEVRONS_SERIAL_PORT`, `CHEVRONS_IDLE_PERCENT`, `CHEVRONS_WAVE_PERCENT`, `CHEVRONS_WAVE_SECONDS`, `CHEVRONS_COUNTDOWN_PERCENT`, `CHEVRONS_PWM_FREQUENCY` |
 | `[Web]` | `WEB_PORT` (80), `WEB_HOST` (0.0.0.0; 127.0.0.1 keeps the web pages on the booth) |

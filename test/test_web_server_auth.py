@@ -356,6 +356,22 @@ def test_without_a_printer_the_admin_page_does_not_guess(client, server):
     assert 'class="card-notice"' not in page
 
 
+def test_knowing_the_media_the_admin_page_names_a_cut_sheet_too(client, server):
+    server.page_sizes_provider = lambda: [('w288h432', '4x6'), ('w288h288', '4x4'),
+                                          ('w288h288-div2', '2x4*2'), ('w288h432-div3', '2x4*3')]
+    server.printer_media = (4, 6)
+    write_template(server, 'two.json', 'w288h288-div2', copies_per_sheet=2)
+    write_template(server, 'square.json', 'w288h288')
+    write_template(server, 'three.json', 'w288h432-div3', copies_per_sheet=3)
+    login(client)
+
+    page = client.get('/admin').get_data(as_text=True)
+
+    assert page.count('class="card-notice"') == 2
+    assert '2x4*3' in page            # offered for the 2x4*2
+    assert 'Three' not in page        # fills the 4x6
+
+
 def test_a_template_switched_to_the_cut_sheet_is_no_longer_named(client, server):
     """Read again once the file changes, not served from what was read before."""
     server.page_sizes_provider = lambda: QW410_SIZES

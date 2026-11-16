@@ -247,7 +247,8 @@
       "templates_eyebrow": "Templates",
       "edit_layouts": "Edit layouts",
       "edit_layouts_hint": "Create and edit printed layouts, with their photo frames and texts.",
-      "ink_warning": "“{name}” prints a {size} on its own, which uses a whole {sheet} sheet's ink. Switch it to {fuller} in the editor: {count} prints for the same ink.",
+      "ink_warning": "“{name}” ({size}) covers only part of a {sheet} sheet but uses all of its ink. Switch it to {fuller} in the editor: {count} prints for the same ink.",
+      "ink_warning_alone": "“{name}” ({size}) covers only part of a {sheet} sheet but uses all of its ink.",
       "welcome_background_title": "Welcome screen photo",
       "welcome_background_hint": "The photo behind the title guests see while the booth waits. Sent on its own: it is stored as soon as it is uploaded, without the Save button.",
       "welcome_background_none": "No photo uploaded: the booth shows its own.",
@@ -321,7 +322,8 @@
         "unlimited": "Unlimited",
         "automatic": "automatic",
         "printing_disabled": "none (printing disabled)",
-        "open_network": "Open network"
+        "open_network": "Open network",
+        "unknown": "unknown"
       },
       "units": {
         "seconds": "s",
@@ -531,6 +533,10 @@
           "CUT_OFFSET": {
             "label": "Where the printer starts its cuts",
             "help": "For a template printed on a sheet the printer cuts into several prints (2x4*3…): how far into the page the cutter starts measuring, in pixels at 300 dpi. The booth places each copy on its own print from there, so the cuts fall between the copies. 20 on a DNP QW410; another printer is measured with tools/manual/cut_calibration.py."
+          },
+          "PRINTER_MEDIA": {
+            "label": "Media loaded in the printer",
+            "help": "The size written on the roll's box: 4x6, 4.5x8… The printer spends a whole sheet's ink on every print: the template editor and this page flag any format smaller than that sheet, and offer the one printing more photos on it for the same ink (2x4*3 rather than 2x4*2 on 4x6). Left empty, only a print alone is flagged (a 4x3 rather than 4x3*2)."
           },
           "PRINTER_WAIT_TIMEOUT": {
             "label": "Wait when the printer stops answering",
@@ -938,8 +944,8 @@
         "printed_again": "Printed again here",
         "per_sheet": "{count} per sheet",
         "whole_sheet_ink": "⚠ a whole {sheet} sheet's ink",
-        "ink_warning": "A {size} on its own uses a whole {sheet} sheet's ink: {fuller} prints {count} of them for the same ink.",
-        "ink_warning_short": "A {size} on its own uses a whole {sheet} sheet's ink.",
+        "ink_warning": "{size} covers only part of a {sheet} sheet but uses all of its ink: {fuller} prints {count} for the same ink.",
+        "ink_warning_short": "{size} covers only part of a {sheet} sheet but uses all of its ink.",
         "ink_switch": "Switch to {fuller}",
         "status_hint": "Ctrl + wheel to zoom · Ctrl + drag to move around · drop an image on the page to add it",
         "uploading_image": "Uploading the image…",

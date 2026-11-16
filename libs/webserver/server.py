@@ -48,7 +48,7 @@ class WebServer:
 
     def __init__(self, save_directory, host='0.0.0.0', port=80, admin_password=None, stats_store=None,
                  restart_callback=None, templates_changed_callback=None, page_sizes_provider=None, remote_store=None, remote_enabled=False, share_enabled=False,
-                 booth_language=i18n.DEFAULT_LANGUAGE, secret_key_path=None):
+                 booth_language=i18n.DEFAULT_LANGUAGE, secret_key_path=None, printer_media=None):
         self.save_directory = save_directory
         self.host = host
         self.port = port
@@ -70,6 +70,9 @@ class WebServer:
         # Returns the printer's (name, label) page sizes, for the editor to
         # offer: what one printer cuts a sheet into is not what another does.
         self.page_sizes_provider = page_sizes_provider
+        # The sheet loaded in the printer, (short, long) in inches, or None:
+        # what a format is judged against for the ink it wastes.
+        self.printer_media = printer_media
         # The queue phones send photos to. Kept as a flag of its own rather than
         # inferred from the store: the operator turns the feature off without
         # the photos already received going anywhere.
@@ -406,10 +409,10 @@ class WebServer:
                 choices = self.page_sizes_provider() or []
             except Exception as exc:
                 Logger.warning(f'WebServer: printer page sizes unavailable: {exc}')
-        sizes = print_sizes.describe_all(choices)
+        sizes = print_sizes.describe_all(choices, self.printer_media)
         if sizes:
             return {'from_printer': True, 'sizes': sizes}
-        return {'from_printer': False, 'sizes': print_sizes.describe_all(print_sizes.FALLBACK_PAGE_SIZES)}
+        return {'from_printer': False, 'sizes': print_sizes.describe_all(print_sizes.FALLBACK_PAGE_SIZES, self.printer_media)}
 
     def _template_print_settings(self):
         """(name, PageSize, copies per sheet) of every template file.
@@ -454,10 +457,12 @@ class WebServer:
         return name, page_size, copies
 
     def _ink_warnings(self):
-        """The templates printing one photo on a sheet the printer could cut into several.
+        """The templates on a format that covers only part of the sheet it spends the ink of.
 
         Against the connected printer's own sizes only: without one, nothing
-        says these are the sizes of the printer the booth will print on.
+        says these are the sizes of the printer the booth will print on. Each
+        warning names the format to switch to under 'fuller', or None when no
+        cut of the same print fills the loaded sheet.
         """
         sizes = self._print_sizes()
         if not sizes['from_printer']:
@@ -467,7 +472,7 @@ class WebServer:
         for name, page_size, copies in self._template_print_settings():
             size = by_name.get(page_size)
             fuller = size['fuller_sheet'] if size else None
-            if fuller and copies == 1:
+            if fuller and copies == size['count']:
                 warnings.append({'name': name, 'size': size['label'], 'sheet': fuller['sheet'],
                                  'fuller': fuller['label'], 'count': fuller['count']})
         return warnings

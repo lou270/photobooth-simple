@@ -155,6 +155,7 @@ class PhotoboothApp(App):
         self.MAX_COPIES = config.get_max_copies()
         self.COLLAGE_DPI = config.get_collage_dpi()
         self.CUT_OFFSET = config.get_cut_offset()
+        self.PRINTER_MEDIA = config.get_printer_media()
         self.CALIBRATION = config.get_calibration()
         self.CAMERA_BACKEND = config.get_camera_backend()
         self._dslr_liveview_params = config.get_dslr_liveview_params()
@@ -433,6 +434,7 @@ class PhotoboothApp(App):
             restart_callback=self.request_restart,
             templates_changed_callback=self.reload_templates,
             page_sizes_provider=self.devices.get_page_sizes,
+            printer_media=self.PRINTER_MEDIA,
             remote_store=self.remote_store,
             remote_enabled=self.REMOTE_CAPTURE,
             share_enabled=self.SHARE,

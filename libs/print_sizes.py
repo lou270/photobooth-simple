@@ -218,28 +218,48 @@ def sheet_layout(page_size, page, copies, design_size, cut_offset):
     return {'rotate': rotate, 'along_x': along_x, 'pad': pad}
 
 
+def _sheet_across_along(page_size):
+    """The sheet a size is printed on, across then along the paper, from its name."""
+    match = _NAME.match(page_size)
+    return tuple(float(match.group(side)) / POINTS_PER_INCH for side in (1, 2))
+
+
 def _sheet_inches(page_size):
     """The sheet a size is printed on, short side first, from its name."""
-    match = _NAME.match(page_size)
-    return tuple(sorted(float(match.group(side)) / POINTS_PER_INCH for side in (1, 2)))
+    return tuple(sorted(_sheet_across_along(page_size)))
 
 
-def fuller_sheet(size, sizes):
-    """The cut sheet that prints several of this print for the ink of one, or None.
+def parse_media(text):
+    """A media size written as the operator reads it on the box ("4x6"), short side first, or None."""
+    match = _LABEL.match(text or '')
+    if not match or match.group(3):
+        return None
+    short, long = sorted(float(side) for side in match.group(1, 2))
+    return (short, long) if short > 0 else None
+
+
+def fuller_sheet(size, sizes, media=None):
+    """The cut sheet that prints more of this print for the same ink, or None.
 
     A dye-sub printer spends a whole panel of ribbon on every sheet it feeds,
     however little of it is printed: a 4x3 on its own on a QW410 uses the ink
     of the 4x6 it comes out of, and "4x3*2" prints two of them for the same.
-    A single print is taken to be that wasteful when some cut sheet of the
-    printer is made of prints its size, unless it is itself a sheet another
-    cut is made from: that one is media of its own, as the DS620's 4x6 is,
-    and printing it on its own wastes nothing.
+
+    media is the sheet the printer is loaded with, (short, long) in inches,
+    as parse_media reads it; see _fuller_sheet_on_media. Without it, nothing
+    says which sizes are media of their own, so only a single print is
+    judged: wasteful when some cut sheet of the printer is made of prints
+    its size, unless it is itself a sheet another cut is made from. That one
+    is taken to be media, as the DS620's 4x6 is, though on a QW410 the 4x4
+    is not, and its 2x4*2 goes unnoticed.
 
     sizes is every size the printer offers, as describe_all lists them. Of
     several cut sheets, the smallest: it adds the fewest prints nobody asked
     for, and is the likeliest to be loaded already. Returns its page_size,
     label, count and sheet ("4x6").
     """
+    if media is not None:
+        return _fuller_sheet_on_media(size, sizes, media)
     if size['count'] != 1:
         return None
     own_short, own_long = _sheet_inches(size['page_size'])
@@ -255,11 +275,46 @@ def fuller_sheet(size, sizes):
             'sheet': f'{_inches(short)}x{_inches(long)}'}
 
 
-def describe_all(choices):
+def _fuller_sheet_on_media(size, sizes, media):
+    """fuller_sheet, knowing the sheet the printer is loaded with.
+
+    Any size smaller than that sheet is printed on it and spends all of its
+    ink, cut or not: on a QW410 loaded with 4x6, a 2x4*2 is a 4x4 printed on
+    a 4x6, and 2x4*3 prints a third 2x4 for nothing. The size offered
+    instead is the cut of the same print that fills the loaded sheet. A
+    size with none (a 4x4 on its own on a 4x6) is still wasteful: the
+    answer then has a sheet but no page_size. A size that does not fit on
+    the loaded sheet is not printed on it, and is left alone; it is measured
+    across and along the paper, as the printer's own size for that sheet
+    lies, so a 4.5x3 is too wide for a 4x6 roll though it is shorter.
+    """
+    media_short, media_long = media
+    own_short, own_long = _sheet_inches(size['page_size'])
+    if _fits(media_long, media_short, own_long, own_short):
+        return None
+    loaded = next((_sheet_across_along(other['page_size']) for other in sizes
+                   if _fits(_sheet_inches(other['page_size'])[1], _sheet_inches(other['page_size'])[0],
+                            media_long, media_short)), None)
+    own = _sheet_across_along(size['page_size']) if loaded else (own_short, own_long)
+    loaded = loaded or (media_short, media_long)
+    tolerance = _TOLERANCE_INCHES * max(1, media_long)
+    if own[0] > loaded[0] + tolerance or own[1] > loaded[1] + tolerance:
+        return None
+    sheet = f'{_inches(media_short)}x{_inches(media_long)}'
+    for other in sizes:
+        other_short, other_long = _sheet_inches(other['page_size'])
+        if (other['count'] > size['count'] and _fits(other_long, other_short, media_long, media_short)
+                and _fits(other['long_in'], other['short_in'], size['long_in'], size['short_in'])):
+            return {'page_size': other['page_size'], 'label': other['label'], 'count': other['count'], 'sheet': sheet}
+    return {'page_size': None, 'label': None, 'count': None, 'sheet': sheet}
+
+
+def describe_all(choices, media=None):
     """Every usable size in a printer's (name, label) list, in the driver's order.
 
     Each also says, under fuller_sheet, which cut sheet would print it
-    several times for the same ink, or None: see fuller_sheet.
+    several times for the same ink, or None: see fuller_sheet, which media
+    is handed on to.
     """
     sizes = []
     seen = set()
@@ -269,5 +324,5 @@ def describe_all(choices):
             seen.add(size['page_size'])
             sizes.append(size)
     for size in sizes:
-        size['fuller_sheet'] = fuller_sheet(size, sizes)
+        size['fuller_sheet'] = fuller_sheet(size, sizes, media)
     return sizes

@@ -130,6 +130,50 @@ def test_a_ds620_strip_on_its_own_is_pointed_at_the_smallest_sheet_of_strips():
     assert sheets['w288h432'] is None
 
 
+# --- knowing the media loaded ------------------------------------------------
+
+def qw410_on(media):
+    sizes = describe_all((tuple(entry.split('/', 1)) for entry in QW410_PPD.split()), media)
+    return {size['page_size']: size['fuller_sheet'] for size in sizes}
+
+
+def test_on_4x6_two_2x4_are_pointed_at_three():
+    """A 4x4 sheet printed on a 4x6 panel: the third 2x4 costs no ink."""
+    sheets = qw410_on((4, 6))
+
+    assert sheets['w288h288-div2'] == {'page_size': 'w288h432-div3', 'label': '2x4*3', 'count': 3, 'sheet': '4x6'}
+    assert sheets['w288h216']['page_size'] == 'w288h432-div2'
+
+
+def test_on_4x6_a_4x4_alone_wastes_ink_with_nothing_to_offer():
+    assert qw410_on((4, 6))['w288h288'] == {'page_size': None, 'label': None, 'count': None, 'sheet': '4x6'}
+
+
+@pytest.mark.parametrize('page_size', [
+    'w288h432', 'w288h432-div2', 'w288h432-div3',   # fill the 4x6
+    'w288h576', 'w324h216', 'w324h432',             # not printed on a 4x6
+])
+def test_on_4x6_what_fills_it_or_does_not_fit_it_is_left_alone(page_size):
+    assert qw410_on((4, 6))[page_size] is None
+
+
+def test_a_ds620_on_4x6_flags_a_strip_but_not_its_own_4x6():
+    sizes = describe_all([('w144h432', '2x6'), ('w288h432', '4x6'), ('w288h432-div2', '2x6*2'),
+                          ('w432h576-div4', '2x6*4')], (4, 6))
+    sheets = {size['page_size']: size['fuller_sheet'] for size in sizes}
+
+    assert sheets['w144h432']['page_size'] == 'w288h432-div2'
+    assert sheets['w288h432'] is None and sheets['w288h432-div2'] is None
+
+
+def test_a_ds620_on_6x8_points_a_4x6_at_two_per_sheet():
+    """The same 4x6 the automatic rule calls media of its own wastes half a 6x8."""
+    sizes = describe_all([('w288h432', '4x6'), ('w432h576-div2', '4x6*2'), ('w432h576', '6x8')], (6, 8))
+    sheets = {size['page_size']: size['fuller_sheet'] for size in sizes}
+
+    assert sheets['w288h432']['page_size'] == 'w432h576-div2'
+
+
 # --- laying copies out where the cutter separates them ----------------------
 
 # The QW410's own lines for the sizes measured with tools/manual/cut_calibration.py.

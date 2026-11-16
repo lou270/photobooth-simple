@@ -557,7 +557,7 @@
                     <h2>{{ t('web.admin.edit_layouts') }}</h2>
                     <p>{{ t('web.admin.edit_layouts_hint') }}</p>
                     {% for warning in ink_warnings %}
-                    <p class="card-notice">{{ t('web.admin.ink_warning', name=warning.name, size=warning.size, sheet=warning.sheet, fuller=warning.fuller, count=warning.count) }}</p>
+                    <p class="card-notice">{{ t('web.admin.ink_warning' if warning.fuller else 'web.admin.ink_warning_alone', name=warning.name, size=warning.size, sheet=warning.sheet, fuller=warning.fuller, count=warning.count) }}</p>
                     {% endfor %}
                     <div class="actions"><a href="/admin/editor" class="btn btn-ghost">{{ t('web.admin.open_template_editor') }}</a></div>
                 </article>

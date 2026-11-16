@@ -2084,13 +2084,13 @@
         return matches ? size.page_size : 'custom';
     }
 
-    // A template printed on its own where the printer offers a sheet cut into
-    // several of the same print: it spends that whole sheet's ink on one
-    // (print_sizes.fuller_sheet). Returns its size and the cut sheet, or null.
+    // A template on a format that covers only part of the sheet it spends the
+    // ink of (print_sizes.fuller_sheet). Returns its size and the cut sheet
+    // printing more of it, whose page_size is null when there is none, or null.
     function inkWaste(template) {
         const pageSize = (template.print_params || {}).PageSize;
         const size = PRINT_SIZES.find(candidate => candidate.page_size === pageSize);
-        if (!size || !size.fuller_sheet || copiesPerSheet(template) !== 1) return null;
+        if (!size || !size.fuller_sheet || copiesPerSheet(template) !== size.count) return null;
         return { size, fuller: size.fuller_sheet };
     }
 
@@ -2151,11 +2151,12 @@
         const waste = inkWaste(entry.template);
         if (!waste) return;
         const values = { size: waste.size.label, sheet: waste.fuller.sheet, fuller: waste.fuller.label, count: waste.fuller.count };
-        byId('inkWarningText').textContent = fmt(I18N.ink_warning, values);
-        byId('inkWarningSwitch').textContent = fmt(I18N.ink_switch, values);
+        const switchable = Boolean(waste.fuller.page_size);
+        byId('inkWarningText').textContent = fmt(switchable ? I18N.ink_warning : I18N.ink_warning_short, values);
+        byId('inkWarningSwitch').textContent = switchable ? fmt(I18N.ink_switch, values) : '';
         // Switching lays the page on one print of the cut sheet: a page sized
         // by hand would be resized under the operator's design.
-        byId('inkWarningSwitch').hidden = format === 'custom';
+        byId('inkWarningSwitch').hidden = !switchable || format === 'custom';
         byId('inkWarning').hidden = false;
     }
 
@@ -2164,7 +2165,7 @@
     byId('inkWarningSwitch').addEventListener('click', () => {
         const entry = currentEntry();
         const waste = entry && inkWaste(entry.template);
-        if (!waste) return;
+        if (!waste || !waste.fuller.page_size) return;
         byId('formatSelect').value = waste.fuller.page_size;
         byId('formatSelect').dispatchEvent(new Event('change'));
     });
